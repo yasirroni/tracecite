@@ -1,0 +1,320 @@
+"""Command-line interface for table normalisation and inspection-site export."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+from .tables import (
+    TableContext,
+    TableNormalisationError,
+    augment_document_with_embedding_text,
+    export_embedding_site,
+    normalise_document_tables,
+    normalise_html_table,
+    normalise_pandoc_table,
+    render_debug_markdown,
+)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="tracecite")
+    parser.add_argument("--version", action="version", version="TraceCite 0.4.0")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    table = subparsers.add_parser("table", help="Normalise one table")
+    table_sub = table.add_subparsers(dest="table_command", required=True)
+    normalise = table_sub.add_parser(
+        "normalise", help="Normalise one Markdown or HTML table"
+    )
+    normalise.add_argument("input", help="Input path or '-' for standard input")
+    normalise.add_argument(
+        "--from",
+        dest="source_format",
+        choices=["auto", "pandoc", "html"],
+        default="auto",
+    )
+    normalise.add_argument(
+        "--to",
+        dest="target_format",
+        choices=["text", "json", "canonical-markdown", "debug-markdown"],
+        default="text",
+    )
+    normalise.add_argument("--output", type=Path)
+    normalise.add_argument("--document-path")
+    normalise.add_argument("--source-code-path")
+    normalise.add_argument("--caption")
+    normalise.add_argument("--table-id")
+    normalise.add_argument("--ordering")
+    normalise.add_argument("--strict", action="store_true")
+    normalise.add_argument("--pandoc")
+    normalise.add_argument("--allow-pipe-fallback", action="store_true")
+
+    document = subparsers.add_parser(
+        "document", help="Normalise every table in one document"
+    )
+    document_sub = document.add_subparsers(dest="document_command", required=True)
+    document_normalise = document_sub.add_parser(
+        "normalise", help="Normalise document tables"
+    )
+    document_normalise.add_argument("input", type=Path)
+    document_normalise.add_argument(
+        "--to",
+        dest="target_format",
+        choices=["jsonl", "embedding-markdown", "summary"],
+        default="summary",
+    )
+    document_normalise.add_argument("--output", type=Path)
+    document_normalise.add_argument("--source-code-path")
+    document_normalise.add_argument("--strict", action="store_true")
+    document_normalise.add_argument("--pandoc")
+    document_normalise.add_argument("--allow-pipe-fallback", action="store_true")
+
+    prepare = subparsers.add_parser(
+        "prepare",
+        help="Prepare table records and optionally keep a complete embedding-Markdown website",
+    )
+    prepare.add_argument("source_root", type=Path)
+    prepare.add_argument("--project-config", type=Path)
+    prepare.add_argument(
+        "--project-profile",
+        help="Merge _quarto-<profile>.yml into the copied inspection-site configuration",
+    )
+    prepare.add_argument("--source-project", type=Path)
+    prepare.add_argument(
+        "--keep-embedding-markdown",
+        type=Path,
+        metavar="DIR",
+        required=True,
+        help="Copy the complete retained-Markdown website to DIR and append normalised table text",
+    )
+    prepare.add_argument("--render-embedding-site", action="store_true")
+    prepare.add_argument("--debug-tables", action="store_true")
+    prepare.add_argument("--quarto")
+    prepare.add_argument("--pandoc")
+    prepare.add_argument("--strict-tables", action="store_true")
+    prepare.add_argument("--allow-pipe-fallback", action="store_true")
+    prepare.add_argument("--no-clean", action="store_true")
+
+    check = subparsers.add_parser(
+        "check", help="Strictly validate generated Markdown tables"
+    )
+    check.add_argument("path", type=Path)
+    check.add_argument("--pandoc")
+    check.add_argument("--allow-pipe-fallback", action="store_true")
+    check.add_argument("--debug-tables", action="store_true")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        if args.command == "table":
+            return _table_normalise(args)
+        if args.command == "document":
+            return _document_normalise(args)
+        if args.command == "prepare":
+            return _prepare(args)
+        if args.command == "check":
+            return _check(args)
+    except (
+        FileNotFoundError,
+        RuntimeError,
+        TableNormalisationError,
+        ValueError,
+    ) as error:
+        print(f"tracecite: {error}", file=sys.stderr)
+        return 2
+    return 1
+
+
+def _table_normalise(args: argparse.Namespace) -> int:
+    source = (
+        sys.stdin.read()
+        if args.input == "-"
+        else Path(args.input).read_text(encoding="utf-8")
+    )
+    context = TableContext(
+        document_path=args.document_path
+        or ("<stdin>" if args.input == "-" else args.input),
+        source_code_path=args.source_code_path,
+        caption=args.caption,
+        table_id=args.table_id,
+        ordering=args.ordering,
+    )
+    source_format = args.source_format
+    if source_format == "auto":
+        source_format = "html" if "<table" in source.lower() else "pandoc"
+
+    if source_format == "html":
+        table = normalise_html_table(
+            source,
+            context=context,
+            strict=args.strict,
+            pandoc=args.pandoc,
+        )
+    else:
+        table = normalise_pandoc_table(
+            source,
+            context=context,
+            strict=args.strict,
+            pandoc=args.pandoc,
+            allow_pipe_fallback=args.allow_pipe_fallback,
+        )
+
+    output = {
+        "text": table.normalised_text,
+        "json": table.to_json(),
+        "canonical-markdown": table.canonical_markdown,
+        "debug-markdown": render_debug_markdown(table),
+    }[args.target_format]
+    _write_output(output.rstrip() + "\n", args.output)
+    return 0
+
+
+def _document_normalise(args: argparse.Namespace) -> int:
+    source = args.input.read_text(encoding="utf-8")
+    if args.target_format == "embedding-markdown":
+        result = augment_document_with_embedding_text(
+            source,
+            document_path=args.input.as_posix(),
+            source_code_path=args.source_code_path,
+            strict=args.strict,
+            pandoc=args.pandoc,
+            allow_pipe_fallback=args.allow_pipe_fallback,
+        )
+        _write_output(result.markdown, args.output)
+        return 0
+
+    tables = normalise_document_tables(
+        source,
+        document_path=args.input.as_posix(),
+        source_code_path=args.source_code_path,
+        strict=args.strict,
+        pandoc=args.pandoc,
+        allow_pipe_fallback=args.allow_pipe_fallback,
+    )
+    if args.target_format == "jsonl":
+        output = "".join(
+            json.dumps(table.to_dict(), ensure_ascii=False, sort_keys=True) + "\n"
+            for table in tables
+        )
+    else:
+        lines = [f"Tables: {len(tables)}"]
+        for table in tables:
+            warning_count = sum(
+                item.severity == "warning" for item in table.diagnostics
+            )
+            error_count = sum(item.severity == "error" for item in table.diagnostics)
+            lines.append(
+                f"- {table.table_id}: {len(table.rows)} row(s), {len(table.headers)} column(s), "
+                f"{warning_count} warning(s), {error_count} error(s)"
+            )
+        output = "\n".join(lines) + "\n"
+    _write_output(output, args.output)
+    return 0
+
+
+def _prepare(args: argparse.Namespace) -> int:
+    result = export_embedding_site(
+        args.source_root,
+        args.keep_embedding_markdown,
+        project_config=args.project_config,
+        project_profile=args.project_profile,
+        source_project=args.source_project,
+        strict=args.strict_tables,
+        pandoc=args.pandoc,
+        allow_pipe_fallback=args.allow_pipe_fallback,
+        render=args.render_embedding_site,
+        quarto=args.quarto,
+        clean=not args.no_clean,
+    )
+    print(f"Embedding Markdown site: {result.output_root}")
+    print(f"Pages copied: {result.page_count}")
+    print(f"Tables normalised: {result.table_count}")
+    if result.rendered_site:
+        print(f"Rendered inspection site: {result.rendered_site}")
+    if args.debug_tables:
+        _print_table_debug(result.output_root / "_tracecite" / "tables.jsonl")
+    return 0
+
+
+def _check(args: argparse.Namespace) -> int:
+    paths = [args.path] if args.path.is_file() else _markdown_paths(args.path)
+    check_root = args.path.parent if args.path.is_file() else args.path
+    failures = 0
+    tables = 0
+    for path in paths:
+        source = path.read_text(encoding="utf-8")
+        try:
+            document_path = path.relative_to(check_root).as_posix()
+        except ValueError:
+            document_path = path.as_posix()
+        try:
+            found = normalise_document_tables(
+                source,
+                document_path=document_path,
+                strict=True,
+                pandoc=args.pandoc,
+                allow_pipe_fallback=args.allow_pipe_fallback,
+            )
+        except TableNormalisationError as error:
+            failures += 1
+            print(f"FAIL {path}: {error}")
+            continue
+        tables += len(found)
+        print(f"OK   {path}: {len(found)} table(s)")
+        if args.debug_tables:
+            for table in found:
+                print(
+                    f"     {table.table_id}: {len(table.rows)} row(s), "
+                    f"{len(table.headers)} column(s), source={table.source_format}"
+                )
+                for diagnostic in table.diagnostics:
+                    print(
+                        f"       {diagnostic.severity}:{diagnostic.code}: "
+                        f"{diagnostic.message}"
+                    )
+    print(f"Checked {len(paths)} file(s), {tables} table(s), {failures} failure(s)")
+    return 1 if failures else 0
+
+
+def _write_output(text: str, path: Path | None) -> None:
+    if path is None:
+        sys.stdout.write(text)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _markdown_paths(root: Path) -> list[Path]:
+    excluded = {".tracecite", "_tracecite", ".quarto", "site_libs", "_site"}
+    return [
+        path
+        for path in sorted(root.rglob("*.md"))
+        if not any(part in excluded for part in path.relative_to(root).parts)
+    ]
+
+
+def _print_table_debug(path: Path) -> None:
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        table = json.loads(line)
+        print(
+            f"DEBUG {table['table_id']}: {len(table['rows'])} row(s), "
+            f"{len(table['headers'])} column(s), source={table['source_format']}"
+        )
+        for diagnostic in table.get("diagnostics", []):
+            print(
+                f"      {diagnostic['severity']}:{diagnostic['code']}: "
+                f"{diagnostic['message']}"
+            )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

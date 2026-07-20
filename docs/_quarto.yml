@@ -1,0 +1,27 @@
+project:
+  type: website
+  output-dir: build
+
+profile:
+  default: python
+
+website:
+  title: "TraceCite table normalisation"
+  search: true
+  page-navigation: true
+  reader-mode: true
+
+format:
+  html:
+    toc: true
+    code-fold: true
+    code-summary: "Show source code"
+    code-overflow: wrap
+    code-line-numbers: true
+    embed-resources: true
+    keep-md: true
+
+execute:
+  echo: true
+  warning: true
+  error: true

@@ -1,0 +1,46 @@
+project:
+  render:
+    - index.md
+    - guide/*.md
+    - formats/*.md
+    - python/*.py
+    - julia/*.jl
+
+# Quarto requires project-wide engine prioritisation for percent-format .jl pages.
+engines:
+  - julia
+
+website:
+  sidebar:
+    style: docked
+    contents:
+      - href: index.md
+        text: Overview
+      - section: Design
+        contents:
+          - href: guide/architecture.md
+            text: Architecture
+          - href: guide/api.md
+            text: Python API and CLI
+          - href: guide/embedding-site.md
+            text: Embedding inspection site
+      - section: Formats
+        contents:
+          - href: formats/pandoc-tables.md
+            text: Pandoc Markdown tables
+          - href: formats/html-documenter.md
+            text: Literate and Documenter HTML
+          - href: formats/diagnostics.md
+            text: Structural diagnostics
+      - section: Python EDA
+        contents:
+          - href: python/hottest_temperature.py
+            text: Highest-temperature result
+          - href: python/dirty_dataframe.py
+            text: Dirty DataFrame edge cases
+      - section: Julia EDA
+        contents:
+          - href: julia/hottest_temperature.jl
+            text: Highest-temperature result
+          - href: julia/dirty_dataframe.jl
+            text: Dirty DataFrame edge cases

@@ -1,0 +1,31 @@
+# Quarto output and execution caches
+/docs/build/
+/docs/.quarto/
+/docs/**/.cache/
+
+# TraceCite generated inspection artefacts
+/.tracecite/
+
+# Python environments and caches
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Julia generated state
+Manifest.toml
+/examples/literate_documenter/Manifest.toml
+
+# Packaging
+*.egg-info/
+/dist/
+/build/
+
+# OS generated files
+.DS_Store
+
+# Editor
+.vscode/
