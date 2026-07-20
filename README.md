@@ -116,7 +116,7 @@ tracecite document normalise report.md --to embedding-markdown --output report.e
 ## Build the human and inspection sites
 
 ```bash
-uv scripts/build_docs.py
+uv run scripts/build_docs.py
 ```
 
 The build script selects one Quarto profile and then performs two site builds:
