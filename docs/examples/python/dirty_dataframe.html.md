@@ -7,7 +7,7 @@ subtitle: "HTML MIME and native Pandoc tables from the same data"
 
 This page intentionally includes Markdown-sensitive values, missing values, currency text, units, links, and literal pipes. The first display uses pandas HTML MIME output. The second uses the optional native Pandoc table helper. TraceCite normalises both through one canonical model.
 
-::: {#8357d849 .cell execution_count=1}
+::: {#dirty-dataframe-setup .cell execution_count=1}
 ``` {.python .cell-code}
 import pandas as pd
 
@@ -43,12 +43,12 @@ dirty_table = pd.DataFrame(
 
 A bare DataFrame is useful for direct inspection and may appear as an HTML table in retained Markdown. The HTML adapter preserves that source and converts it to canonical Markdown for retrieval.
 
-::: {#4b1bc12e .cell execution_count=2}
+::: {#cell-dirty-dataframe-html-display .cell execution_count=2}
 ``` {.python .cell-code}
 dirty_table
 ```
 
-::: {.cell-output .cell-output-display execution_count=2}
+::: {#dirty-dataframe-html-display .cell-output .cell-output-display execution_count=2}
 ```{=html}
 <div>
 <style scoped>
@@ -128,6 +128,7 @@ dirty_table
 
 The same values are emitted as a safe captioned pipe table. This remains optional; TraceCite also accepts tables produced by other libraries.
 
+::: {#dirty-dataframe-pandoc-table .cell execution_count=3}
 <!-- tracecite-table: {"row_identity": ["Technology"], "units": {"Capital cost ($/kW)": "$/kW", "Variable cost ($/MWh)": "$/MWh"}} -->
 
 | Technology             |   Capital cost (\$/kW) |   Variable cost (\$/MWh) | Status      | Notes                             |
@@ -141,6 +142,7 @@ The same values are emitted as a safe captioned pipe table. This remains optiona
 : Dirty technology-cost fixture emitted as native Pandoc Markdown. {#tbl-dirty-python}
 
 **Computed finding.** In `Dirty technology-cost fixture emitted as native Pandoc Markdown.`, the first row has Technology is **Solar PV**, Capital cost ($/kW) is **1250.00 \$/kW**, and Status is **firm**.
+:::
 
 
 

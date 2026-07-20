@@ -12,6 +12,7 @@ The page computes a ranked event table from the source data. When the input chan
 """
 
 # %%
+#| label: hottest-temperature-setup
 import pandas as pd
 
 from tracecite.tables import knowledge_table
@@ -51,6 +52,7 @@ The published output is an ordinary Pandoc table. The optional metadata describe
 """
 
 # %%
+#| label: hottest-temperature-pandoc-table
 #| echo: false
 #| output: asis
 
@@ -81,6 +83,7 @@ print(
 )
 
 # %%
+#| label: hottest-temperature-assertions
 #| include: false
 
 assert highest_temperature.iloc[0]["daily_maximum_temperature_c"] == 50.7

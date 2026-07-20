@@ -29,9 +29,9 @@ Written Markdown and retained Markdown serve different purposes even when both a
 - Retained Markdown contains the result of executing and rendering a document. It is generated rather than edited by hand.
 - HTML is the presentation layer for browser readers. It can be rebuilt from the source and retained evidence.
 
-Committed retained Markdown makes executed evidence reviewable in ordinary diffs and available without rerunning every analysis. Keeping it in a dedicated generated-evidence directory distinguishes it from written pages while preserving it as part of the repository's evidence.
+Committed retained Markdown makes executed evidence reviewable in ordinary diffs and available without rerunning every analysis. Source-adjacent `*.html.md` files stay beside their executable pages, while ordinary `*.html` files and build directories remain disposable.
 
-The planned documentation layout is:
+The documentation layout is:
 
 ```text
 docs/
@@ -39,13 +39,13 @@ docs/
     guide/                         written documentation
     examples/python/               executable Python pages
     examples/julia/                executable Julia pages
-    retained/                      committed generated Markdown
-        guide/architecture.html.md
-        examples/python/hottest_temperature.html.md
+    guide/architecture.md          written documentation
+    guide/architecture.html.md     committed generated evidence
+    examples/python/hottest_temperature.html.md
     build/                         rebuildable HTML website
 ```
 
-Rendering can take place in a temporary project directory so Quarto's intermediate `.html` and `.html.md` files never mix with written files. A successful render copies retained Markdown into `docs/retained/` and HTML into `docs/build/`. The retained Markdown is committed; the HTML build remains disposable.
+Quarto writes retained Markdown beside each executable source. The build script copies those files into `docs/build/` for the inspection site. Retained Markdown is committed; ordinary HTML, `docs/build/`, Quarto caches, and `.tracecite/` are disposable.
 
 ## Three separate operations
 
@@ -107,7 +107,7 @@ The same page may exist as written Markdown and retained Markdown:
 
 ```text
 docs/guide/architecture.md
-docs/retained/guide/architecture.html.md
+docs/guide/architecture.html.md
 ```
 
 These files represent one logical document, not two independent search results. A source manifest can record the written path for provenance and the retained path as the indexable evidence. A standalone Markdown file without a rendered counterpart uses the written file itself as its evidence.

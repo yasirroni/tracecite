@@ -4,6 +4,7 @@ title: "Repository layout"
 
 TraceCite keeps its Python and Julia implementations, tests, documentation, examples, and build tools in separate top-level areas.
 
+::: {#repository-layout-tree .cell execution_count=1}
 ```text
 .
 ├── docs/
@@ -62,6 +63,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 ├── README.md
 └── uv.lock
 ```
+:::
 
 
 Executable documentation examples are grouped by language under `docs/examples/`. Written guides and format references remain under `docs/guide/` and `docs/formats/`.

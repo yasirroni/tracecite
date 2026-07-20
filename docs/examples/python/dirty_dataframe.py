@@ -12,6 +12,7 @@ This page intentionally includes Markdown-sensitive values, missing values, curr
 """
 
 # %%
+#| label: dirty-dataframe-setup
 import pandas as pd
 
 from tracecite.tables import knowledge_table
@@ -47,6 +48,7 @@ A bare DataFrame is useful for direct inspection and may appear as an HTML table
 """
 
 # %%
+#| label: dirty-dataframe-html-display
 dirty_table
 
 # %% [markdown]
@@ -57,6 +59,7 @@ The same values are emitted as a safe captioned pipe table. This remains optiona
 """
 
 # %%
+#| label: dirty-dataframe-pandoc-table
 #| echo: false
 #| output: asis
 
@@ -86,6 +89,7 @@ print(
 )
 
 # %%
+#| label: dirty-dataframe-assertions
 #| include: false
 
 assert dirty_table.shape == (5, 5)

@@ -7,7 +7,7 @@ subtitle: "An executed result that can answer a later question without reloading
 
 The page computes a ranked event table from the source data. When the input changes and the page is rerun, Quarto regenerates the retained Markdown and HTML. TraceCite can then retrieve the new first row directly.
 
-::: {#e6ae1c8e .cell execution_count=1}
+::: {#hottest-temperature-setup .cell execution_count=1}
 ``` {.python .cell-code}
 import pandas as pd
 
@@ -47,6 +47,7 @@ highest_temperature.insert(0, "rank", range(1, len(highest_temperature) + 1))
 
 The published output is an ordinary Pandoc table. The optional metadata describes schema semantics only; the rows are generated from the DataFrame.
 
+::: {#hottest-temperature-pandoc-table .cell execution_count=2}
 <!-- tracecite-table: {"description": "Highest daily maximum-temperature events in the example dataset.", "ordering": "Daily maximum temperature descending, then Date ascending, then Place ascending", "row_identity": ["Place", "Date"], "units": {"Daily maximum temperature (°C)": "°C"}} -->
 
 |   Rank | Place                               | Date       |   Daily maximum temperature (°C) |
@@ -57,6 +58,7 @@ The published output is an ordinary Pandoc table. The optional metadata describe
 |      4 | Roebourne, Western Australia        | 2022-01-13 |                             50.5 |
 
 : Highest observed daily maximum temperatures, ordered from highest to lowest. {#tbl-highest-temperature-python}
+:::
 
 
 

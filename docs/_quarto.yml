@@ -24,4 +24,4 @@ format:
 execute:
   echo: true
   warning: true
-  error: true
+  error: false

@@ -9,6 +9,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 """
 
 # %%
+#| label: repository-layout-tree
 #| echo: false
 #| output: asis
 
