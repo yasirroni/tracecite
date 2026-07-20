@@ -20,6 +20,8 @@ website:
         contents:
           - href: guide/architecture.md
             text: Architecture
+          - href: guide/searchable-evidence.md
+            text: From documents to searchable evidence
           - href: guide/api.md
             text: Python API and CLI
           - href: guide/embedding-site.md

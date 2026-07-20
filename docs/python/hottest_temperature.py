@@ -8,7 +8,7 @@
 """
 ## Purpose
 
-The page computes a ranked event table. The source contains no manually written observed fact. When the input changes and the page is rerun, Quarto regenerates the retained Markdown and HTML. TraceCite can then retrieve the new first row directly.
+The page computes a ranked event table from the source data. When the input changes and the page is rerun, Quarto regenerates the retained Markdown and HTML. TraceCite can then retrieve the new first row directly.
 """
 
 # %%
@@ -47,7 +47,7 @@ highest_temperature.insert(0, "rank", range(1, len(highest_temperature) + 1))
 """
 ## Highest observed daily maximum temperatures
 
-The human-facing output is an ordinary Pandoc table. The optional metadata describes schema semantics only; the rows are generated from the DataFrame.
+The published output is an ordinary Pandoc table. The optional metadata describes schema semantics only; the rows are generated from the DataFrame.
 """
 
 # %%

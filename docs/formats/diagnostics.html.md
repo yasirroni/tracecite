@@ -27,7 +27,7 @@ The normaliser emits both `table.unit-conflict` and `table.mixed-units`. It does
 
 ## Failure preservation
 
-Default document ingestion does not discard a table merely because optional metadata or structure is malformed. TraceCite preserves the exact raw source, marks the result as unsupported, records `table.normalisation-failed`, and emits no retrieval text for that table. A later agent can still inspect the original evidence.
+Default document ingestion does not discard a table merely because optional metadata or structure is malformed. TraceCite preserves the exact raw source, marks the result as unsupported, records `table.normalisation-failed`, and emits no retrieval text for that table. The original evidence remains available for inspection.
 
 Strict validation deliberately fails instead:
 

@@ -31,7 +31,7 @@ def knowledge_table(
     description: str | None = None,
     summary: bool | Sequence[str] = False,
 ) -> str:
-    """Return one human-facing Pandoc table with optional semantic metadata."""
+    """Return one Pandoc table with optional semantic metadata."""
 
     if not _TABLE_ID_RE.fullmatch(table_id):
         raise ValueError(

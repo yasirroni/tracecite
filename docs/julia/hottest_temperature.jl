@@ -8,7 +8,7 @@
 """
 ## Purpose
 
-The page computes the same ranked event table as the Python counterpart. The source contains no manually written observed fact. Quarto's native Julia engine executes the page, retains Markdown, and produces the human HTML site.
+The page computes the same ranked event table as the Python counterpart. The observed result is generated from the source data. Quarto's native Julia engine executes the page, retains Markdown, and produces the HTML site.
 """
 
 # %%
@@ -41,7 +41,7 @@ insertcols!(highest_temperature, 1, :rank => 1:nrow(highest_temperature))
 """
 ## Highest observed daily maximum temperatures
 
-The human-facing output is an ordinary Pandoc table. The metadata describes schema semantics only; the rows are generated from the DataFrame.
+The published output is an ordinary Pandoc table. The metadata describes schema semantics only; the rows are generated from the DataFrame.
 """
 
 # %%

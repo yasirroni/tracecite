@@ -21,7 +21,7 @@ docs/build/                         original Quarto output
     _site/                           optional second Quarto render
 ```
 
-Each copied page contains the original table followed by a collapsible callout with the normalised representation. This makes transformation errors visible without polluting the human-facing source site or double-weighting the table in a normal indexing run.
+Each copied page contains the original table followed by a collapsible callout with the normalised representation. This makes transformation errors visible without polluting the main documentation site or double-weighting the table in a normal indexing run.
 
 The copied `_quarto.yml` is produced by merging the original base configuration with the selected profile. TraceCite preserves the site's theme, brand, navigation, and format settings, rewrites executable-page links from `.py` or `.jl` to copied `.md` pages, disables execution, and removes build hooks. The second Quarto run is therefore a presentation-only render of already executed knowledge.
 

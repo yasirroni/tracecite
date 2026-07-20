@@ -43,7 +43,7 @@ dirty_table = pd.DataFrame(
 """
 ## HTML MIME display
 
-A bare DataFrame is useful to humans and may appear as an HTML table in retained Markdown. The HTML adapter preserves that source and converts it to canonical Markdown for retrieval.
+A bare DataFrame is useful for direct inspection and may appear as an HTML table in retained Markdown. The HTML adapter preserves that source and converts it to canonical Markdown for retrieval.
 """
 
 # %%

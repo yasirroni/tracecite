@@ -1,4 +1,4 @@
-"""Build the human Quarto site and the generated embedding-inspection site."""
+"""Build the Quarto documentation and generated embedding-inspection sites."""
 
 from __future__ import annotations
 
@@ -8,6 +8,23 @@ import shutil
 import subprocess
 
 from tracecite.tables import export_embedding_site
+
+
+def stage_retained_markdown(docs: Path, build: Path) -> int:
+    """Copy Quarto's retained Markdown into the rendered site tree."""
+
+    docs = docs.resolve()
+    build = build.resolve()
+    count = 0
+    for source in sorted(docs.rglob("*.html.md")):
+        resolved = source.resolve()
+        if resolved.is_relative_to(build) or ".quarto" in source.parts:
+            continue
+        destination = build / resolved.relative_to(docs)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(resolved, destination)
+        count += 1
+    return count
 
 
 def main() -> int:
@@ -31,13 +48,17 @@ def main() -> int:
         print("Julia was not found; rendering the Python-only profile.")
 
     subprocess.run(command, cwd=root, check=True)
-    print(f"Human site: {root / 'docs' / 'build'}")
+    docs = root / "docs"
+    build = docs / "build"
+    retained_count = stage_retained_markdown(docs, build)
+    print(f"Documentation site: {build}")
+    print(f"Retained Markdown pages: {retained_count}")
 
     if args.no_embedding_site:
         return 0
 
     result = export_embedding_site(
-        root / "docs" / "build",
+        build,
         root / ".tracecite" / "embedding-site",
         project_config=root / "docs" / "_quarto.yml",
         project_profile=profile,
