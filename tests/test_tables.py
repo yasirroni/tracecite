@@ -371,7 +371,7 @@ class SiteExportTests(unittest.TestCase):
                 "  title: Raw site\n"
                 "  navbar:\n"
                 "    left:\n"
-                "      - href: python/example.py\n"
+                "      - href: examples/python/example.py\n"
                 "format:\n"
                 "  html:\n"
                 "    theme: cosmo\n"
@@ -384,7 +384,7 @@ class SiteExportTests(unittest.TestCase):
                 "website:\n"
                 "  sidebar:\n"
                 "    contents:\n"
-                "      - href: python/example.py\n",
+                "      - href: examples/python/example.py\n",
                 encoding="utf-8",
             )
             output = root / "embedding"
@@ -402,11 +402,11 @@ class SiteExportTests(unittest.TestCase):
             self.assertNotIn("keep-md", generated["format"]["html"])
             self.assertEqual(
                 generated["website"]["sidebar"]["contents"][0]["href"],
-                "python/example.md",
+                "examples/python/example.md",
             )
             self.assertEqual(
                 generated["website"]["navbar"]["left"][0]["href"],
-                "python/example.md",
+                "examples/python/example.md",
             )
             self.assertNotIn("post-render", generated["project"])
             self.assertNotIn("profile", generated)
@@ -439,9 +439,14 @@ class RepositoryTests(unittest.TestCase):
     def test_python_and_julia_pages_remain_paired(self) -> None:
         project = Path(__file__).resolve().parents[1]
         python_pages = {
-            path.stem for path in (project / "docs" / "python").glob("*.py")
+            path.stem
+            for path in (project / "docs" / "examples" / "python").glob("*.py")
         }
-        julia_pages = {path.stem for path in (project / "docs" / "julia").glob("*.jl")}
+        julia_pages = {
+            path.stem
+            for path in (project / "docs" / "examples" / "julia").glob("*.jl")
+        }
+        self.assertTrue(python_pages)
         self.assertEqual(python_pages, julia_pages)
 
 

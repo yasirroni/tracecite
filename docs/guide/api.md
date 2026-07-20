@@ -38,8 +38,8 @@ from tracecite.tables import normalise_document_tables
 
 tables = normalise_document_tables(
     markdown,
-    document_path="docs/build/weather.html.md",
-    source_code_path="docs/python/weather.py",
+    document_path="docs/build/examples/python/weather.html.md",
+    source_code_path="docs/examples/python/weather.py",
 )
 ```
 

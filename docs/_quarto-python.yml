@@ -3,7 +3,8 @@ project:
     - index.md
     - guide/*.md
     - formats/*.md
-    - python/*.py
+    - guide/repository_layout.py
+    - examples/python/*.py
 
 website:
   sidebar:
@@ -17,6 +18,8 @@ website:
             text: Architecture
           - href: guide/searchable-evidence.md
             text: From documents to searchable evidence
+          - href: guide/repository_layout.py
+            text: Repository layout
           - href: guide/api.md
             text: Python API and CLI
           - href: guide/embedding-site.md
@@ -31,7 +34,7 @@ website:
             text: Structural diagnostics
       - section: Python EDA
         contents:
-          - href: python/hottest_temperature.py
+          - href: examples/python/hottest_temperature.py
             text: Highest-temperature result
-          - href: python/dirty_dataframe.py
+          - href: examples/python/dirty_dataframe.py
             text: Dirty DataFrame edge cases

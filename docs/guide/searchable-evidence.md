@@ -37,11 +37,11 @@ The planned documentation layout is:
 docs/
     index.md                       written documentation
     guide/                         written documentation
-    python/                        executable Python pages
-    julia/                         executable Julia pages
+    examples/python/               executable Python pages
+    examples/julia/                executable Julia pages
     retained/                      committed generated Markdown
         guide/architecture.html.md
-        python/hottest_temperature.html.md
+        examples/python/hottest_temperature.html.md
     build/                         rebuildable HTML website
 ```
 

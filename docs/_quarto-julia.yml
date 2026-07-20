@@ -3,8 +3,9 @@ project:
     - index.md
     - guide/*.md
     - formats/*.md
-    - python/*.py
-    - julia/*.jl
+    - guide/repository_layout.py
+    - examples/python/*.py
+    - examples/julia/*.jl
 
 # Quarto requires project-wide engine prioritisation for percent-format .jl pages.
 engines:
@@ -22,6 +23,8 @@ website:
             text: Architecture
           - href: guide/searchable-evidence.md
             text: From documents to searchable evidence
+          - href: guide/repository_layout.py
+            text: Repository layout
           - href: guide/api.md
             text: Python API and CLI
           - href: guide/embedding-site.md
@@ -36,13 +39,13 @@ website:
             text: Structural diagnostics
       - section: Python EDA
         contents:
-          - href: python/hottest_temperature.py
+          - href: examples/python/hottest_temperature.py
             text: Highest-temperature result
-          - href: python/dirty_dataframe.py
+          - href: examples/python/dirty_dataframe.py
             text: Dirty DataFrame edge cases
       - section: Julia EDA
         contents:
-          - href: julia/hottest_temperature.jl
+          - href: examples/julia/hottest_temperature.jl
             text: Highest-temperature result
-          - href: julia/dirty_dataframe.jl
+          - href: examples/julia/dirty_dataframe.jl
             text: Dirty DataFrame edge cases

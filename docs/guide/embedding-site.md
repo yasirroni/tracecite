@@ -9,13 +9,13 @@ The normal site must stay pure Quarto output. TraceCite therefore does not appen
 ```text
 docs/build/                         original Quarto output
     index.html
-    python/hottest_temperature.html
-    python/hottest_temperature.html.md
+    examples/python/hottest_temperature.html
+    examples/python/hottest_temperature.html.md
 
 .tracecite/embedding-site/          generated inspection source
     _quarto.yml
     index.md
-    python/hottest_temperature.md
+    examples/python/hottest_temperature.md
     _tracecite/tables.jsonl
     _tracecite/manifest.json
     _site/                           optional second Quarto render

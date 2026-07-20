@@ -7,7 +7,7 @@ subtitle: "An executed result that can answer a later question without reloading
 
 The page computes a ranked event table from the source data. When the input changes and the page is rerun, Quarto regenerates the retained Markdown and HTML. TraceCite can then retrieve the new first row directly.
 
-::: {#1e2d53c5 .cell execution_count=1}
+::: {#e6ae1c8e .cell execution_count=1}
 ``` {.python .cell-code}
 import pandas as pd
 
