@@ -38,7 +38,7 @@ print("```")
 
 # %% [markdown]
 """
-Executable documentation examples are grouped by language under `docs/examples/`. Written guides and format references remain under `docs/guide/` and `docs/formats/`.
+Executable documentation examples are grouped by language under `docs/examples/`. The standalone Literate/Documenter fixture is also kept under `docs/examples/literate_documenter/`, with its own Julia project and nested Documenter site. Written guides and format references remain under `docs/guide/` and `docs/formats/`.
 
 The project contains no `.qmd` files. Executable pages use percent-format `.py` and `.jl`; written pages use `.md`.
 """

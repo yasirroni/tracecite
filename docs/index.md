@@ -13,12 +13,16 @@ TraceCite treats generated documentation as a reusable analytical knowledge laye
     -> HTML website
 
 retained Markdown
-    -> TraceCite table normaliser
+    -> `tracecite prepare` CLI/package
     -> raw table evidence + normalised row text
     -> future FTS/vector/SQLite ingestion
 ```
 
 The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact text that an embedding pipeline would consume.
+
+## Build boundary
+
+`scripts/build_docs.py` is a repository-specific thin wrapper around the installed Quarto and TraceCite commands. It selects the Python or Julia profile, stages Quarto's retained Markdown, coordinates the optional inspection-site render, and checks retained-Markdown freshness. Normalisation is implemented by the public `tracecite prepare` CLI and package.
 
 | Representation | Preserved content | Main consumer | Default location |
 |---|---|---|---|
@@ -42,7 +46,9 @@ The normal documentation site contains only the original table. An optional embe
 
 ```bash
 python -m pip install -e .
-python scripts/build_docs.py
+uv run scripts/build_docs.py
 ```
 
-When Julia is not installed, the script automatically uses the `python` profile and still builds the Python, format, and architecture pages. With Julia available, it uses the `julia` profile and adds the paired Julia pages to the same website.
+`uv run` exposes the project environment's installed `tracecite` console script. Use `uv run scripts/build_docs.py --tracecite /path/to/tracecite` to select an explicit executable. When Julia is not installed, the script automatically uses the `python` profile and still builds the Python, format, and architecture pages. With Julia available, it uses the `julia` profile and adds the paired Julia pages to the same website.
+
+After a Quarto render, another project can invoke `tracecite prepare` directly with its retained Markdown root and preparation options.

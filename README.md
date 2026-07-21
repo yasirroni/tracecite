@@ -13,7 +13,7 @@ Python or Julia executable page
        -> HTML site
 
 retained Markdown
-    -> TraceCite normaliser
+    -> `tracecite prepare` CLI/package
        -> canonical table model
        -> row-oriented retrieval text
        -> diagnostics
@@ -21,6 +21,8 @@ retained Markdown
 ```
 
 The normal site remains pure Quarto output. The generated inspection copy doubles each table only when explicitly requested.
+
+`scripts/build_docs.py` is a repository-specific thin wrapper around the installed Quarto and TraceCite commands. It selects the Python or Julia Quarto profile, stages retained Markdown, coordinates the optional inspection-site render, and checks retained-Markdown freshness. Table normalisation remains in the public `tracecite prepare` CLI and package rather than in the wrapper.
 
 ## Prerequisites
 
@@ -32,6 +34,8 @@ The normal site remains pure Quarto output. The generated inspection copy double
 The Python normaliser and CLI work without Julia. `scripts/build_docs.py` automatically selects the Python-only profile when Julia is not available.
 
 ## Usage
+
+The public `tracecite` CLI provides table and document normalisation directly; the `prepare` command consumes retained Markdown after a Quarto render and creates the optional inspection-site copy.
 
 ## Public API
 
@@ -117,7 +121,10 @@ julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
 ```sh
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 uv run scripts/build_docs.py
+uv run scripts/build_docs.py --tracecite /path/to/tracecite
 ```
+
+`uv run` runs the wrapper in the project environment, exposing that environment's installed `tracecite` console script. An explicit executable can be selected with `--tracecite /path/to/tracecite`. External projects can invoke `tracecite prepare` directly after their Quarto render when they do not need this repository's profile selection, retained-Markdown staging, or freshness check.
 
 Julia dependency installation is required once before building the combined Python and Julia site. To build only the Python pages, use:
 
@@ -125,7 +132,7 @@ Julia dependency installation is required once before building the combined Pyth
 uv run scripts/build_docs.py --skip-julia
 ```
 
-The build script selects one Quarto profile and then performs two site builds:
+The wrapper selects one Quarto profile, runs Quarto, stages retained Markdown, and then invokes the public preparation command. The optional second render is owned by `tracecite prepare`:
 
 ```text
 quarto render docs --profile python   # when Julia is unavailable
@@ -144,3 +151,9 @@ tracecite prepare docs/build \
 ```
 
 If Julia is unavailable, the build script selects the `python` profile without deleting or modifying the Julia sources. When Julia is available, it selects the `julia` profile, which enables Quarto's native Julia engine and adds the paired Julia pages to the same site.
+
+To open the final docs:
+
+```sh
+open docs/build/index.html
+```

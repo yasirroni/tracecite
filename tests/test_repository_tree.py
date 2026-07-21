@@ -5,6 +5,30 @@ import unittest
 
 
 class RepositoryTreeTests(unittest.TestCase):
+    def test_literate_documenter_fixture_uses_canonical_docs_path(self) -> None:
+        project = Path(__file__).resolve().parents[1]
+        canonical = project / "docs" / "examples" / "literate_documenter"
+        old = project / "examples" / "literate_documenter"
+
+        for relative in (
+            "Project.toml",
+            "src/temperature_eda.jl",
+            "docs/make.jl",
+            "docs/src/index.md",
+            "index.md",
+        ):
+            self.assertTrue((canonical / relative).is_file(), relative)
+        self.assertFalse(old.exists())
+
+        format_page = (project / "docs" / "formats" / "html-documenter.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("docs/examples/literate_documenter/", format_page)
+
+        for profile_name in ("_quarto-python.yml", "_quarto-julia.yml"):
+            profile = (project / "docs" / profile_name).read_text(encoding="utf-8")
+            self.assertIn("examples/literate_documenter/index.md", profile)
+
     def test_tree_has_a_hidden_source_guide_page(self) -> None:
         project = Path(__file__).resolve().parents[1]
         page = project / "docs" / "guide" / "repository_layout.py"

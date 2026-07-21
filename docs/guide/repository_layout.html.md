@@ -10,6 +10,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 ├── docs/
 │   ├── examples/
 │   │   ├── julia/
+│   │   ├── literate_documenter/
 │   │   └── python/
 │   ├── formats/
 │   │   ├── diagnostics.html.md
@@ -29,17 +30,15 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── repository_layout.py
 │   │   ├── searchable-evidence.html.md
 │   │   └── searchable-evidence.md
+│   ├── superpowers/
+│   │   ├── plans/
+│   │   └── specs/
 │   ├── .gitignore
 │   ├── _quarto-julia.yml
 │   ├── _quarto-python.yml
 │   ├── _quarto.yml
 │   ├── index.html.md
 │   └── index.md
-├── examples/
-│   └── literate_documenter/
-│       ├── docs/
-│       ├── src/
-│       └── Project.toml
 ├── scripts/
 │   ├── build_docs.py
 │   └── render_repository_tree.py
@@ -66,7 +65,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 :::
 
 
-Executable documentation examples are grouped by language under `docs/examples/`. Written guides and format references remain under `docs/guide/` and `docs/formats/`.
+Executable documentation examples are grouped by language under `docs/examples/`. The standalone Literate/Documenter fixture is also kept under `docs/examples/literate_documenter/`, with its own Julia project and nested Documenter site. Written guides and format references remain under `docs/guide/` and `docs/formats/`.
 
 The project contains no `.qmd` files. Executable pages use percent-format `.py` and `.jl`; written pages use `.md`.
 

@@ -47,6 +47,8 @@ docs/
 
 Quarto writes retained Markdown beside each executable source. The build script copies those files into `docs/build/` for the inspection site. Retained Markdown is committed; ordinary HTML, `docs/build/`, Quarto caches, and `.tracecite/` are disposable.
 
+In this repository, `scripts/build_docs.py` is a thin orchestration wrapper. It selects the Python or Julia profile, runs Quarto, stages retained Markdown, coordinates the optional inspection render, and checks freshness. The public `tracecite prepare` CLI and package own table normalisation. `uv run scripts/build_docs.py` uses the project environment's installed `tracecite` console script; `--tracecite /path/to/tracecite` selects an explicit executable. An external project can run `tracecite prepare` directly after its Quarto render.
+
 ## Three separate operations
 
 Normalising a document, synchronising a collection, and computing embeddings are related but distinct operations.

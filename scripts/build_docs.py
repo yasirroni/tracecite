@@ -8,9 +8,6 @@ import re
 import shutil
 import subprocess
 
-from tracecite.tables import export_embedding_site
-
-
 def snapshot_retained_markdown(docs: Path) -> dict[Path, bytes]:
     """Return source-adjacent retained Markdown bytes, excluding output trees."""
     docs = docs.resolve()
@@ -71,9 +68,41 @@ def stage_retained_markdown(docs: Path, build: Path) -> int:
     return count
 
 
+def build_prepare_command(
+    tracecite: str,
+    quarto: str,
+    profile: str,
+    *,
+    render: bool,
+    strict: bool,
+) -> list[str]:
+    """Build the public TraceCite preparation command for this repository."""
+    command = [
+        tracecite,
+        "prepare",
+        "docs/build",
+        "--project-config",
+        "docs/_quarto.yml",
+        "--project-profile",
+        profile,
+        "--source-project",
+        "docs",
+        "--keep-embedding-markdown",
+        ".tracecite/embedding-site",
+        "--quarto",
+        quarto,
+    ]
+    if render:
+        command.append("--render-embedding-site")
+    if strict:
+        command.append("--strict-tables")
+    return command
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quarto", help="Path to the Quarto executable")
+    parser.add_argument("--tracecite", help="Path to the TraceCite executable")
     parser.add_argument("--skip-julia", action="store_true")
     parser.add_argument("--no-embedding-site", action="store_true")
     parser.add_argument("--no-render-embedding-site", action="store_true")
@@ -82,6 +111,15 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
+    tracecite = None
+    if not args.no_embedding_site:
+        tracecite = args.tracecite or shutil.which("tracecite")
+        if not tracecite:
+            raise SystemExit(
+                "tracecite CLI is required for the embedding site. Install "
+                "TraceCite and ensure 'tracecite' is on PATH, pass --tracecite "
+                "with its executable path, or use --no-embedding-site."
+            )
     quarto = args.quarto or shutil.which("quarto")
     if not quarto:
         raise SystemExit("Quarto is required. Install Quarto or pass --quarto.")
@@ -101,20 +139,14 @@ def main() -> int:
     print(f"Retained Markdown pages: {retained_count}")
 
     if not args.no_embedding_site:
-        result = export_embedding_site(
-            build,
-            root / ".tracecite" / "embedding-site",
-            project_config=root / "docs" / "_quarto.yml",
-            project_profile=profile,
-            source_project=root / "docs",
-            strict=args.strict_tables,
+        command = build_prepare_command(
+            tracecite,
+            quarto,
+            profile,
             render=not args.no_render_embedding_site,
-            quarto=quarto,
+            strict=args.strict_tables,
         )
-        print(f"Embedding Markdown: {result.output_root}")
-        if result.rendered_site:
-            print(f"Embedding inspection HTML: {result.rendered_site}")
-        print(f"Pages: {result.page_count}; tables: {result.table_count}")
+        subprocess.run(command, cwd=root, check=True)
     if retained_before is not None:
         changed = changed_retained_markdown(retained_before, docs)
         if changed:

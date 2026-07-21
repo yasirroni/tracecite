@@ -5,6 +5,7 @@ project:
     - formats/*.md
     - guide/repository_layout.py
     - examples/python/*.py
+    - examples/literate_documenter/index.md
 
 website:
   sidebar:
@@ -38,3 +39,5 @@ website:
             text: Highest-temperature result
           - href: examples/python/dirty_dataframe.py
             text: Dirty DataFrame edge cases
+      - href: examples/literate_documenter/index.md
+        text: Literate and Documenter fixture

@@ -6,6 +6,7 @@ project:
     - guide/repository_layout.py
     - examples/python/*.py
     - examples/julia/*.jl
+    - examples/literate_documenter/index.md
 
 # Quarto requires project-wide engine prioritisation for percent-format .jl pages.
 engines:
@@ -49,3 +50,5 @@ website:
             text: Highest-temperature result
           - href: examples/julia/dirty_dataframe.jl
             text: Dirty DataFrame edge cases
+      - href: examples/literate_documenter/index.md
+        text: Literate and Documenter fixture

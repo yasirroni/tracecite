@@ -25,6 +25,15 @@ Each copied page contains the original table followed by a collapsible callout w
 
 The copied `_quarto.yml` is produced by merging the original base configuration with the selected profile. TraceCite preserves the site's theme, brand, navigation, and format settings, rewrites executable-page links from `.py` or `.jl` to copied `.md` pages, disables execution, and removes build hooks. The second Quarto run is therefore a presentation-only render of already executed knowledge.
 
+The repository wrapper, `scripts/build_docs.py`, runs the first Quarto render, stages retained Markdown, invokes `tracecite prepare`, and checks retained-Markdown freshness. It selects the Python or Julia profile and coordinates the optional second render; normalisation remains in the public CLI and package. Run it through the project environment so the installed console script is available:
+
+```bash
+uv run scripts/build_docs.py
+uv run scripts/build_docs.py --tracecite /path/to/tracecite
+```
+
+Projects using a different build system can run the public `tracecite prepare` command directly after Quarto has produced retained Markdown.
+
 ```bash
 tracecite prepare docs/build \
   --project-config docs/_quarto.yml \
