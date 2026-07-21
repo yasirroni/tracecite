@@ -2,9 +2,9 @@
 title: "From documents to searchable evidence"
 ---
 
-TraceCite turns documents into searchable evidence without requiring a separate prose summary for every table. A table written directly in Markdown and a table produced by Python or Julia follow the same path once they appear in a document: the original table remains available for inspection, while TraceCite derives records that work better for full-text and vector search.
+TraceCite turns documents into searchable evidence without requiring a separate prose summary for every table. A table written directly in Markdown and a table produced by Python or Julia follow the same path once they appear in a document: the original table remains available for inspection, while TraceCite derives records that work better for full-text search and future vector search.
 
-Table normalisation and the inspectable embedding-site copy are available in the current package. Database synchronisation and embedding storage describe the planned indexing path; they are not yet exposed as TraceCite commands.
+Table normalisation and the inspectable embedding-site copy are available in the current package. Their current output is pre-vector retrieval text. Database synchronisation and embedding storage describe the planned indexing path; they are not yet exposed as TraceCite commands.
 
 ## Source material
 
@@ -41,7 +41,7 @@ docs/
     examples/julia/                executable Julia pages
     guide/architecture.md          written documentation
     guide/architecture.html.md     committed generated evidence
-    examples/python/hottest_temperature.html.md
+    examples/python/hottest_temperature.html.md  Tutorial 3 inspection output
     build/                         rebuildable HTML website
 ```
 
@@ -65,6 +65,10 @@ Normalisation is a pure document transformation. It reads Markdown or HTML, disc
 - structural diagnostics and content hashes.
 
 Normalisation does not modify a database or call an embedding model.
+
+The public `debug-markdown` output shows raw source, canonical Markdown,
+normalised retrieval text, and row records together. It is an inspection text
+representation, not a vector.
 
 ```bash
 tracecite document normalise report.md --to jsonl

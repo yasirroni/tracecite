@@ -38,17 +38,15 @@ website:
             text: Literate and Documenter HTML
           - href: formats/diagnostics.md
             text: Structural diagnostics
-      - section: Python EDA
+      - section: Tutorials
         contents:
-          - href: examples/python/hottest_temperature.py
-            text: Highest-temperature result
           - href: examples/python/dirty_dataframe.py
-            text: Dirty DataFrame edge cases
-      - section: Julia EDA
-        contents:
-          - href: examples/julia/hottest_temperature.jl
-            text: Highest-temperature result
+            text: What TraceCite does
           - href: examples/julia/dirty_dataframe.jl
-            text: Dirty DataFrame edge cases
+            text: TraceCite with Julia
+          - href: examples/python/hottest_temperature.py
+            text: Normalise and inspect ranked results
+          - href: examples/python/quarto_code_visibility.py
+            text: Control code visibility in Quarto
       - href: examples/literate_documenter/index.md
         text: Literate and Documenter fixture

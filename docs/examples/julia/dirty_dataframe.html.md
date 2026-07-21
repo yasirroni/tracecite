@@ -1,11 +1,17 @@
 ---
-title: "Dirty DataFrame edge cases — Julia"
-subtitle: "HTML MIME and native Pandoc tables from the same data"
+title: "TraceCite with Julia"
+subtitle: "The optional Julia route into TraceCite's canonical table model"
 ---
 
-## Purpose
+## Julia is optional
 
-This page uses the same values and section structure as the Python counterpart. The first display uses DataFrames.jl's rich table output. The second emits native Pandoc Markdown through `TraceCite.knowledge_table`.
+Julia is optional. TraceCite's Python normaliser and CLI do not require Julia.
+Rendering this executable page requires Julia 1.10 or newer, DataFrames.jl,
+Tables.jl, and Quarto's Julia engine.
+
+This page uses the same table contract as the Python introduction: HTML MIME
+and native Pandoc output are two evidence routes into TraceCite's canonical
+model.
 
 ::: {#2 .cell execution_count=1}
 ``` {.julia .cell-code}
@@ -43,7 +49,7 @@ dirty_table = DataFrame(
 
 
 
-## HTML MIME display
+## Evidence route 1: HTML MIME
 
 The native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.
 
@@ -61,7 +67,7 @@ dirty_table
 
 
 
-## Native Pandoc tables
+## Evidence route 2: Native Pandoc tables
 
 `knowledge_table()` needs a stable table identifier. A caption is optional, so
 the minimal form emits a bare pipe table without a numbered Quarto caption.
@@ -85,9 +91,10 @@ print(
 | Demand response | 140 | -15 | credit | negative value is intentional |
 
 
-Optional metadata controls presentation, retrieval context, stable row identity,
-and the data-derived finding. TraceCite can also normalise tables produced by
-other libraries; this helper is a convenient Pandoc Markdown output route.
+The advanced call below controls presentation, retrieval context, stable row
+identity, and the data-derived finding. TraceCite can also normalise tables
+produced by other libraries; this helper is a convenient Pandoc Markdown output
+route.
 
 ``` {.julia .cell-code}
 print(

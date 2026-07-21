@@ -21,6 +21,7 @@ _EXCLUDED_NAMES = {
 _EXCLUDED_SUFFIXES = (".egg-info",)
 _EXCLUDED_FILENAMES = {"Manifest.toml"}
 _EXCLUDED_PATHS = {
+    (".superpowers",),
     ("docs", "build"),
     ("docs", "site_libs"),
 }

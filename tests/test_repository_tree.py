@@ -75,9 +75,21 @@ class RepositoryTreeTests(unittest.TestCase):
             (root / "Manifest.toml").write_text("generated\n", encoding="utf-8")
             (root / ".git").mkdir()
             (root / ".git" / "config").write_text("git\n", encoding="utf-8")
+            (root / ".superpowers" / "specs").mkdir(parents=True)
+            (root / ".superpowers" / "specs" / "internal.md").write_text(
+                "internal\n", encoding="utf-8"
+            )
+            (root / "docs" / ".superpowers").mkdir(parents=True)
+            (root / "docs" / ".superpowers" / "public.md").write_text(
+                "public\n", encoding="utf-8"
+            )
 
             rendered = module.render_repository_tree(root, max_depth=3)
 
+            self.assertTrue(module._is_excluded(root, root / ".superpowers"))
+            self.assertFalse(
+                module._is_excluded(root, root / "docs" / ".superpowers")
+            )
         self.assertIn("README.md", rendered)
         self.assertIn("docs/", rendered)
         self.assertIn("guide/", rendered)
@@ -91,6 +103,8 @@ class RepositoryTreeTests(unittest.TestCase):
         self.assertNotIn("old/", rendered)
         self.assertNotIn("egg-info", rendered)
         self.assertNotIn("Manifest.toml", rendered)
+        self.assertNotIn("internal.md", rendered)
+        self.assertIn("public.md", rendered)
 
 
 if __name__ == "__main__":

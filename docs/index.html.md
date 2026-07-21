@@ -18,7 +18,7 @@ retained Markdown
     -> future FTS/vector/SQLite ingestion
 ```
 
-The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact text that an embedding pipeline would consume.
+The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact normalised retrieval text prepared for a future embedding pipeline; it does not contain vectors.
 
 ## Build boundary
 
@@ -38,7 +38,8 @@ The normal documentation site contains only the original table. An optional embe
 - Native Pandoc pipe, grid, and multiline table parsing through Pandoc's AST.
 - HTML table conversion for Literate.jl, Documenter.jl, PrettyTables, and notebook HTML MIME output.
 - Explicit diagnostics for spans, duplicate ranks, mixed units, declared ordering, empty headers, and malformed structures.
-- Paired Python and Julia executable EDA pages.
+- Four tutorials: what TraceCite does, the optional Julia route, ranked-result normalisation and inspection, and Quarto code visibility.
+- Continue with [Normalise and inspect ranked results](examples/python/hottest_temperature.py).
 - A complete `--keep-embedding-markdown` website copy that can be rendered by a second Quarto run.
 - No `.qmd` requirement: executable pages are percent-format `.py` and `.jl`; prose pages are `.md`.
 
@@ -49,6 +50,6 @@ python -m pip install -e .
 uv run scripts/build_docs.py
 ```
 
-`uv run` exposes the project environment's installed `tracecite` console script. Use `uv run scripts/build_docs.py --tracecite /path/to/tracecite` to select an explicit executable. When Julia is not installed, the script automatically uses the `python` profile and still builds the Python, format, and architecture pages. With Julia available, it uses the `julia` profile and adds the paired Julia pages to the same website.
+`uv run` exposes the project environment's installed `tracecite` console script. Use `uv run scripts/build_docs.py --tracecite /path/to/tracecite` to select an explicit executable. The Python profile renders Tutorials 1, 3, and 4. The Julia profile requires Julia 1.10 or newer and renders those pages plus the optional Julia equivalent (Tutorial 2).
 
 After a Quarto render, another project can invoke `tracecite prepare` directly with its retained Markdown root and preparation options.

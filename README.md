@@ -150,7 +150,7 @@ tracecite prepare docs/build \
     -> .tracecite/embedding-site/_site/ rendered inspection site
 ```
 
-If Julia is unavailable, the build script selects the `python` profile without deleting or modifying the Julia sources. When Julia is available, it selects the `julia` profile, which enables Quarto's native Julia engine and adds the paired Julia pages to the same site.
+If Julia is unavailable, the build script selects the `python` profile without deleting or modifying the Julia sources. When Julia is available, it selects the `julia` profile, which enables Quarto's native Julia engine and adds the optional Julia tutorial equivalent to the same site; only the dirty-DataFrame concept is paired across languages.
 
 To open the final docs:
 

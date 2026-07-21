@@ -30,9 +30,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── repository_layout.py
 │   │   ├── searchable-evidence.html.md
 │   │   └── searchable-evidence.md
-│   ├── superpowers/
-│   │   ├── plans/
-│   │   └── specs/
 │   ├── .gitignore
 │   ├── _quarto-julia.yml
 │   ├── _quarto-python.yml

@@ -1,14 +1,17 @@
 # %% [markdown]
 # ---
-# title: "Dirty DataFrame edge cases — Python"
-# subtitle: "HTML MIME and native Pandoc tables from the same data"
+# title: "What TraceCite does"
+# subtitle: "Preserved evidence and derived retrieval text from Python tables"
 # ---
 
 # %% [markdown]
 """
 ## Purpose
 
-This page intentionally includes Markdown-sensitive values, missing values, currency text, units, links, and literal pipes. The first display uses pandas HTML MIME output. The second uses the optional native Pandoc table helper. TraceCite normalises both through one canonical model.
+TraceCite accepts table evidence from ordinary Python displays and from its
+native Pandoc helper. Both routes preserve the raw source while deriving one
+canonical Markdown table, normalised retrieval text, row records, diagnostics,
+and stable identifiers for retrieval.
 """
 
 # %%
@@ -42,9 +45,11 @@ dirty_table = pd.DataFrame(
 
 # %% [markdown]
 """
-## HTML MIME display
+## Evidence route 1: HTML MIME
 
-A bare DataFrame is useful for direct inspection and may appear as an HTML table in retained Markdown. The HTML adapter preserves that source and converts it to canonical Markdown for retrieval.
+A bare DataFrame is a normal Python evidence route. Its retained HTML is
+preserved, and TraceCite can convert it to canonical Markdown and retrieval
+records without requiring the native helper.
 """
 
 # %%
@@ -53,7 +58,7 @@ dirty_table
 
 # %% [markdown]
 """
-## Native Pandoc tables
+## Evidence route 2: Native Pandoc tables
 
 `knowledge_table()` needs a stable table identifier. A caption is optional, so
 the minimal form emits a bare pipe table without a numbered Quarto caption.
@@ -72,9 +77,10 @@ print(
 
 # %% [markdown]
 """
-Optional metadata controls presentation, retrieval context, stable row identity,
-and the data-derived finding. TraceCite can also normalise tables produced by
-other libraries; this helper is a convenient Pandoc Markdown output route.
+The minimal call above and advanced call below show the optional caption,
+metadata, stable row identity, and data-derived finding. TraceCite can also normalise
+tables produced by other libraries; this helper is a convenient Pandoc output
+route.
 """
 
 # %%
@@ -114,3 +120,19 @@ print(
 
 assert dirty_table.shape == (5, 5)
 assert "Battery | BESS" in dirty_table["technology"].tolist()
+
+# %% [markdown]
+"""
+## What the canonical model provides
+
+For either input route, TraceCite derives:
+
+- raw source evidence;
+- canonical Markdown;
+- normalised retrieval text;
+- table-level and row-level records; and
+- diagnostics, identifiers, and source hashes.
+
+These are retrieval representations, not embedding vectors. The public API and
+CLI inspection workflow is demonstrated in the ranked-results tutorial.
+"""

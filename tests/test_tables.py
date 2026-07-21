@@ -511,7 +511,7 @@ class RepositoryTests(unittest.TestCase):
         project = Path(__file__).resolve().parents[1]
         self.assertEqual(list(project.rglob("*.qmd")), [])
 
-    def test_python_and_julia_pages_remain_paired(self) -> None:
+    def test_only_dirty_dataframe_pages_are_paired(self) -> None:
         project = Path(__file__).resolve().parents[1]
         python_pages = {
             path.stem
@@ -522,7 +522,10 @@ class RepositoryTests(unittest.TestCase):
             for path in (project / "docs" / "examples" / "julia").glob("*.jl")
         }
         self.assertTrue(python_pages)
-        self.assertEqual(python_pages, julia_pages)
+        self.assertEqual(python_pages & julia_pages, {"dirty_dataframe"})
+        self.assertFalse(
+            (project / "docs" / "examples" / "julia" / "hottest_temperature.jl").exists()
+        )
 
 
 if __name__ == "__main__":

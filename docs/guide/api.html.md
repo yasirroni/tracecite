@@ -11,6 +11,9 @@ table = normalise_pandoc_table(markdown_table)
 print(table.normalised_text)
 ```
 
+The ranked-results tutorial demonstrates this API end to end, including the
+public `debug-markdown` representation: [Normalise and inspect ranked results](../examples/python/hottest_temperature.py).
+
 The result contains:
 
 - `raw_source` — exact evidence supplied to the function;
@@ -66,3 +69,7 @@ tracecite prepare docs/build \
 ```
 
 The selected profile is merged into the copied site's configuration. Navigation, theme, brand, and ordinary website settings are retained. Execution engines and pre/post-render hooks are removed because the copied Markdown already contains executed results.
+
+`debug-markdown` and the embedding inspection site expose normalised retrieval
+text, raw and canonical representations, and row records. They do not generate
+or display embedding vectors.
