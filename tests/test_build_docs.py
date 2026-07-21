@@ -207,6 +207,22 @@ class RetainedMarkdownStagingTests(unittest.TestCase):
 class DocumentationInvariantTests(unittest.TestCase):
     ROOT = Path(__file__).parents[1]
 
+    def test_dirty_dataframe_pages_show_minimal_and_commented_advanced_calls(
+        self,
+    ) -> None:
+        docs = self.ROOT / "docs"
+        pages = [
+            (docs / "examples/python/dirty_dataframe.py").read_text(encoding="utf-8"),
+            (docs / "examples/julia/dirty_dataframe.jl").read_text(encoding="utf-8"),
+        ]
+        for page in pages:
+            self.assertIn("Required:", page)
+            self.assertIn("Optional:", page)
+            self.assertIn("summary", page)
+            self.assertNotIn("echo: false", page)
+        self.assertGreaterEqual(pages[0].count("knowledge_table("), 2)
+        self.assertGreaterEqual(pages[1].count("knowledge_table("), 2)
+
     def test_readme_keeps_public_commands_and_tracecite_override(self) -> None:
         readme = (self.ROOT / "README.md").read_text(encoding="utf-8")
         code_blocks = [

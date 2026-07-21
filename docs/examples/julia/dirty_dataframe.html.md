@@ -61,10 +61,62 @@ dirty_table
 
 
 
-## Native Pandoc table
+## Native Pandoc tables
 
-The same values are emitted as a safe captioned pipe table.
+`knowledge_table()` needs a stable table identifier. A caption is optional, so
+the minimal form emits a bare pipe table without a numbered Quarto caption.
 
+``` {.julia .cell-code}
+print(
+    knowledge_table(
+        dirty_table;
+        table_id = "dirty-dataframe-julia-minimal", # Required: stable TraceCite identity.
+    ),
+)
+```
+<!-- tracecite-table: {"table_id":"dirty-dataframe-julia-minimal"} -->
+
+| technology | capital cost per kw | variable cost per mwh | status | notes |
+| :--- | ---: | ---: | :--- | :--- |
+| Solar PV | 1250 | 0 | firm | Currency: A\$1,250/kW |
+| Battery \| BESS | 890.5 | 12.4 | provisional | literal pipe: north \| south |
+| Gas \*peaker\* | 760 | 185 | review | emphasis must remain literal |
+| Hydrogen &lt;draft&gt; | not available | 240 | missing | HTML-looking text must be escaped |
+| Demand response | 140 | -15 | credit | negative value is intentional |
+
+
+Optional metadata controls presentation, retrieval context, stable row identity,
+and the data-derived finding. TraceCite can also normalise tables produced by
+other libraries; this helper is a convenient Pandoc Markdown output route.
+
+``` {.julia .cell-code}
+print(
+    knowledge_table(
+        dirty_table;
+        table_id = "tbl-dirty-julia", # Required: stable identity and Quarto target.
+        caption = "Technology costs.", # Optional: visible caption enabling Quarto references.
+        labels = Dict( # Optional: reader-facing column headings.
+            "technology" => "Technology",
+            "capital_cost_per_kw" => "Capital cost (\$/kW)",
+            "variable_cost_per_mwh" => "Variable cost (\$/MWh)",
+            "status" => "Status",
+            "notes" => "Notes",
+        ),
+        formats = Dict( # Optional: deterministic numeric display formats.
+            "capital_cost_per_kw" => ".2f",
+            "variable_cost_per_mwh" => ".2f",
+        ),
+        units = Dict( # Optional: units retained in retrieval metadata and findings.
+            "capital_cost_per_kw" => "\$/kW",
+            "variable_cost_per_mwh" => "\$/MWh",
+        ),
+        row_identity = ["technology"], # Optional: logical identity for stable row IDs.
+        summary = [ # Optional: first field is the subject of the generated finding.
+            "technology", "capital_cost_per_kw", "status"
+        ],
+    ),
+)
+```
 <!-- tracecite-table: {"units":{"Variable cost ($/MWh)":"$/MWh","Capital cost ($/kW)":"$/kW"},"row_identity":["Technology"]} -->
 
 | Technology | Capital cost (\$/kW) | Variable cost (\$/MWh) | Status | Notes |
@@ -75,9 +127,9 @@ The same values are emitted as a safe captioned pipe table.
 | Hydrogen &lt;draft&gt; | not available | 240.00 | missing | HTML-looking text must be escaped |
 | Demand response | 140.00 | -15.00 | credit | negative value is intentional |
 
-: Dirty technology-cost fixture emitted as native Pandoc Markdown. {#tbl-dirty-julia}
+: Technology costs. {#tbl-dirty-julia}
 
-**Computed finding.** In `Dirty technology-cost fixture emitted as native Pandoc Markdown.`, the first row has Technology is **Solar PV**, Capital cost ($/kW) is **1250.00 \$/kW**, and Status is **firm**.
+**First-row finding.** For **Solar PV**, capital cost ($/kW) is **1250.00 \$/kW** and status is **firm**.
 
 
 

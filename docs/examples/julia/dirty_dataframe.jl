@@ -48,37 +48,56 @@ dirty_table
 
 # %% [markdown]
 """
-## Native Pandoc table
+## Native Pandoc tables
 
-The same values are emitted as a safe captioned pipe table.
+`knowledge_table()` needs a stable table identifier. A caption is optional, so
+the minimal form emits a bare pipe table without a numbered Quarto caption.
 """
 
 # %%
-#| echo: false
 #| output: asis
 
 print(
     knowledge_table(
         dirty_table;
-        caption = "Dirty technology-cost fixture emitted as native Pandoc Markdown.",
-        table_id = "tbl-dirty-julia",
-        labels = Dict(
+        table_id = "dirty-dataframe-julia-minimal", # Required: stable TraceCite identity.
+    ),
+)
+
+# %% [markdown]
+"""
+Optional metadata controls presentation, retrieval context, stable row identity,
+and the data-derived finding. TraceCite can also normalise tables produced by
+other libraries; this helper is a convenient Pandoc Markdown output route.
+"""
+
+# %%
+#| output: asis
+
+print(
+    knowledge_table(
+        dirty_table;
+        table_id = "tbl-dirty-julia", # Required: stable identity and Quarto target.
+        caption = "Technology costs.", # Optional: visible caption enabling Quarto references.
+        labels = Dict( # Optional: reader-facing column headings.
             "technology" => "Technology",
             "capital_cost_per_kw" => "Capital cost (\$/kW)",
             "variable_cost_per_mwh" => "Variable cost (\$/MWh)",
             "status" => "Status",
             "notes" => "Notes",
         ),
-        formats = Dict(
+        formats = Dict( # Optional: deterministic numeric display formats.
             "capital_cost_per_kw" => ".2f",
             "variable_cost_per_mwh" => ".2f",
         ),
-        units = Dict(
+        units = Dict( # Optional: units retained in retrieval metadata and findings.
             "capital_cost_per_kw" => "\$/kW",
             "variable_cost_per_mwh" => "\$/MWh",
         ),
-        row_identity = ["technology"],
-        summary = ["technology", "capital_cost_per_kw", "status"],
+        row_identity = ["technology"], # Optional: logical identity for stable row IDs.
+        summary = [ # Optional: first field is the subject of the generated finding.
+            "technology", "capital_cost_per_kw", "status"
+        ],
     ),
 )
 

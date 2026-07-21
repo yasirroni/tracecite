@@ -20,8 +20,8 @@ _TABLE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]*$")
 def knowledge_table(
     table: pd.DataFrame,
     *,
-    caption: str,
     table_id: str,
+    caption: str | None = None,
     columns: Sequence[str] | None = None,
     labels: Mapping[str, str] | None = None,
     formats: Mapping[str, Formatter] | None = None,
@@ -67,6 +67,7 @@ def knowledge_table(
     )
 
     metadata = table_metadata_comment(
+        table_id=table_id if caption is None else None,
         description=description,
         ordering=ordering,
         units={
@@ -88,11 +89,12 @@ def knowledge_table(
                 colalign=alignments,
             ),
             "",
-            f": {caption} {{#{table_id}}}",
         ]
     )
+    if caption is not None:
+        parts.append(f": {caption} {{#{table_id}}}")
 
-    if summary:
+    if summary is not False:
         summary_columns = selected if summary is True else list(summary)
         _require_columns(table, summary_columns)
         parts.extend(
@@ -100,7 +102,6 @@ def knowledge_table(
                 "",
                 computed_first_row_summary(
                     table,
-                    title=caption,
                     columns=summary_columns,
                     labels=labels,
                     units=units,
@@ -113,6 +114,7 @@ def knowledge_table(
 
 def table_metadata_comment(
     *,
+    table_id: str | None = None,
     description: str | None = None,
     ordering: str | None = None,
     labels: Mapping[str, str] | None = None,
@@ -122,6 +124,7 @@ def table_metadata_comment(
     payload = {
         key: value
         for key, value in {
+            "table_id": table_id,
             "description": description,
             "ordering": ordering,
             "labels": dict(labels or {}),
@@ -138,32 +141,42 @@ def table_metadata_comment(
 def computed_first_row_summary(
     table: pd.DataFrame,
     *,
-    title: str,
+    title: str | None = None,
     columns: Sequence[str] | None = None,
     labels: Mapping[str, str] | None = None,
     units: Mapping[str, str] | None = None,
     formats: Mapping[str, Formatter] | None = None,
-    prefix: str = "Computed finding",
+    prefix: str = "First-row finding",
 ) -> str:
     """Describe the first row using only values computed in ``table``."""
 
-    if table.empty:
-        return f"**{prefix}.** `{title}` contains no rows."
+    del title
     labels = dict(labels or {})
     units = dict(units or {})
     formats = dict(formats or {})
-    selected = list(columns or table.columns)
+    selected = list(table.columns if columns is None else columns)
     _require_columns(table, selected)
+    if not selected:
+        return f"**{prefix}.** No fields were selected."
+    if table.empty:
+        return f"**{prefix}.** The table contains no rows."
 
     row = table.iloc[0]
-    fields = []
+    fields: list[tuple[str, str]] = []
     for column in selected:
         label = labels.get(column, _humanise(column))
         value = _format_value(row[column], formats.get(column))
         if column in units and value != "not available":
             value = f"{value} {units[column]}"
-        fields.append(f"{label} is **{_escape_inline(value)}**")
-    return f"**{prefix}.** In `{title}`, the first row has {_join(fields)}."
+        fields.append((label, _escape_inline(value)))
+    if len(fields) == 1:
+        label, value = fields[0]
+        return f"**{prefix}.** {_upper_initial(label)} is **{value}**."
+    subject = fields[0][1]
+    predicates = [
+        f"{_lower_initial(label)} is **{value}**" for label, value in fields[1:]
+    ]
+    return f"**{prefix}.** For **{subject}**, {_join(predicates)}."
 
 
 def _format_value(value: Any, formatter: Formatter | None = None) -> str:
@@ -202,6 +215,14 @@ def _escape_inline(value: str) -> str:
 
 def _humanise(name: str) -> str:
     return str(name).replace("_", " ").strip()
+
+
+def _lower_initial(value: str) -> str:
+    return value[:1].lower() + value[1:]
+
+
+def _upper_initial(value: str) -> str:
+    return value[:1].upper() + value[1:]
 
 
 def _require_columns(table: pd.DataFrame, columns: Sequence[str]) -> None:
