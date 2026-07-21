@@ -37,11 +37,11 @@ The Python normaliser and CLI work without Julia. Automatic documentation builds
 
 The public `tracecite` CLI provides table and document normalisation directly; the `prepare` command consumes retained Markdown after a Quarto render and creates the optional inspection-site copy.
 
-## Public API
+### Public API
 
 ```python
 from tracecite.tables import (
-    normalise_pandoc_table,
+    normalise_panTraceCiteTables,
     normalise_html_table,
     normalise_document_tables,
 )
@@ -65,6 +65,30 @@ tracecite table normalise table.html --from html --to debug-markdown
 ```sh
 tracecite document normalise report.md --to jsonl
 tracecite document normalise report.md --to embedding-markdown --output report.embedding.md
+```
+
+### Build the documentation
+
+```sh
+tracecite docs build docs
+tracecite docs build docs_quarto_py --only python
+tracecite docs build docs_quarto_jl --only julia
+```
+
+<!-- TODO:
+Explain the expected `[WARNING] Could not fetch resource`
+-->
+
+The public builder discovers configured render inputs, automatically selects the complete site when both runtimes are available, and safely falls back to the available language with exact skipped-file warnings.
+Use `--only python` or `--only julia` for explicit reduced builds.
+External projects can invoke `tracecite prepare` directly after their Quarto render when they already have rendered and staged retained Markdown.
+
+If Julia is unavailable, the automatic build names every configured Julia source it skips and renders the Python overlay without modifying Julia sources.
+
+To open the final docs:
+
+```sh
+open docs/build/index.html
 ```
 
 ### Direct preparation command
@@ -114,53 +138,4 @@ Julia test:
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
-```
-
-### Build the documentation and inspection sites
-
-```sh
-julia --project=. -e 'using Pkg; Pkg.instantiate()'
-uv run tracecite docs build docs
-uv run tracecite docs build docs --only python
-julia --version
-uv run tracecite docs build docs --only julia
-```
-
-The public builder discovers configured render inputs, automatically selects the
-complete site when both runtimes are available, and safely falls back to the
-available language with exact skipped-file warnings. Use `--only python` or
-`--only julia` for explicit reduced builds. External projects can invoke
-`tracecite prepare` directly after their Quarto render when they already have
-rendered and staged retained Markdown.
-
-Julia dependency installation is required once before building the combined Python and Julia site. To build only the Python pages, use:
-
-```sh
-uv run tracecite docs build docs --only python
-```
-
-The builder selects the complete site or a reduced overlay, runs Quarto, stages retained Markdown, and calls the existing inspection export directly. The optional second render remains controlled by the builder:
-
-```text
-uv run tracecite docs build docs             # automatic complete/fallback selection
-uv run tracecite docs build docs --only python
-uv run tracecite docs build docs --only julia
-    -> docs/build/                      documentation site + retained Markdown
-
-tracecite prepare docs/build \
-    --project-config docs/_quarto.yml \
-    --project-profile python \
-    --source-project docs \
-    --keep-embedding-markdown .tracecite/embedding-site \
-    --render-embedding-site
-    -> .tracecite/embedding-site/       copied and augmented Markdown
-    -> .tracecite/embedding-site/_site/ rendered inspection site
-```
-
-If Julia is unavailable, the automatic build names every configured Julia source it skips and renders the Python overlay without modifying Julia sources. Julia packages such as PISP.jl can reuse the same public `tracecite docs build PROJECT --only julia` entry point.
-
-To open the final docs:
-
-```sh
-open docs/build/index.html
 ```
