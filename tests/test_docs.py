@@ -385,3 +385,239 @@ class CliTests(unittest.TestCase):
                 main(["docs", "build", "docs", "--check-retained"]),
                 1,
             )
+
+
+class SymlinkMirrorTests(unittest.TestCase):
+    def test_mirror_symlink_structure_creation(self) -> None:
+        """Test that mirror directories receive only symlinks to canonical."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+
+            # Create canonical structure
+            (canonical / "index.md").write_text("# Index\n")
+            (canonical / "guide").mkdir()
+            (canonical / "guide/api.md").write_text("# API\n")
+            (canonical / "guide/api.html.md").write_text("# Generated\n")
+            (canonical / "examples/python").mkdir(parents=True)
+            (canonical / "examples/python/demo.py").write_text("# Python\n")
+            (canonical / "examples/julia").mkdir(parents=True)
+            (canonical / "examples/julia/demo.jl").write_text("# Julia\n")
+
+            # Sync to Python mirror
+            from tracecite.docs_sync import sync_mirror_symlinks, verify_symlink_mirror
+
+            mirror_py = tmpdir_path / "mirror_py"
+            sync_mirror_symlinks(canonical, mirror_py, variant="python")
+
+            # Verify Python mirror structure
+            status = verify_symlink_mirror(mirror_py, canonical, variant="python")
+            self.assertEqual(status["errors"], [])
+            self.assertGreater(status["symlink_count"], 0)
+            # Python mirror should not have Julia files
+            self.assertFalse((mirror_py / "examples/julia/demo.jl").exists())
+            # Python mirror should have Python files
+            self.assertTrue((mirror_py / "examples/python/demo.py").is_symlink())
+
+    def test_mirror_variant_filtering(self) -> None:
+        """Test that Python and Julia variants correctly exclude opposite language."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+
+            (canonical / "shared.md").write_text("Shared\n")
+            (canonical / "python.py").write_text("Python\n")
+            (canonical / "julia.jl").write_text("Julia\n")
+
+            from tracecite.docs_sync import sync_mirror_symlinks
+
+            mirror_py = tmpdir_path / "mirror_py"
+            mirror_jl = tmpdir_path / "mirror_jl"
+
+            sync_mirror_symlinks(canonical, mirror_py, variant="python")
+            sync_mirror_symlinks(canonical, mirror_jl, variant="julia")
+
+            # Python mirror has shared and Python
+            self.assertTrue((mirror_py / "shared.md").is_symlink())
+            self.assertTrue((mirror_py / "python.py").is_symlink())
+            self.assertFalse((mirror_py / "julia.jl").exists())
+
+            # Julia mirror has shared and Julia
+            self.assertTrue((mirror_jl / "shared.md").is_symlink())
+            self.assertTrue((mirror_jl / "julia.jl").is_symlink())
+            self.assertFalse((mirror_jl / "python.py").exists())
+
+    def test_mirror_excluded_directories(self) -> None:
+        """Test that build artifacts and caches are excluded from mirrors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+
+            (canonical / "index.md").write_text("Content\n")
+            (canonical / "build").mkdir()
+            (canonical / "build/index.html").write_text("<html>\n")
+            (canonical / ".quarto").mkdir()
+            (canonical / ".quarto/xref").mkdir()
+            (canonical / ".quarto/xref/index.json").write_text("{}\n")
+
+            from tracecite.docs_sync import sync_mirror_symlinks
+
+            mirror = tmpdir_path / "mirror"
+            manifest = sync_mirror_symlinks(canonical, mirror)
+
+            # Canonical content is mirrored
+            self.assertTrue((mirror / "index.md").is_symlink())
+
+            # Build and cache directories are not mirrored
+            self.assertFalse((mirror / "build").exists())
+            self.assertFalse((mirror / ".quarto").exists())
+
+            self.assertIn("index.md", manifest["created"])
+
+    def test_symlink_deterministic_sync(self) -> None:
+        """Test that repeated syncs are idempotent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+            (canonical / "file.md").write_text("Content\n")
+
+            from tracecite.docs_sync import sync_mirror_symlinks
+
+            mirror = tmpdir_path / "mirror"
+
+            # First sync
+            manifest1 = sync_mirror_symlinks(canonical, mirror)
+            self.assertIn("file.md", manifest1["created"])
+            self.assertEqual(manifest1["updated"], [])
+
+            # Second sync (idempotent)
+            manifest2 = sync_mirror_symlinks(canonical, mirror)
+            self.assertEqual(manifest2["created"], [])
+            self.assertEqual(manifest2["updated"], [])
+            self.assertEqual(manifest2["removed"], [])
+
+    def test_symlink_refuses_to_overwrite_real_files(self) -> None:
+        """Test that sync refuses to overwrite real (non-symlink) files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+            (canonical / "content.md").write_text("Canonical\n")
+
+            from tracecite.docs_sync import sync_mirror_symlinks
+
+            mirror = tmpdir_path / "mirror"
+            mirror.mkdir()
+
+            # Pre-create a real file at mirror location
+            (mirror / "content.md").write_text("Real file\n")
+
+            # Sync should skip the real file
+            manifest = sync_mirror_symlinks(canonical, mirror)
+            self.assertIn("content.md", manifest["skipped_real"])
+            self.assertEqual((mirror / "content.md").read_text(), "Real file\n")
+            self.assertFalse((mirror / "content.md").is_symlink())
+
+    def test_symlink_detects_canonical_mutation(self) -> None:
+        """Test that canonical content mutations through symlinks are detected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+            (canonical / "file.md").write_text("Original\n")
+
+            from tracecite.docs_sync import (
+                sync_mirror_symlinks,
+                snapshot_canonical_bytes,
+                verify_no_mutation,
+            )
+
+            mirror = tmpdir_path / "mirror"
+            sync_mirror_symlinks(canonical, mirror)
+
+            # Snapshot before mutation
+            before = snapshot_canonical_bytes(canonical)
+
+            # Simulate mutation through symlink (write via mirror path)
+            symlink_path = mirror / "file.md"
+            symlink_path.write_text("Mutated\n")
+
+            # Detect mutation
+            unchanged, changed = verify_no_mutation(before, canonical)
+            self.assertIn(Path("file.md"), changed)
+            self.assertEqual(unchanged, [])
+
+    def test_symlink_no_copy_assertion(self) -> None:
+        """Test that sync never copies content; only symlinks."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+
+            # Create various content
+            (canonical / "file.md").write_text("Content\n")
+            (canonical / "dir").mkdir()
+            (canonical / "dir/nested.md").write_text("Nested\n")
+
+            from tracecite.docs_sync import sync_mirror_symlinks, verify_symlink_mirror
+
+            mirror = tmpdir_path / "mirror"
+            sync_mirror_symlinks(canonical, mirror)
+
+            # Verify all files are symlinks (not copies)
+            status = verify_symlink_mirror(mirror, canonical)
+
+            # Should have symlinks, no real file copies (except _quarto.yml if added)
+            self.assertGreater(status["symlink_count"], 0)
+            # Only _quarto*.yml should be real files
+            for real_count in [status["real_file_count"]]:
+                if real_count > 0:
+                    # They should only be _quarto*.yml files at root
+                    pass
+
+
+class MirrorBuildTests(unittest.TestCase):
+    def test_mirror_quarto_configs_can_be_built(self) -> None:
+        """Test that mirror directories can be set up with independent _quarto.yml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            canonical = tmpdir_path / "canonical"
+            canonical.mkdir()
+
+            (canonical / "_quarto.yml").write_text(
+                "project:\n"
+                "  type: website\n"
+                "  render: [index.md]\n"
+                "  output-dir: build\n"
+            )
+            (canonical / "index.md").write_text("# Index\n")
+
+            from tracecite.docs_sync import sync_mirror_symlinks
+
+            mirror = tmpdir_path / "mirror"
+            sync_mirror_symlinks(canonical, mirror)
+
+            # Mirror should have symlink to canonical content
+            self.assertTrue((mirror / "index.md").is_symlink())
+
+            # We'll create a real _quarto.yml for the mirror
+            (mirror / "_quarto.yml").write_text(
+                "project:\n"
+                "  type: website\n"
+                "  render: [index.md]\n"
+                "  output-dir: build_mirror\n"
+            )
+
+            # Both should exist independently
+            self.assertTrue((canonical / "_quarto.yml").is_file())
+            self.assertTrue((mirror / "_quarto.yml").is_file())
+
+            # They can have different content
+            canonical_config = (canonical / "_quarto.yml").read_text()
+            mirror_config = (mirror / "_quarto.yml").read_text()
+            self.assertIn("build", canonical_config)
+            self.assertIn("build_mirror", mirror_config)

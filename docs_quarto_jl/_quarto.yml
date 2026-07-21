@@ -1,0 +1,44 @@
+engines:
+- julia
+project:
+  output-dir: build
+  render:
+  - '!examples/python/*.py'
+  - '!guide/repository_layout.py'
+  - index.md
+  - guide/*.md
+  - '!guide/*.html.md'
+  - formats/*.md
+  - '!formats/*.html.md'
+  - examples/julia/*.jl
+  - examples/literate_documenter/index.md
+website:
+  sidebar:
+    contents:
+    - href: index.md
+      text: Overview
+    - contents:
+      - href: guide/architecture.md
+        text: Architecture
+      - href: guide/searchable-evidence.md
+        text: From documents to searchable evidence
+      - href: guide/api.md
+        text: Python API and CLI
+      - href: guide/embedding-site.md
+        text: Embedding inspection site
+      section: Design
+    - contents:
+      - href: formats/pandoc-tables.md
+        text: Pandoc Markdown tables
+      - href: formats/html-documenter.md
+        text: Literate and Documenter HTML
+      - href: formats/diagnostics.md
+        text: Structural diagnostics
+      section: Formats
+    - contents:
+      - href: examples/julia/dirty_dataframe.jl
+        text: TraceCite with Julia
+      section: Tutorials
+    - href: examples/literate_documenter/index.md
+      text: Literate and Documenter fixture
+    style: docked

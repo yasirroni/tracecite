@@ -1,0 +1,1 @@
+../../docs/formats/pandoc-tables.md

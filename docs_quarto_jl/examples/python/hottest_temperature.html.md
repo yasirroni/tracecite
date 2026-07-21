@@ -1,0 +1,1 @@
+../../../docs/examples/python/hottest_temperature.html.md

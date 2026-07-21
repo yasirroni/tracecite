@@ -1,0 +1,5 @@
+/build/
+/.quarto/
+**/*.quarto_ipynb
+site_libs
+**/*.html
