@@ -36,9 +36,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── index.html.md
 │   └── index.md
 ├── scripts/
-│   ├── build_docs.py
-│   ├── build_docs_julia.py
-│   ├── build_docs_python.py
 │   └── render_repository_tree.py
 ├── src/
 │   ├── tracecite/

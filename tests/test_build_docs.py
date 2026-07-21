@@ -95,17 +95,6 @@ class DocumentationInvariantTests(unittest.TestCase):
         self.assertNotIn("examples/python/hottest_temperature.py", julia_text)
         self.assertNotIn("guide/repository_layout.py", julia_text)
 
-    def test_repository_scripts_are_tiny_in_process_launchers(self) -> None:
-        for name, argv in (
-            ("build_docs.py", '["docs", "build", "docs"]'),
-            ("build_docs_python.py", '["docs", "build", "docs", "--only", "python"]'),
-            ("build_docs_julia.py", '["docs", "build", "docs", "--only", "julia"]'),
-        ):
-            source = (self.ROOT / "scripts" / name).read_text()
-            self.assertNotIn("argparse", source)
-            self.assertIn(argv, source)
-            self.assertLessEqual(len([line for line in source.splitlines() if line.strip()]), 8)
-
     def test_tutorial_content_and_intro_behaviour_are_preserved(self) -> None:
         root = self.ROOT
         python_intro = (root / "docs/examples/python/dirty_dataframe.py").read_text()
@@ -174,13 +163,26 @@ class DocumentationInvariantTests(unittest.TestCase):
         self.assertGreaterEqual(pages[0].count("knowledge_table("), 2)
         self.assertGreaterEqual(pages[1].count("knowledge_table("), 2)
 
-    def test_readme_keeps_public_commands_and_tracecite_override(self) -> None:
+    def test_docs_document_only_public_builder_commands(self) -> None:
         readme = (self.ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("tracecite docs build docs", readme)
-        self.assertIn("scripts/build_docs_python.py", readme)
-        self.assertIn("scripts/build_docs_julia.py", readme)
+        for command in (
+            "uv run tracecite docs build docs",
+            "uv run tracecite docs build docs --only python",
+            "uv run tracecite docs build docs --only julia",
+        ):
+            self.assertIn(command, readme)
         self.assertIn("tracecite prepare", readme)
         self.assertNotIn("--skip-julia", readme)
+        self.assertNotIn("--tracecite", readme)
+        self.assertNotIn("the `julia` profile is combined", readme)
+        self.assertNotIn("profile `julia`", readme)
+        for relative in (
+            "docs/index.md",
+            "docs/guide/embedding-site.md",
+            "docs/guide/searchable-evidence.md",
+        ):
+            source = (self.ROOT / relative).read_text(encoding="utf-8")
+            self.assertNotIn("scripts/build_docs", source)
 
     def test_all_python_code_cells_have_unique_labels(self) -> None:
         labels = python_code_cell_labels(self.ROOT / "docs")

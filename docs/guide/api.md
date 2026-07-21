@@ -63,9 +63,9 @@ Pandoc is authoritative. `--allow-pipe-fallback` is an explicit reduced mode for
 For a repository with Quarto sources, the automatic builder is:
 
 ```bash
-tracecite docs build docs
-tracecite docs build docs --only python
-tracecite docs build docs --only julia
+uv run tracecite docs build docs
+uv run tracecite docs build docs --only python
+uv run tracecite docs build docs --only julia
 ```
 
 It discovers configured render inputs and performs Quarto execution, retained

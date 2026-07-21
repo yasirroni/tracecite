@@ -22,7 +22,7 @@ The normal documentation site contains only the original table. An optional embe
 
 ## Build boundary
 
-`tracecite docs build docs` is the public automatic builder. It discovers configured executable inputs, selects the complete site or a safe reduced fallback, stages retained Markdown, and optionally renders the inspection site. The fixed repository scripts provide automatic, Python-only, and Julia-only entry points.
+`tracecite docs build docs` is the public automatic builder. It discovers configured executable inputs, selects the complete site or a safe reduced fallback, stages retained Markdown, and optionally renders the inspection site. Use its `--only python` and `--only julia` options for explicit reduced builds.
 
 | Representation | Preserved content | Main consumer | Default location |
 |---|---|---|---|
@@ -44,20 +44,20 @@ The normal documentation site contains only the original table. An optional embe
 - A complete `--keep-embedding-markdown` website copy that can be rendered by a second Quarto run.
 - No `.qmd` requirement: executable pages are percent-format `.py` and `.jl`; prose pages are `.md`.
 
-## Build both sites
+## Build the documentation and inspection sites
 
 ```bash
 python -m pip install -e .
-uv run scripts/build_docs.py
-uv run scripts/build_docs_python.py
+uv run tracecite docs build docs
+uv run tracecite docs build docs --only python
 julia --version
-uv run scripts/build_docs_julia.py
+uv run tracecite docs build docs --only julia
 ```
 
-The automatic command uses the complete base Quarto configuration when both
+The public builder uses the complete base Quarto configuration when both
 runtimes are available. If Julia is unavailable, it warns with every skipped
 configured Julia source and uses the Python-only overlay. Explicit reduced
-builds are available as `tracecite docs build docs --only python` and
-`tracecite docs build docs --only julia`.
+builds use the two `--only` commands above. Projects that already have
+rendered and staged retained Markdown can invoke `tracecite prepare` directly.
 
 After a Quarto render, another project can invoke `tracecite prepare` directly with its retained Markdown root and preparation options.

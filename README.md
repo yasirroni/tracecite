@@ -22,14 +22,14 @@ retained Markdown
 
 The normal site remains pure Quarto output. The generated inspection copy doubles each table only when explicitly requested.
 
-`tracecite docs build docs` is the public automatic documentation builder. It discovers configured executable inputs, selects the complete site when runtimes are available, safely falls back with exact skipped-file warnings, stages retained Markdown, and optionally renders the inspection site. The three fixed repository scripts are convenient entry points; table normalisation remains in the public `tracecite prepare` command.
+`tracecite docs build docs` is the public automatic documentation builder. It discovers configured executable inputs, selects the complete site when runtimes are available, safely falls back with exact skipped-file warnings, stages retained Markdown, and optionally renders the inspection site. Table normalisation remains in the public `tracecite prepare` command.
 
 ## Prerequisites
 
 - Python 3.11 or newer;
 - Pandoc, either installed directly or provided by Quarto;
 - Quarto for documentation-site renders;
-- Julia 1.10 or newer only when building the Julia profile.
+- Julia 1.10 or newer only when building Julia documentation pages.
 
 The Python normaliser and CLI work without Julia. Automatic documentation builds fall back to the Python-only overlay when configured Julia inputs cannot run; explicit Julia-only builds require Julia.
 
@@ -120,13 +120,18 @@ julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
-uv run scripts/build_docs.py
-uv run scripts/build_docs_python.py
+uv run tracecite docs build docs
+uv run tracecite docs build docs --only python
 julia --version
-uv run scripts/build_docs_julia.py
+uv run tracecite docs build docs --only julia
 ```
 
-The automatic script invokes the installed package in-process. The public equivalent is `tracecite docs build docs`; use `--only python` or `--only julia` for explicit reduced builds. External projects can invoke `tracecite prepare` directly after their Quarto render when they already have rendered and staged retained Markdown.
+The public builder discovers configured render inputs, automatically selects the
+complete site when both runtimes are available, and safely falls back to the
+available language with exact skipped-file warnings. Use `--only python` or
+`--only julia` for explicit reduced builds. External projects can invoke
+`tracecite prepare` directly after their Quarto render when they already have
+rendered and staged retained Markdown.
 
 Julia dependency installation is required once before building the combined Python and Julia site. To build only the Python pages, use:
 
@@ -137,9 +142,9 @@ uv run tracecite docs build docs --only python
 The builder selects the complete site or a reduced overlay, runs Quarto, stages retained Markdown, and calls the existing inspection export directly. The optional second render remains controlled by the builder:
 
 ```text
-tracecite docs build docs             # automatic complete/fallback selection
-tracecite docs build docs --only python
-tracecite docs build docs --only julia
+uv run tracecite docs build docs             # automatic complete/fallback selection
+uv run tracecite docs build docs --only python
+uv run tracecite docs build docs --only julia
     -> docs/build/                      documentation site + retained Markdown
 
 tracecite prepare docs/build \
@@ -152,7 +157,7 @@ tracecite prepare docs/build \
     -> .tracecite/embedding-site/_site/ rendered inspection site
 ```
 
-If Julia is unavailable, the automatic build names every configured Julia source it skips and renders the Python overlay without modifying Julia sources. The Julia-only script is a reusable entry-point pattern for Julia packages such as PISP.jl.
+If Julia is unavailable, the automatic build names every configured Julia source it skips and renders the Python overlay without modifying Julia sources. Julia packages such as PISP.jl can reuse the same public `tracecite docs build PROJECT --only julia` entry point.
 
 To open the final docs:
 

@@ -45,9 +45,17 @@ docs/
     build/                         rebuildable HTML website
 ```
 
-Quarto writes retained Markdown beside each executable source. The build script copies those files into `docs/build/` for the inspection site. Retained Markdown is committed; ordinary HTML, `docs/build/`, Quarto caches, and `.tracecite/` are disposable.
+Quarto writes retained Markdown beside each executable source. The public docs
+builder copies those files into `docs/build/` for the inspection site. Retained
+Markdown is committed; ordinary HTML, `docs/build/`, Quarto caches, and
+`.tracecite/` are disposable.
 
-In this repository, `tracecite docs build docs` owns the generic build orchestration: configured-input discovery, automatic or explicit language selection, Quarto execution, retained-Markdown staging, inspection export, and freshness checks. The fixed scripts `scripts/build_docs.py`, `scripts/build_docs_python.py`, and `scripts/build_docs_julia.py` provide argument-free entry points. An external project can run `tracecite prepare` directly after its Quarto render.
+In this repository, `tracecite docs build docs` owns the generic build
+orchestration: configured-input discovery, automatic or explicit language
+selection, Quarto execution, retained-Markdown staging, inspection export, and
+freshness checks. Use `--only python` or `--only julia` for explicit reduced
+builds. An external project can run `tracecite prepare` directly after its
+Quarto render.
 
 ## Three separate operations
 
