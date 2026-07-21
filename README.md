@@ -22,16 +22,16 @@ retained Markdown
 
 The normal site remains pure Quarto output. The generated inspection copy doubles each table only when explicitly requested.
 
-`scripts/build_docs.py` is a repository-specific thin wrapper around the installed Quarto and TraceCite commands. It selects the Python or Julia Quarto profile, stages retained Markdown, coordinates the optional inspection-site render, and checks retained-Markdown freshness. Table normalisation remains in the public `tracecite prepare` CLI and package rather than in the wrapper.
+`tracecite docs build docs` is the public automatic documentation builder. It discovers configured executable inputs, selects the complete site when runtimes are available, safely falls back with exact skipped-file warnings, stages retained Markdown, and optionally renders the inspection site. The three fixed repository scripts are convenient entry points; table normalisation remains in the public `tracecite prepare` command.
 
 ## Prerequisites
 
 - Python 3.11 or newer;
 - Pandoc, either installed directly or provided by Quarto;
-- Quarto for the two documentation-site renders;
+- Quarto for documentation-site renders;
 - Julia 1.10 or newer only when building the Julia profile.
 
-The Python normaliser and CLI work without Julia. `scripts/build_docs.py` automatically selects the Python-only profile when Julia is not available.
+The Python normaliser and CLI work without Julia. Automatic documentation builds fall back to the Python-only overlay when configured Julia inputs cannot run; explicit Julia-only builds require Julia.
 
 ## Usage
 
@@ -121,23 +121,25 @@ julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
 ```sh
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 uv run scripts/build_docs.py
-uv run scripts/build_docs.py --tracecite /path/to/tracecite
+uv run scripts/build_docs_python.py
+julia --version
+uv run scripts/build_docs_julia.py
 ```
 
-`uv run` runs the wrapper in the project environment, exposing that environment's installed `tracecite` console script. An explicit executable can be selected with `--tracecite /path/to/tracecite`. External projects can invoke `tracecite prepare` directly after their Quarto render when they do not need this repository's profile selection, retained-Markdown staging, or freshness check.
+The automatic script invokes the installed package in-process. The public equivalent is `tracecite docs build docs`; use `--only python` or `--only julia` for explicit reduced builds. External projects can invoke `tracecite prepare` directly after their Quarto render when they already have rendered and staged retained Markdown.
 
 Julia dependency installation is required once before building the combined Python and Julia site. To build only the Python pages, use:
 
 ```sh
-uv run scripts/build_docs.py --skip-julia
+uv run tracecite docs build docs --only python
 ```
 
-The wrapper selects one Quarto profile, runs Quarto, stages retained Markdown, and then invokes the public preparation command. The optional second render is owned by `tracecite prepare`:
+The builder selects the complete site or a reduced overlay, runs Quarto, stages retained Markdown, and calls the existing inspection export directly. The optional second render remains controlled by the builder:
 
 ```text
-quarto render docs --profile python   # when Julia is unavailable
-# or
-quarto render docs --profile julia    # Python + Julia in one site
+tracecite docs build docs             # automatic complete/fallback selection
+tracecite docs build docs --only python
+tracecite docs build docs --only julia
     -> docs/build/                      documentation site + retained Markdown
 
 tracecite prepare docs/build \
@@ -150,7 +152,7 @@ tracecite prepare docs/build \
     -> .tracecite/embedding-site/_site/ rendered inspection site
 ```
 
-If Julia is unavailable, the build script selects the `python` profile without deleting or modifying the Julia sources. When Julia is available, it selects the `julia` profile, which enables Quarto's native Julia engine and adds the optional Julia tutorial equivalent to the same site; only the dirty-DataFrame concept is paired across languages.
+If Julia is unavailable, the automatic build names every configured Julia source it skips and renders the Python overlay without modifying Julia sources. The Julia-only script is a reusable entry-point pattern for Julia packages such as PISP.jl.
 
 To open the final docs:
 

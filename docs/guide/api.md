@@ -12,7 +12,8 @@ print(table.normalised_text)
 ```
 
 The ranked-results tutorial demonstrates this API end to end, including the
-public `debug-markdown` representation: [Normalise and inspect ranked results](../examples/python/hottest_temperature.py).
+public `debug-markdown` representation in the Python-only build:
+`examples/python/hottest_temperature.py`.
 
 The result contains:
 
@@ -58,6 +59,18 @@ tracecite check docs/build
 Pandoc is authoritative. `--allow-pipe-fallback` is an explicit reduced mode for ordinary pipe tables when neither standalone Pandoc nor Quarto's bundled Pandoc is available.
 
 ## Prepare the inspectable copy
+
+For a repository with Quarto sources, the automatic builder is:
+
+```bash
+tracecite docs build docs
+tracecite docs build docs --only python
+tracecite docs build docs --only julia
+```
+
+It discovers configured render inputs and performs Quarto execution, retained
+Markdown staging, and optional inspection export. Use the direct `prepare`
+command below when a site has already been rendered and staged.
 
 ```bash
 tracecite prepare docs/build \

@@ -17,6 +17,7 @@ from .tables import (
     normalise_pandoc_table,
     render_debug_markdown,
 )
+from .docs import build_docs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,6 +99,17 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--allow-pipe-fallback", action="store_true")
     prepare.add_argument("--no-clean", action="store_true")
 
+    docs_parser = subparsers.add_parser("docs", help="Build documentation")
+    docs_sub = docs_parser.add_subparsers(dest="docs_command", required=True)
+    docs_build = docs_sub.add_parser("build", help="Build a Quarto documentation project")
+    docs_build.add_argument("project", type=Path)
+    docs_build.add_argument("--only", choices=["python", "julia"])
+    docs_build.add_argument("--quarto")
+    docs_build.add_argument("--no-embedding-site", action="store_true")
+    docs_build.add_argument("--no-render-embedding-site", action="store_true")
+    docs_build.add_argument("--strict-tables", action="store_true")
+    docs_build.add_argument("--check-retained", action="store_true")
+
     check = subparsers.add_parser(
         "check", help="Strictly validate generated Markdown tables"
     )
@@ -117,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
             return _document_normalise(args)
         if args.command == "prepare":
             return _prepare(args)
+        if args.command == "docs":
+            return _docs_build(args)
         if args.command == "check":
             return _check(args)
     except (
@@ -128,6 +142,34 @@ def main(argv: list[str] | None = None) -> int:
         print(f"tracecite: {error}", file=sys.stderr)
         return 2
     return 1
+
+
+def _docs_build(args: argparse.Namespace) -> int:
+    result = build_docs(
+        args.project,
+        only=args.only,
+        quarto=args.quarto,
+        inspection=not args.no_embedding_site,
+        render_inspection=not args.no_render_embedding_site,
+        strict_tables=args.strict_tables,
+        check_retained=args.check_retained,
+    )
+    print(f"Documentation build: {result.selection.variant}")
+    print(f"Documentation site: {result.output_root}")
+    print(f"Retained Markdown pages: {result.retained_count}")
+    if result.inspection:
+        print(f"Embedding Markdown site: {result.inspection.output_root}")
+        print(f"Pages copied: {result.inspection.page_count}")
+        print(f"Tables normalised: {result.inspection.table_count}")
+        if result.inspection.rendered_site:
+            print(f"Rendered inspection site: {result.inspection.rendered_site}")
+    if args.check_retained:
+        if result.changed_retained:
+            print("Retained Markdown changed:")
+            print("\n".join(f"- {path}" for path in result.changed_retained))
+            return 1
+        print("Retained Markdown is fresh.")
+    return 0
 
 
 def _table_normalise(args: argparse.Namespace) -> int:

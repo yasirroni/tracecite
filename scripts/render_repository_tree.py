@@ -6,16 +6,6 @@ from pathlib import Path
 
 
 _EXCLUDED_NAMES = {
-    ".DS_Store",
-    ".cache",
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".quarto",
-    ".ruff_cache",
-    ".tracecite",
-    ".venv",
-    ".vscode",
     "__pycache__",
 }
 _EXCLUDED_SUFFIXES = (".egg-info",)
@@ -75,6 +65,8 @@ def _append_children(
 
 def _is_excluded(root: Path, path: Path) -> bool:
     relative = path.relative_to(root)
+    if path.name.startswith("."):
+        return True
     if path.name in _EXCLUDED_NAMES or path.name in _EXCLUDED_FILENAMES:
         return True
     if path.name.endswith(_EXCLUDED_SUFFIXES):

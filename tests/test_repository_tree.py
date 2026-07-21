@@ -83,13 +83,20 @@ class RepositoryTreeTests(unittest.TestCase):
             (root / "docs" / ".superpowers" / "public.md").write_text(
                 "public\n", encoding="utf-8"
             )
+            (root / ".env.example").write_text("secret\n", encoding="utf-8")
+            (root / "docs" / ".gitignore").write_text("ignored\n", encoding="utf-8")
+            (root / "docs" / "guide" / ".hidden").mkdir()
+            (root / "docs" / "guide" / ".hidden" / "nested.md").write_text(
+                "nested\n", encoding="utf-8"
+            )
 
             rendered = module.render_repository_tree(root, max_depth=3)
 
             self.assertTrue(module._is_excluded(root, root / ".superpowers"))
-            self.assertFalse(
-                module._is_excluded(root, root / "docs" / ".superpowers")
-            )
+            self.assertTrue(module._is_excluded(root, root / "docs" / ".superpowers"))
+            self.assertTrue(module._is_excluded(root, root / ".env.example"))
+            self.assertTrue(module._is_excluded(root, root / "docs" / ".gitignore"))
+            self.assertTrue(module._is_excluded(root, root / "docs" / "guide" / ".hidden"))
         self.assertIn("README.md", rendered)
         self.assertIn("docs/", rendered)
         self.assertIn("guide/", rendered)
@@ -104,7 +111,10 @@ class RepositoryTreeTests(unittest.TestCase):
         self.assertNotIn("egg-info", rendered)
         self.assertNotIn("Manifest.toml", rendered)
         self.assertNotIn("internal.md", rendered)
-        self.assertIn("public.md", rendered)
+        self.assertNotIn("public.md", rendered)
+        self.assertNotIn(".env.example", rendered)
+        self.assertNotIn(".gitignore", rendered)
+        self.assertNotIn("nested.md", rendered)
 
 
 if __name__ == "__main__":

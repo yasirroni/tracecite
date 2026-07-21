@@ -1,8 +1,11 @@
 project:
   render:
+    - "!examples/julia/*.jl"
     - index.md
     - guide/*.md
+    - "!guide/*.html.md"
     - formats/*.md
+    - "!formats/*.html.md"
     - guide/repository_layout.py
     - examples/python/*.py
     - examples/literate_documenter/index.md

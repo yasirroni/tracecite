@@ -1,15 +1,16 @@
 project:
   type: website
   output-dir: build
-
-profile:
-  default: python
-
-website:
-  title: "TraceCite table normalisation"
-  search: true
-  page-navigation: true
-  reader-mode: true
+  render:
+    - index.md
+    - guide/*.md
+    - "!guide/*.html.md"
+    - formats/*.md
+    - "!formats/*.html.md"
+    - guide/repository_layout.py
+    - examples/python/*.py
+    - examples/julia/*.jl
+    - examples/literate_documenter/index.md
 
 format:
   html:
@@ -25,3 +26,49 @@ execute:
   echo: true
   warning: true
   error: false
+
+engines:
+  - julia
+
+website:
+  title: "TraceCite table normalisation"
+  search: true
+  page-navigation: true
+  reader-mode: true
+  sidebar:
+    style: docked
+    contents:
+      - href: index.md
+        text: Overview
+      - section: Design
+        contents:
+          - href: guide/architecture.md
+            text: Architecture
+          - href: guide/searchable-evidence.md
+            text: From documents to searchable evidence
+          - href: guide/repository_layout.py
+            text: Repository layout
+          - href: guide/api.md
+            text: Python API and CLI
+          - href: guide/embedding-site.md
+            text: Embedding inspection site
+      - section: Formats
+        contents:
+          - href: formats/pandoc-tables.md
+            text: Pandoc Markdown tables
+          - href: formats/html-documenter.md
+            text: Literate and Documenter HTML
+          - href: formats/diagnostics.md
+            text: Structural diagnostics
+      - section: Tutorials
+        contents:
+          - href: examples/python/dirty_dataframe.py
+            text: What TraceCite does
+          - href: examples/julia/dirty_dataframe.jl
+            text: TraceCite with Julia
+          - href: examples/python/hottest_temperature.py
+            text: Normalise and inspect ranked results
+          - href: examples/python/quarto_code_visibility.py
+            text: Control code visibility in Quarto
+      - href: examples/literate_documenter/index.md
+        text: Literate and Documenter fixture

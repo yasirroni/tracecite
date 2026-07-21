@@ -30,7 +30,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── repository_layout.py
 │   │   ├── searchable-evidence.html.md
 │   │   └── searchable-evidence.md
-│   ├── .gitignore
 │   ├── _quarto-julia.yml
 │   ├── _quarto-python.yml
 │   ├── _quarto.yml
@@ -38,21 +37,24 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   └── index.md
 ├── scripts/
 │   ├── build_docs.py
+│   ├── build_docs_julia.py
+│   ├── build_docs_python.py
 │   └── render_repository_tree.py
 ├── src/
 │   ├── tracecite/
 │   │   ├── tables/
 │   │   ├── __init__.py
 │   │   ├── __main__.py
-│   │   └── cli.py
+│   │   ├── cli.py
+│   │   └── docs.py
 │   └── TraceCite.jl
 ├── test/
 │   └── runtests.jl
 ├── tests/
 │   ├── test_build_docs.py
+│   ├── test_docs.py
 │   ├── test_repository_tree.py
 │   └── test_tables.py
-├── .gitignore
 ├── LICENSE
 ├── Project.toml
 ├── pyproject.toml

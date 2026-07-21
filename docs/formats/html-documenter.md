@@ -32,4 +32,4 @@ The row and column spans are expanded deterministically in the canonical model a
 
 A minimal Literate/Documenter project using this route is included under `docs/examples/literate_documenter/`.
 
-After Quarto produces retained Markdown, the public `tracecite prepare` command can create the optional inspection-site copy. `scripts/build_docs.py` coordinates that command for this repository; it does not implement HTML table normalisation. External projects can invoke `tracecite prepare` directly after their own Quarto render.
+After Quarto produces retained Markdown, the public `tracecite prepare` command can create the optional inspection-site copy. The automatic `tracecite docs build docs` command coordinates that export for this repository; external projects can invoke `tracecite prepare` directly after their own Quarto render.
