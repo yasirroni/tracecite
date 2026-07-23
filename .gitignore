@@ -29,3 +29,6 @@ Manifest.toml
 
 # Editor
 .vscode/
+
+# Temporary files
+.tmp/
