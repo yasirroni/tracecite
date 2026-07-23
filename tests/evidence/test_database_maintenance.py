@@ -248,7 +248,8 @@ def test_compaction_json_cli_reports_before_after(tmp_path: Path, capsys):
 
 def test_scripts_run_from_standalone_copied_core(tmp_path: Path):
     copied = tmp_path / "tracecite-core"
-    shutil.copytree(ROOT, copied)
+    # Generated documentation builds are outputs, not standalone package core.
+    shutil.copytree(ROOT, copied, ignore=shutil.ignore_patterns("build"))
     db = make_db(tmp_path / "tracecite.sqlite")
     diagnose_path = copied / "scripts" / "diagnose_database.py"
     compact_path = copied / "scripts" / "compact_database.py"

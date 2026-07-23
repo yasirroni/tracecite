@@ -17,7 +17,7 @@ from .tables import (
     normalise_pandoc_table,
     render_debug_markdown,
 )
-from .docs import build_docs
+from .docs import build_docs, load_docs_contract
 
 EVIDENCE_COMMANDS = {"sync", "search", "page", "verify", "prune", "doctor"}
 
@@ -175,6 +175,8 @@ def build_parser() -> argparse.ArgumentParser:
     docs_sub = docs_parser.add_subparsers(dest="docs_command", required=True)
     docs_build = docs_sub.add_parser("build", help="Build a Quarto documentation project")
     docs_build.add_argument("project", type=Path)
+    docs_build.add_argument("--docs-config", type=Path, default=None)
+    docs_build.add_argument("--repo-root", type=Path, default=Path.cwd())
     docs_build.add_argument("--only", choices=["python", "julia"])
     docs_build.add_argument("--quarto")
     docs_build.add_argument("--no-embedding-site", action="store_true")
@@ -246,6 +248,8 @@ def _evidence(args: argparse.Namespace) -> int:
 
 
 def _docs_build(args: argparse.Namespace) -> int:
+    if args.docs_config is not None:
+        load_docs_contract(args.docs_config, repo_root=args.repo_root)
     result = build_docs(
         args.project,
         only=args.only,

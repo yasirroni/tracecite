@@ -70,9 +70,9 @@ tracecite document normalise report.md --to embedding-markdown --output report.e
 ### Build the documentation
 
 ```sh
-tracecite docs build docs
-tracecite docs build docs_quarto_py --only python
-tracecite docs build docs_quarto_jl --only julia
+uv run tracecite docs build docs
+uv run tracecite docs build docs_quarto_py --only python
+uv run tracecite docs build docs_quarto_jl --only julia
 ```
 
 <!-- TODO:
@@ -82,6 +82,17 @@ Explain the expected `[WARNING] Could not fetch resource`
 The public builder discovers configured render inputs, automatically selects the complete site when both runtimes are available, and safely falls back to the available language with exact skipped-file warnings.
 Use `--only python` or `--only julia` for explicit reduced builds.
 External projects can invoke `tracecite prepare` directly after their Quarto render when they already have rendered and staged retained Markdown.
+
+Repository integrations may validate the docs evidence contract before building:
+
+```sh
+uv run tracecite docs build docs --docs-config docs/tracecite.toml --repo-root .
+```
+
+Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`,
+`source_links`, `index_output`, `publication_exclude`, and optional
+`host_render_command` under `[docs]`. Contract paths are repository-relative and
+must remain contained within the repository.
 
 If Julia is unavailable, the automatic build names every configured Julia source it skips and renders the Python overlay without modifying Julia sources.
 

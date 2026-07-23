@@ -167,8 +167,8 @@ class DocumentationInvariantTests(unittest.TestCase):
         readme = (self.ROOT / "README.md").read_text(encoding="utf-8")
         for command in (
             "uv run tracecite docs build docs",
-            "uv run tracecite docs build docs --only python",
-            "uv run tracecite docs build docs --only julia",
+            "uv run tracecite docs build docs_quarto_py --only python",
+            "uv run tracecite docs build docs_quarto_jl --only julia",
         ):
             self.assertIn(command, readme)
         self.assertIn("tracecite prepare", readme)

@@ -10,7 +10,7 @@ from typing import Literal, Mapping, Sequence
 
 import yaml
 
-from .tables import SiteExportResult, export_embedding_site
+from ..tables import SiteExportResult, export_embedding_site
 
 Language = Literal["python", "julia"]
 BuildVariant = Literal["combined", "python", "julia", "prose"]
