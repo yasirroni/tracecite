@@ -17,7 +17,7 @@ from .tables import (
     normalise_pandoc_table,
     render_debug_markdown,
 )
-from .docs import build_docs, load_docs_contract, stage_docs
+from .docs import author_docs, build_docs, check_docs, load_docs_contract, stage_docs
 
 EVIDENCE_COMMANDS = {"sync", "search", "page", "verify", "prune", "doctor"}
 
@@ -187,6 +187,10 @@ def build_parser() -> argparse.ArgumentParser:
     docs_stage.add_argument("--docs-config", type=Path, required=True)
     docs_stage.add_argument("--repo-root", type=Path, default=Path.cwd())
     docs_stage.add_argument("--target", choices=["local", "public"], required=True)
+    for name in ("author", "check"):
+        mode = docs_sub.add_parser(name, help=f"{name.title()} documentation outputs")
+        mode.add_argument("--docs-config", type=Path, required=True)
+        mode.add_argument("--repo-root", type=Path, default=Path.cwd())
 
     check = subparsers.add_parser(
         "check", help="Strictly validate generated Markdown tables"
@@ -211,6 +215,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "docs":
             if args.docs_command == "stage":
                 return _docs_stage(args)
+            if args.docs_command == "author":
+                return _docs_mode(args, author_docs)
+            if args.docs_command == "check":
+                return _docs_mode(args, check_docs)
             return _docs_build(args)
         if args.command == "check":
             return _check(args)
@@ -290,6 +298,16 @@ def _docs_stage(args: argparse.Namespace) -> int:
     print(f"Documentation staging root: {result.staged_root}")
     print(f"Changed Markdown files: {len(result.changed_files)}")
     return 0
+
+
+def _docs_mode(args: argparse.Namespace, operation) -> int:
+    contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+    result = operation(contract, config_path=args.docs_config, repo_root=args.repo_root)
+    print(f"Documentation mode: {result.mode}")
+    print(f"Manifest: {result.manifest_path}")
+    if result.diagnostics:
+        print("\n".join(f"- {item}" for item in result.diagnostics), file=sys.stderr)
+    return 0 if result.ok else 1
 
 
 def _table_normalise(args: argparse.Namespace) -> int:

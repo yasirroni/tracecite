@@ -16,6 +16,7 @@ from .build import (
 from .contract import DocsEvidenceContract
 from .config import load_docs_contract
 from .stage import DocsStageResult, stage_docs
+from .modes import DocsModeResult, author_docs, check_docs
 
 # Keep module attributes used by existing callers and tests while the
 # implementation moves from ``tracecite.docs`` to ``tracecite.docs.build``.
@@ -39,6 +40,7 @@ __all__ = [
     "DocsBuildResult",
     "DocsEvidenceContract",
     "DocsStageResult",
+    "DocsModeResult",
     "Language",
     "build_docs",
     "changed_retained_markdown",
@@ -49,4 +51,6 @@ __all__ = [
     "stage_docs",
     "snapshot_retained_markdown",
     "stage_retained_markdown",
+    "author_docs",
+    "check_docs",
 ]
