@@ -1,0 +1,15 @@
+schema_version = 2
+
+[[source]]
+title = "Synthetic Planning Note"
+publisher = "Synthetic fixture publisher"
+local_path = "evidence/planning-note.pdf"
+public_url = "https://example.org/synthetic/planning-note.pdf"
+public_origin = "official"
+
+[[source]]
+title = "Synthetic Counter Note"
+publisher = "Synthetic fixture publisher"
+local_path = "evidence/counter-note.pdf"
+public_url = "https://example.org/synthetic/counter-note.pdf"
+public_origin = "official"

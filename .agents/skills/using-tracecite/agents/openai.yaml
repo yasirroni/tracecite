@@ -1,0 +1,3 @@
+interface:
+  display_name: "Using TraceCite"
+  short_description: "Synchronise local PDFs and Markdown into a searchable TraceCite SQLite database."

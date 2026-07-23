@@ -1,0 +1,3 @@
+interface:
+  display_name: "Routing Documentation Source Links"
+  short_description: "Route maintained local PDF links to official URLs in public documentation builds."

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Writing Evidence-Backed Reports"
+  short_description: "Write natural Markdown reports from verified local evidence."
