@@ -35,7 +35,7 @@ def _add_evidence_common_args(
     database_required: bool = True,
 ) -> None:
     del root_required, database_required
-    parser.add_argument("--config", type=Path, default=None, help="TraceCite profile TOML.")
+    parser.add_argument("--config", type=Path, default=argparse.SUPPRESS, help="TraceCite profile TOML.")
     parser.add_argument("--root", type=Path, default=None, help="Source root directory.")
     parser.add_argument("--database", type=Path, default=None, help="SQLite database path.")
     parser.add_argument("--model-cache-dir", type=Path, default=None)
@@ -93,6 +93,7 @@ def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.Argume
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tracecite")
+    parser.add_argument("--config", type=Path, default=None, help="TraceCite profile TOML.")
     parser.add_argument("--version", action="version", version="TraceCite 0.4.0")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -11,7 +11,7 @@ DEFAULT_OCR_LANG = "eng"
 
 
 def _add_common_args(parser: argparse.ArgumentParser, *, root_required: bool = False, database_required: bool = True) -> None:
-    parser.add_argument("--config", type=Path, default=None, help="TraceCite profile TOML.")
+    parser.add_argument("--config", type=Path, default=argparse.SUPPRESS, help="TraceCite profile TOML.")
     parser.add_argument("--root", type=Path, default=None, help="Source root directory.")
     parser.add_argument("--database", type=Path, default=None, help="SQLite database path.")
     parser.add_argument("--model-cache-dir", type=Path, default=None)
@@ -20,6 +20,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, root_required: bool = F
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tracecite", description="TraceCite local evidence indexer")
+    parser.add_argument("--config", type=Path, default=None, help="TraceCite profile TOML.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     sync_parser = subparsers.add_parser("sync", help="Synchronise selected sources into the database.")
