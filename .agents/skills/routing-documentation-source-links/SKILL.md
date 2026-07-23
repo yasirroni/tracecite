@@ -13,6 +13,10 @@ Maintain one Markdown authority. Route only the generated build copy to a local 
 - `writing-evidence-backed-reports` owns the complementary report-writing workflow: report prose, evidence interpretation, and local descriptive citations remain there.
 - This skill owns `docs/source-links.toml`, target-specific staging, conservative link substitution, and documentation-build integration.
 - Do not download sources, parse PDFs, generate embeddings, interpret report evidence, or rewrite maintained Markdown in place.
+- TraceCite's Python implementation exposes the same operation as
+  `tracecite.docs.stage_docs` and `tracecite docs stage --docs-config PATH
+  --repo-root ROOT --target local|public`; the report verifier and staging use
+  one schema-v2 registry and Markdown-link parser.
 
 ## Required architecture
 
@@ -47,13 +51,13 @@ generated site                  = docs/build/ or equivalent
 1. **Inspect the host documentation lifecycle.** Identify maintained Markdown, generated Markdown, page/navigation registries, build scripts, staging directories, and deployment outputs. Do not assume one repository's Documenter layout matches another.
 2. **Confirm stable source paths.** Every routed source path must match a normalised local path used by TraceCite and the maintained report's reference definitions or narrow inline PDF links.
 3. **Create or validate `source-links.toml`.** Use the schema in `references/registry-contract.md`; do not store quotations, page evidence, vectors, or report claims in it.
-4. **Stage atomically.** Copy the maintained source tree into a fresh temporary sibling, apply target-specific changes there, validate it, then atomically replace the previous staging tree. Preserve the previous valid staging tree on failure.
+4. **Stage atomically.** Copy the maintained source tree into a fresh temporary sibling, apply target-specific changes there, validate it, then atomically replace only `staged_root/<target>`. Preserve the previous valid target, the other target, and unrelated siblings on failure.
 5. **Rewrite conservatively.** Process only recognised Markdown reference definitions and the narrow inline form `[descriptive text](relative/path.pdf#page=N)` outside protected Markdown regions. Preserve labels, query strings, fragments, and all unrelated text. See `references/staging-and-rewriting.md`.
 6. **Select the target explicitly.** Default to `local`; allow only `local` or `public`. A public build substitutes `public_url` and appends the existing `#page=N` fragment after any URL query string.
 7. **Integrate at the documentation-build boundary.** In Documenter.jl, stage inside `make.jl` before `makedocs`; do not alter Literate generation. See `references/documenter-integration.md`.
 8. **Validate before build.** Apply target-specific path, URL, duplicate-path, ambiguity, and no-mutation checks. See `references/validation-and-failure-modes.md`.
 9. **Build from the staged source.** Upload only generated HTML/assets intended for publication. Never include local PDFs, `tracecite.sqlite`, embedding caches, source-capture workspaces, or private evidence.
-10. **Reconcile the verifier contract.** TraceCite report verification and the routing implementation must parse the same schema-v2 `[[source]]` registry keyed by `local_path`. Patch existing readers rather than creating a second parser, then rerun the relevant tests.
+10. **Reconcile the verifier contract.** TraceCite report verification and the routing implementation must parse the same schema-v2 `[[source]]` registry keyed by `local_path` and the same narrow positive-`#page=N` Markdown candidates. Patch existing readers rather than creating a second parser, then rerun the relevant tests.
 
 Expected companion-tool paths:
 
@@ -106,6 +110,11 @@ queries, unsafe or unmapped paths, images, autolinks, remote URLs, inline code,
 raw HTML, and other unsupported syntax remain untouched or fail clearly when
 they are malformed source-PDF candidates. Multiple recognised inline links on
 one line are supported. Reference-definition support remains unchanged.
+
+The Python staging contract uses the same exact registry fields (`title`,
+`publisher`, `local_path`, `public_url`, `public_origin`), allows only
+`local|public` targets, and rewrites only `staged_root/<target>` from a fresh
+copy of retained Markdown. The authored and retained trees are never modified.
 
 Because Markdown support varies between host renderers, each host integration
 must include a renderer pressure test that asserts an actual HTML anchor for

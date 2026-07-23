@@ -27,6 +27,15 @@ def test_docs_build_config_options_are_distinct_from_evidence_config() -> None:
     assert evidence.config == Path("profile.toml")
 
 
+def test_docs_stage_options_are_explicit() -> None:
+    args = cli.build_parser().parse_args([
+        "docs", "stage", "--docs-config", "docs/tracecite.toml",
+        "--repo-root", ".", "--target", "public",
+    ])
+    assert args.docs_command == "stage"
+    assert args.target == "public"
+
+
 def test_docs_build_adapter_consumes_docs_config_without_reusing_evidence_config(tmp_path: Path) -> None:
     args = cli.build_parser().parse_args([
         "docs", "build", "docs", "--docs-config", "docs/tracecite.toml", "--repo-root", "."

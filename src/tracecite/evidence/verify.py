@@ -4,10 +4,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import posixpath
 import re
-import tomllib
 
 from .chunking import normalise_text
 from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
+from .source_links import (
+    SourceLinkEntry,
+    load_source_links,
+    parse_source_link_destination,
+)
 
 _DEFINITION_RE = re.compile(
     r"^\[(?P<key>[^\]]+)\]:\s*(?:<(?P<angle>.*?)#page=(?P<angle_page>-?\d+)>|(?P<bare>.*?)#page=(?P<bare_page>-?\d+))\s*$"
@@ -93,9 +97,16 @@ def _parse_definitions(lines: list[str]) -> tuple[dict[str, ReferenceDefinition]
         match = _DEFINITION_RE.match(line)
         if match:
             destination = match.group("angle") or match.group("bare") or ""
-            destination = destination.replace(r"\ ", " ")
             page = match.group("angle_page") or match.group("bare_page")
-            definition = ReferenceDefinition(match.group("key"), int(page), destination)
+            parsed = parse_source_link_destination(
+                f"<{destination}#page={page}>" if match.group("angle") is not None
+                else f"{destination}#page={page}"
+            )
+            if parsed is None:
+                invalid_keys.add(match.group("key"))
+                continue
+            destination, parsed_page = parsed
+            definition = ReferenceDefinition(match.group("key"), parsed_page, destination)
             existing = out.get(definition.key)
             if existing is not None:
                 kind = "duplicate-definition" if (existing.path, existing.page) == (definition.path, definition.page) else "ambiguous-definition"
@@ -235,54 +246,8 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
     return result
 
 
-@dataclass(frozen=True)
-class SourceLinkEntry:
-    local_path: str
-
-
-_SOURCE_LINK_REQUIRED = {"title", "publisher", "local_path", "public_url", "public_origin"}
-
-
 def _load_source_links(path: Path, source_links_root: Path) -> tuple[dict[Path, list[SourceLinkEntry]], list[str]]:
-    with Path(path).open("rb") as handle:
-        data = tomllib.load(handle)
-    issues: list[str] = []
-    if data.get("schema_version") != 2:
-        return {}, [f"{path} requires schema_version = 2"]
-    source_entries = data.get("source", [])
-    if not isinstance(source_entries, list):
-        return {}, [f"{path} field source must be an array of tables"]
-    registry: dict[Path, list[SourceLinkEntry]] = {}
-    seen: set[Path] = set()
-    for index, entry in enumerate(source_entries, start=1):
-        if not isinstance(entry, dict):
-            issues.append(f"source entry {index} must be a table")
-            continue
-        keys = set(entry)
-        unknown = keys - _SOURCE_LINK_REQUIRED
-        missing = _SOURCE_LINK_REQUIRED - keys
-        if unknown:
-            issues.append(f"source entry {index} has unknown field(s): {', '.join(sorted(unknown))}")
-            continue
-        if missing:
-            issues.append(f"source entry {index} missing required field(s): {', '.join(sorted(missing))}")
-            continue
-        invalid_fields = [field for field in sorted(_SOURCE_LINK_REQUIRED) if not isinstance(entry[field], str) or not entry[field].strip()]
-        if invalid_fields:
-            issues.extend(f"source entry {index} field {field} must be a non-empty string" for field in invalid_fields)
-            continue
-        try:
-            local_path = normalise_source_path(source_links_root, entry["local_path"])
-        except PathAuthorityError as exc:
-            issues.append(f"source entry {index} invalid local_path: {exc}")
-            continue
-        local_abs = (source_links_root / local_path).resolve()
-        if local_abs in seen:
-            issues.append(f"duplicate source-link local_path: {local_path}")
-            continue
-        seen.add(local_abs)
-        registry.setdefault(local_abs, []).append(SourceLinkEntry(entry["local_path"]))
-    return registry, issues
+    return load_source_links(path, source_links_root)
 
 
 def _prose_lines(lines: list[str]) -> list[str]:

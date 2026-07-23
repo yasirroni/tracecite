@@ -17,7 +17,7 @@ from .tables import (
     normalise_pandoc_table,
     render_debug_markdown,
 )
-from .docs import build_docs, load_docs_contract
+from .docs import build_docs, load_docs_contract, stage_docs
 
 EVIDENCE_COMMANDS = {"sync", "search", "page", "verify", "prune", "doctor"}
 
@@ -183,6 +183,10 @@ def build_parser() -> argparse.ArgumentParser:
     docs_build.add_argument("--no-render-embedding-site", action="store_true")
     docs_build.add_argument("--strict-tables", action="store_true")
     docs_build.add_argument("--check-retained", action="store_true")
+    docs_stage = docs_sub.add_parser("stage", help="Stage local or public source links")
+    docs_stage.add_argument("--docs-config", type=Path, required=True)
+    docs_stage.add_argument("--repo-root", type=Path, default=Path.cwd())
+    docs_stage.add_argument("--target", choices=["local", "public"], required=True)
 
     check = subparsers.add_parser(
         "check", help="Strictly validate generated Markdown tables"
@@ -205,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "prepare":
             return _prepare(args)
         if args.command == "docs":
+            if args.docs_command == "stage":
+                return _docs_stage(args)
             return _docs_build(args)
         if args.command == "check":
             return _check(args)
@@ -274,6 +280,15 @@ def _docs_build(args: argparse.Namespace) -> int:
             print("\n".join(f"- {path}" for path in result.changed_retained))
             return 1
         print("Retained Markdown is fresh.")
+    return 0
+
+
+def _docs_stage(args: argparse.Namespace) -> int:
+    contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+    result = stage_docs(contract, target=args.target, repo_root=args.repo_root)
+    print(f"Documentation staging target: {result.target}")
+    print(f"Documentation staging root: {result.staged_root}")
+    print(f"Changed Markdown files: {len(result.changed_files)}")
     return 0
 
 

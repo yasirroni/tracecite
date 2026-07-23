@@ -706,3 +706,25 @@ def test_source_links_top_level_source_must_be_array_of_tables(tmp_path):
 
     assert registry == {}
     assert issues == [f"{source_links_path} field source must be an array of tables"]
+
+
+@pytest.mark.parametrize("local_path", ["AEMO_2026_ISP.pdf?download=1", "AEMO_2026_ISP.pdf#page=65"])
+def test_verifier_source_link_loader_rejects_local_path_query_or_fragment(tmp_path, local_path):
+    source_links_path = tmp_path / "source-links.toml"
+    source_links_path.write_text(
+        f'''schema_version = 2
+
+[[source]]
+title = "Title"
+publisher = "Publisher"
+local_path = "{local_path}"
+public_url = "https://example.invalid/source.pdf"
+public_origin = "official"
+''',
+        encoding="utf-8",
+    )
+
+    registry, issues = verify._load_source_links(source_links_path, tmp_path)
+
+    assert registry == {}
+    assert issues == ["source entry 1 local_path must not contain a query or fragment"]
