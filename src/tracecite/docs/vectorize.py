@@ -185,6 +185,37 @@ def _assert_retained_unchanged(retained_root: Path, before: dict[Path, bytes]) -
         raise RuntimeError(f"retained Markdown was mutated during index-input preparation: {changed[0]}")
 
 
+def _atomic_promote_pair(replacements: tuple[tuple[Path, Path], ...]) -> None:
+    """Replace every destination with its staged temp path, or roll all of them back.
+
+    ``replacements`` is a sequence of ``(temp_path, destination)`` pairs. If any
+    individual replace fails partway through, every destination already moved is
+    restored to its prior content and no stray ``.previous`` backup is left behind.
+    """
+    backups: list[tuple[Path, Path]] = []
+    try:
+        for _temp, destination in replacements:
+            if destination.exists():
+                backup = destination.with_name(f".{destination.name}.previous")
+                if backup.exists():
+                    shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
+                os.replace(destination, backup)
+                backups.append((destination, backup))
+        for temp, destination in replacements:
+            os.replace(temp, destination)
+    except Exception:
+        for _temp, destination in replacements:
+            if destination.exists():
+                shutil.rmtree(destination) if destination.is_dir() else destination.unlink()
+        for destination, backup in backups:
+            os.replace(backup, destination)
+        raise
+    else:
+        for _destination, backup in backups:
+            if backup.exists():
+                shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
+
+
 def prepare_docs_index_input(
     contract: DocsEvidenceContract,
     *,
@@ -229,8 +260,6 @@ def _prepare_docs_index_input(
     temporary = Path(tempfile.mkdtemp(prefix=".index-input-", dir=contract.staged_root.parent))
     temp_input = temporary / INDEX_INPUT_NAME
     temp_manifest = temporary / MANIFEST_NAME
-    input_backup = profile.input_root.with_name(f".{INDEX_INPUT_NAME}.previous")
-    manifest_backup = profile.manifest_path.with_name(f".{MANIFEST_NAME}.previous")
     tables_normalized = 0
 
     try:
@@ -258,23 +287,12 @@ def _prepare_docs_index_input(
 
         temp_manifest.write_text(manifest_text, encoding="utf-8")
 
-        for backup in (input_backup, manifest_backup):
-            if backup.exists():
-                shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
-        for destination in (profile.input_root, profile.manifest_path):
-            if destination.exists():
-                os.replace(destination, destination.with_name(f".{destination.name}.previous"))
-        os.replace(temp_input, profile.input_root)
-        os.replace(temp_manifest, profile.manifest_path)
-        for backup in (input_backup, manifest_backup):
-            if backup.exists():
-                shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
-    except Exception:
-        for destination in (profile.input_root, profile.manifest_path):
-            backup = destination.with_name(f".{destination.name}.previous")
-            if backup.exists() and not destination.exists():
-                os.replace(backup, destination)
-        raise
+        _atomic_promote_pair(
+            (
+                (temp_input, profile.input_root),
+                (temp_manifest, profile.manifest_path),
+            )
+        )
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
@@ -388,25 +406,70 @@ def _index_input_freshness(contract: DocsEvidenceContract, profile: DocsIndexPro
     return tuple(diagnostics)
 
 
+def _manifest_freshness(
+    contract: DocsEvidenceContract, profile: DocsIndexProfile, repo_root: Path,
+) -> tuple[str, ...]:
+    if not profile.manifest_path.is_file():
+        return ()
+    expected = _render_manifest(_mirror_exclude_globs(contract, repo_root))
+    try:
+        actual = profile.manifest_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return (f"index-input manifest is unreadable: {exc}",)
+    if actual != expected:
+        return ("index-input manifest is stale or does not match the current docs contract",)
+    return ()
+
+
+def _database_freshness(profile: DocsIndexProfile) -> tuple[str, ...]:
+    if not profile.manifest_path.is_file():
+        return ()
+    from ..evidence import schema, sync as sync_module
+
+    try:
+        rules = sync_module.load_manifest_rules(profile.manifest_path)
+    except Exception:
+        # An unparsable manifest is already reported by _manifest_freshness;
+        # there is no usable source selection to compare the database against.
+        return ()
+    discovered = sync_module.discover_source_files(profile.input_root, rules)
+    conn = schema.connect_existing(profile.database_path, read_only=True)
+    try:
+        schema.ensure_schema(conn)
+        rows = {row["path"]: row["sha256"] for row in conn.execute("SELECT path, sha256 FROM sources")}
+    finally:
+        conn.close()
+    diagnostics: list[str] = []
+    for path in sorted(set(discovered) - set(rows)):
+        diagnostics.append(f"documentation index database missing source: {path}")
+    for path in sorted(set(rows) - set(discovered)):
+        diagnostics.append(f"documentation index database has stale source: {path}")
+    for path in sorted(set(discovered) & set(rows)):
+        if sync_module.hash_file(discovered[path]) != rows[path]:
+            diagnostics.append(f"documentation index database is stale relative to mirror: {path}")
+    return tuple(diagnostics)
+
+
 def docs_index_freshness_diagnostics(
     contract: DocsEvidenceContract,
     *,
     repo_root: str | Path,
 ) -> tuple[str, ...]:
-    del repo_root
+    root = Path(repo_root).resolve()
     profile = resolve_docs_index_profile(contract)
     diagnostics = list(_index_input_freshness(contract, profile))
+    diagnostics.extend(_manifest_freshness(contract, profile, root))
     if not profile.database_path.is_file():
         diagnostics.append("documentation index database is missing")
+    else:
+        diagnostics.extend(_database_freshness(profile))
     return tuple(diagnostics)
 
 
 def doctor_docs_index(contract: DocsEvidenceContract, *, repo_root: str | Path) -> tuple[str, ...]:
-    del repo_root
     profile = resolve_docs_index_profile(contract)
-    issues = list(_index_input_freshness(contract, profile))
+    issues = list(docs_index_freshness_diagnostics(contract, repo_root=repo_root))
     if not profile.database_path.is_file():
-        issues.append("documentation index database is missing")
         return tuple(issues)
     from ..evidence import schema, sync as sync_module
 

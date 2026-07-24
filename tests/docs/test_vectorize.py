@@ -18,6 +18,7 @@ from tracecite.docs import (
     search_docs_index,
     sync_docs_index,
 )
+from tracecite.docs import vectorize
 from tracecite.docs.vectorize import docs_index_freshness_diagnostics
 from tracecite.evidence import schema
 
@@ -161,6 +162,64 @@ def test_prepare_failure_preserves_previous_index_input(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         prepare_docs_index_input(contract, repo_root=root)
     assert (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8") == previous
+
+
+def test_prepare_rolls_back_both_files_when_manifest_promotion_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, root = _fixture(tmp_path)
+    contract = load_docs_contract(config, repo_root=root)
+    prepare_docs_index_input(contract, repo_root=root)
+    previous_mirror = (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8")
+    previous_manifest = (contract.staged_root / "index-input.manifest.toml").read_text(encoding="utf-8")
+
+    real_replace = os.replace
+    calls = {"count": 0}
+
+    def flaky_replace(src, dst):
+        calls["count"] += 1
+        if calls["count"] == 4:
+            raise OSError("simulated failure promoting manifest")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(vectorize.os, "replace", flaky_replace)
+    with pytest.raises(OSError):
+        prepare_docs_index_input(contract, repo_root=root)
+
+    assert (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8") == previous_mirror
+    assert (
+        contract.staged_root / "index-input.manifest.toml"
+    ).read_text(encoding="utf-8") == previous_manifest
+    assert list(contract.staged_root.glob(".*.previous")) == []
+
+
+def test_doctor_reports_stale_manifest_content(tmp_path: Path, make_embedder) -> None:
+    config, root = _fixture(tmp_path)
+    contract = load_docs_contract(config, repo_root=root)
+    sync_docs_index(contract, repo_root=root, embedder=make_embedder())
+    assert doctor_docs_index(contract, repo_root=root) == ()
+    (contract.staged_root / "index-input.manifest.toml").write_text(
+        "this does not match the current docs contract\n", encoding="utf-8"
+    )
+    issues = doctor_docs_index(contract, repo_root=root)
+    assert any("manifest" in issue and "stale" in issue for issue in issues)
+
+
+def test_doctor_reports_database_stale_relative_to_rebuilt_mirror(
+    tmp_path: Path, make_embedder
+) -> None:
+    config, root = _fixture(tmp_path)
+    contract = load_docs_contract(config, repo_root=root)
+    sync_docs_index(contract, repo_root=root, embedder=make_embedder())
+    assert doctor_docs_index(contract, repo_root=root) == ()
+    (contract.retained_root / "index.md").write_text(
+        "# Topic\n\nUpdated fixture query text about coal plant retirement planning.\n\n"
+        "See [report](../../sources/report.pdf#page=1).\n",
+        encoding="utf-8",
+    )
+    prepare_docs_index_input(contract, repo_root=root)
+    issues = doctor_docs_index(contract, repo_root=root)
+    assert any("stale relative to mirror" in issue for issue in issues)
 
 
 def test_publication_exclude_is_translated_into_manifest(tmp_path: Path) -> None:
