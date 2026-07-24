@@ -83,6 +83,8 @@ The public builder discovers configured render inputs, automatically selects the
 Use `--only python` or `--only julia` for explicit reduced builds.
 External projects can invoke `tracecite prepare` directly after their Quarto render when they already have rendered and staged retained Markdown.
 
+See `examples/report-adoption/aemo-isp-comparison/` for a complete, real example of the author -> check -> index -> search -> doctor -> publish-only workflow using two AEMO Integrated System Plan reports.
+
 Repository integrations may validate the docs evidence contract before building:
 
 ```sh
