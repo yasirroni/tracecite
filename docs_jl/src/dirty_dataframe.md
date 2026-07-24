@@ -1,5 +1,5 @@
 ```@meta
-EditURL = "../../docs/examples/julia/dirty_dataframe.jl"
+EditURL = "examples/julia/dirty_dataframe.jl"
 ```
 
 %% [markdown]

@@ -57,6 +57,10 @@ freshness checks. Use `--only python` or `--only julia` for explicit reduced
 builds. An external project can run `tracecite prepare` directly after its
 Quarto render.
 
+See `examples/report-adoption/aemo-isp-comparison/` for a complete, real
+adoption example covering author, check, index, search, doctor, and
+publish-only modes together.
+
 ## Three separate operations
 
 Normalising a document, synchronising a collection, and computing embeddings are related but distinct operations.

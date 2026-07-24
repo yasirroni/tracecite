@@ -1,0 +1,42 @@
+{
+  "files": {
+    "src/examples/julia/dirty_dataframe.jl": {
+      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
+      "source": "docs/examples/julia/dirty_dataframe.jl"
+    },
+    "src/formats/diagnostics.md": {
+      "sha256": "1d17977d4a986aae261489e75bb20f49030b1e4ae0f239be9949d190adf076f8",
+      "source": "docs/formats/diagnostics.md"
+    },
+    "src/formats/html-documenter.md": {
+      "sha256": "3ee5dda720eb1b92b34a67e538b02844e793e8dafee8b3747aaa23e294982816",
+      "source": "docs/formats/html-documenter.md"
+    },
+    "src/formats/pandoc-tables.md": {
+      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
+      "source": "docs/formats/pandoc-tables.md"
+    },
+    "src/guide/api.md": {
+      "sha256": "4842cc9f5714e1af3774f2b2a3659da79f276a8fd90af16a55db85d068fbc946",
+      "source": "docs/guide/api.md"
+    },
+    "src/guide/architecture.md": {
+      "sha256": "22b69dbeb8754063392002b7e2066376635c8069a2a8cb482a5912260c9c14a5",
+      "source": "docs/guide/architecture.md"
+    },
+    "src/guide/embedding-site.md": {
+      "sha256": "8498d350df2e84f5d40f36b483c984d31efd5b3e2565ba2eeceec98d8f8b3a65",
+      "source": "docs/guide/embedding-site.md"
+    },
+    "src/guide/searchable-evidence.md": {
+      "sha256": "12f008ee3f011d87b93b66a4a2ef50ae076d80e9ea01791e1e67dbd2a2bc39c0",
+      "source": "docs/guide/searchable-evidence.md"
+    },
+    "src/index.md": {
+      "sha256": "f3f3b00f10bd6f280942ff998dce5d21b29a9535c6b525c5b6e67e79ea2f30ad",
+      "source": "docs/index.md"
+    }
+  },
+  "project": "docs_jl",
+  "schema_version": 1
+}

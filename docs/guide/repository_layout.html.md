@@ -33,14 +33,10 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── _quarto-julia.yml
 │   ├── _quarto-python.yml
 │   ├── _quarto.yml
+│   ├── bootstrap.toml
 │   ├── index.html.md
 │   └── index.md
 ├── docs_jl/
-│   ├── build/
-│   │   ├── assets/
-│   │   ├── examples/
-│   │   ├── objects.inv
-│   │   └── search_index.js
 │   ├── src/
 │   │   ├── examples/
 │   │   ├── formats/
@@ -50,11 +46,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── make.jl
 │   └── Project.toml
 ├── docs_quarto_jl/
-│   ├── build/
-│   │   ├── examples/
-│   │   ├── formats/
-│   │   ├── guide/
-│   │   └── index_files/
 │   ├── examples/
 │   │   ├── julia/
 │   │   ├── literate_documenter/
@@ -78,11 +69,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── _quarto.yml
 │   └── index.md
 ├── docs_quarto_py/
-│   ├── build/
-│   │   ├── examples/
-│   │   ├── formats/
-│   │   ├── guide/
-│   │   └── index_files/
 │   ├── examples/
 │   │   ├── julia/
 │   │   ├── literate_documenter/
@@ -105,25 +91,37 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   └── quarto-search/
 │   ├── _quarto.yml
 │   └── index.md
+├── examples/
+│   └── report-adoption/
+│       └── aemo-isp-comparison/
 ├── fixtures/
 │   └── sample-report.md
 ├── scripts/
+│   ├── bootstrap_docs.py
 │   ├── compact_database.py
 │   ├── diagnose_database.py
 │   └── render_repository_tree.py
 ├── src/
 │   ├── tracecite/
+│   │   ├── docs/
 │   │   ├── evidence/
 │   │   ├── tables/
 │   │   ├── __init__.py
 │   │   ├── __main__.py
-│   │   ├── cli.py
-│   │   ├── docs.py
-│   │   └── docs_sync.py
+│   │   └── cli.py
 │   └── TraceCite.jl
 ├── test/
 │   └── runtests.jl
 ├── tests/
+│   ├── docs/
+│   │   ├── __init__.py
+│   │   ├── test_config.py
+│   │   ├── test_contract.py
+│   │   ├── test_docs_cli.py
+│   │   ├── test_modes.py
+│   │   ├── test_report_adoption.py
+│   │   ├── test_stage.py
+│   │   └── test_vectorize.py
 │   ├── evidence/
 │   │   ├── conftest.py
 │   │   ├── measure_help.py
@@ -142,6 +140,10 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── test_sync.py
 │   │   ├── test_vector_backend.py
 │   │   └── test_verify.py
+│   ├── fixtures/
+│   │   ├── docs-vector/
+│   │   └── publish-only/
+│   ├── test_bootstrap_docs.py
 │   ├── test_build_docs.py
 │   ├── test_docs.py
 │   ├── test_evidence_imports.py

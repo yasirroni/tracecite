@@ -1,0 +1,78 @@
+{
+  "files": {
+    "examples/julia/dirty_dataframe.jl": {
+      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
+      "source": "docs/examples/julia/dirty_dataframe.jl"
+    },
+    "examples/literate_documenter/Project.toml": {
+      "sha256": "e15403f21989b11b1314ae97ef2d3615264d9674d374500f80776e58f95a0ceb",
+      "source": "docs/examples/literate_documenter/Project.toml"
+    },
+    "examples/literate_documenter/docs/make.jl": {
+      "sha256": "b9a8970561809089591c788a8102b9061b15dac3fd931aa17cffe1531d93c113",
+      "source": "docs/examples/literate_documenter/docs/make.jl"
+    },
+    "examples/literate_documenter/docs/src/index.md": {
+      "sha256": "8c3136ce8482ddb8521e40b52aded7b8d2b05813f135151d57e50679858facca",
+      "source": "docs/examples/literate_documenter/docs/src/index.md"
+    },
+    "examples/literate_documenter/index.md": {
+      "sha256": "9ce22a8f8d3cef1537c977236f5e3336ca2c94fc3e7ab162efab666f78331bcc",
+      "source": "docs/examples/literate_documenter/index.md"
+    },
+    "examples/literate_documenter/src/temperature_eda.jl": {
+      "sha256": "aca8f54ed6a83bb3b8311ce4f840e5f4fedeb9872bfa6ecfae5ef35af80d69da",
+      "source": "docs/examples/literate_documenter/src/temperature_eda.jl"
+    },
+    "examples/python/dirty_dataframe.html.md": {
+      "sha256": "324886682b3e911ed31d89bef8cf39d533a4814fe2e99a59517b289b29914d19",
+      "source": "docs/examples/python/dirty_dataframe.html.md"
+    },
+    "examples/python/hottest_temperature.html.md": {
+      "sha256": "cff73c411cb6a0390fce777a7ee5e39d9fca7f157444af7adbe460499a9979fb",
+      "source": "docs/examples/python/hottest_temperature.html.md"
+    },
+    "examples/python/quarto_code_visibility.html.md": {
+      "sha256": "086f4f1030b8483d6acb8cfac9635f55f4c4c10f62a9835b1b3cef491e1f9715",
+      "source": "docs/examples/python/quarto_code_visibility.html.md"
+    },
+    "formats/diagnostics.md": {
+      "sha256": "1d17977d4a986aae261489e75bb20f49030b1e4ae0f239be9949d190adf076f8",
+      "source": "docs/formats/diagnostics.md"
+    },
+    "formats/html-documenter.md": {
+      "sha256": "3ee5dda720eb1b92b34a67e538b02844e793e8dafee8b3747aaa23e294982816",
+      "source": "docs/formats/html-documenter.md"
+    },
+    "formats/pandoc-tables.md": {
+      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
+      "source": "docs/formats/pandoc-tables.md"
+    },
+    "guide/api.md": {
+      "sha256": "4842cc9f5714e1af3774f2b2a3659da79f276a8fd90af16a55db85d068fbc946",
+      "source": "docs/guide/api.md"
+    },
+    "guide/architecture.md": {
+      "sha256": "22b69dbeb8754063392002b7e2066376635c8069a2a8cb482a5912260c9c14a5",
+      "source": "docs/guide/architecture.md"
+    },
+    "guide/embedding-site.md": {
+      "sha256": "8498d350df2e84f5d40f36b483c984d31efd5b3e2565ba2eeceec98d8f8b3a65",
+      "source": "docs/guide/embedding-site.md"
+    },
+    "guide/repository_layout.html.md": {
+      "sha256": "c4fa35feb89dec3f70f1c3166c6f255ab63fb3180bc06b0a9fcaefa6545bfb5a",
+      "source": "docs/guide/repository_layout.html.md"
+    },
+    "guide/searchable-evidence.md": {
+      "sha256": "12f008ee3f011d87b93b66a4a2ef50ae076d80e9ea01791e1e67dbd2a2bc39c0",
+      "source": "docs/guide/searchable-evidence.md"
+    },
+    "index.md": {
+      "sha256": "f3f3b00f10bd6f280942ff998dce5d21b29a9535c6b525c5b6e67e79ea2f30ad",
+      "source": "docs/index.md"
+    }
+  },
+  "project": "docs_quarto_jl",
+  "schema_version": 1
+}

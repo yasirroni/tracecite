@@ -1,0 +1,84 @@
+name: Docs bootstrap consistency
+
+on:
+  push:
+    paths:
+      - docs/**
+      - docs_quarto_py/**
+      - docs_quarto_jl/**
+      - docs_jl/**
+      - scripts/bootstrap_docs.py
+      - docs/bootstrap.toml
+      - .github/workflows/docs-bootstrap.yml
+  pull_request:
+    paths:
+      - docs/**
+      - docs_quarto_py/**
+      - docs_quarto_jl/**
+      - docs_jl/**
+      - scripts/bootstrap_docs.py
+      - docs/bootstrap.toml
+      - .github/workflows/docs-bootstrap.yml
+  workflow_dispatch:
+
+jobs:
+  bootstrap-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v3
+        with:
+          version: "1.12"
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v3
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          uv sync --locked
+          julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Check bootstrap consistency
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python scripts/bootstrap_docs.py --check
+
+      - name: Build documentation projects
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -rf docs/build docs_quarto_py/build docs_quarto_jl/build docs_jl/build
+          uv run tracecite docs build docs
+          uv run tracecite docs build docs_quarto_py --only python
+          uv run tracecite docs build docs_quarto_jl --only julia
+          julia --project=docs_jl docs_jl/make.jl
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -f docs/build/index.html
+          test -f docs_quarto_py/build/index.html
+          test -f docs_quarto_jl/build/index.html
+          test -f docs_jl/build/index.html

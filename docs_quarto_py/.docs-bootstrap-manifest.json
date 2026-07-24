@@ -1,0 +1,70 @@
+{
+  "files": {
+    "examples/julia/dirty_dataframe.html.md": {
+      "sha256": "842b79534afeb3121ac7367de017c1657333cc90ad868609c48c27f34c245eb9",
+      "source": "docs/examples/julia/dirty_dataframe.html.md"
+    },
+    "examples/literate_documenter/Project.toml": {
+      "sha256": "e15403f21989b11b1314ae97ef2d3615264d9674d374500f80776e58f95a0ceb",
+      "source": "docs/examples/literate_documenter/Project.toml"
+    },
+    "examples/literate_documenter/docs/src/index.md": {
+      "sha256": "8c3136ce8482ddb8521e40b52aded7b8d2b05813f135151d57e50679858facca",
+      "source": "docs/examples/literate_documenter/docs/src/index.md"
+    },
+    "examples/literate_documenter/index.md": {
+      "sha256": "9ce22a8f8d3cef1537c977236f5e3336ca2c94fc3e7ab162efab666f78331bcc",
+      "source": "docs/examples/literate_documenter/index.md"
+    },
+    "examples/python/dirty_dataframe.py": {
+      "sha256": "7b36612b0e3e6e4605ea35f16d1f9a613705d10ad24e0b2b18d2b91bade738dd",
+      "source": "docs/examples/python/dirty_dataframe.py"
+    },
+    "examples/python/hottest_temperature.py": {
+      "sha256": "1aa5f9236ecf3a540fb6ddfb13fbeed869489990d91e546de2371c4ddceb8c01",
+      "source": "docs/examples/python/hottest_temperature.py"
+    },
+    "examples/python/quarto_code_visibility.py": {
+      "sha256": "e8cf3834636ba61ecde26e5258f10cf68ab7e563a3eb0d662b08aebf7107016d",
+      "source": "docs/examples/python/quarto_code_visibility.py"
+    },
+    "formats/diagnostics.md": {
+      "sha256": "1d17977d4a986aae261489e75bb20f49030b1e4ae0f239be9949d190adf076f8",
+      "source": "docs/formats/diagnostics.md"
+    },
+    "formats/html-documenter.md": {
+      "sha256": "3ee5dda720eb1b92b34a67e538b02844e793e8dafee8b3747aaa23e294982816",
+      "source": "docs/formats/html-documenter.md"
+    },
+    "formats/pandoc-tables.md": {
+      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
+      "source": "docs/formats/pandoc-tables.md"
+    },
+    "guide/api.md": {
+      "sha256": "4842cc9f5714e1af3774f2b2a3659da79f276a8fd90af16a55db85d068fbc946",
+      "source": "docs/guide/api.md"
+    },
+    "guide/architecture.md": {
+      "sha256": "22b69dbeb8754063392002b7e2066376635c8069a2a8cb482a5912260c9c14a5",
+      "source": "docs/guide/architecture.md"
+    },
+    "guide/embedding-site.md": {
+      "sha256": "8498d350df2e84f5d40f36b483c984d31efd5b3e2565ba2eeceec98d8f8b3a65",
+      "source": "docs/guide/embedding-site.md"
+    },
+    "guide/repository_layout.py": {
+      "sha256": "92e47d4fa1321187b50e8a5f1d4281f923e38c5039865c0ddea3e4f66d85cd86",
+      "source": "docs/guide/repository_layout.py"
+    },
+    "guide/searchable-evidence.md": {
+      "sha256": "12f008ee3f011d87b93b66a4a2ef50ae076d80e9ea01791e1e67dbd2a2bc39c0",
+      "source": "docs/guide/searchable-evidence.md"
+    },
+    "index.md": {
+      "sha256": "f3f3b00f10bd6f280942ff998dce5d21b29a9535c6b525c5b6e67e79ea2f30ad",
+      "source": "docs/index.md"
+    }
+  },
+  "project": "docs_quarto_py",
+  "schema_version": 1
+}

@@ -1,0 +1,99 @@
+schema_version = 1
+
+# Shared prose (guide/, formats/, index) -> all three derived projects.
+[[mapping]]
+source = "docs/index.md"
+destinations = ["docs_quarto_py/index.md", "docs_quarto_jl/index.md", "docs_jl/src/index.md"]
+
+[[mapping]]
+source = "docs/guide/architecture.md"
+destinations = ["docs_quarto_py/guide/architecture.md", "docs_quarto_jl/guide/architecture.md", "docs_jl/src/guide/architecture.md"]
+
+[[mapping]]
+source = "docs/guide/api.md"
+destinations = ["docs_quarto_py/guide/api.md", "docs_quarto_jl/guide/api.md", "docs_jl/src/guide/api.md"]
+
+[[mapping]]
+source = "docs/guide/embedding-site.md"
+destinations = ["docs_quarto_py/guide/embedding-site.md", "docs_quarto_jl/guide/embedding-site.md", "docs_jl/src/guide/embedding-site.md"]
+
+[[mapping]]
+source = "docs/guide/searchable-evidence.md"
+destinations = ["docs_quarto_py/guide/searchable-evidence.md", "docs_quarto_jl/guide/searchable-evidence.md", "docs_jl/src/guide/searchable-evidence.md"]
+
+[[mapping]]
+source = "docs/formats/diagnostics.md"
+destinations = ["docs_quarto_py/formats/diagnostics.md", "docs_quarto_jl/formats/diagnostics.md", "docs_jl/src/formats/diagnostics.md"]
+
+[[mapping]]
+source = "docs/formats/html-documenter.md"
+destinations = ["docs_quarto_py/formats/html-documenter.md", "docs_quarto_jl/formats/html-documenter.md", "docs_jl/src/formats/html-documenter.md"]
+
+[[mapping]]
+source = "docs/formats/pandoc-tables.md"
+destinations = ["docs_quarto_py/formats/pandoc-tables.md", "docs_quarto_jl/formats/pandoc-tables.md", "docs_jl/src/formats/pandoc-tables.md"]
+
+# Language-variant-specific single files.
+[[mapping]]
+source = "docs/guide/repository_layout.py"
+destinations = ["docs_quarto_py/guide/repository_layout.py"]
+
+[[mapping]]
+source = "docs/guide/repository_layout.html.md"
+destinations = ["docs_quarto_jl/guide/repository_layout.html.md"]
+
+# Python example sources -> docs_quarto_py (real .py); retained .html.md -> docs_quarto_jl only.
+[[mapping]]
+source = "docs/examples/python/dirty_dataframe.py"
+destinations = ["docs_quarto_py/examples/python/dirty_dataframe.py"]
+
+[[mapping]]
+source = "docs/examples/python/hottest_temperature.py"
+destinations = ["docs_quarto_py/examples/python/hottest_temperature.py"]
+
+[[mapping]]
+source = "docs/examples/python/quarto_code_visibility.py"
+destinations = ["docs_quarto_py/examples/python/quarto_code_visibility.py"]
+
+[[mapping]]
+source = "docs/examples/python/dirty_dataframe.html.md"
+destinations = ["docs_quarto_jl/examples/python/dirty_dataframe.html.md"]
+
+[[mapping]]
+source = "docs/examples/python/hottest_temperature.html.md"
+destinations = ["docs_quarto_jl/examples/python/hottest_temperature.html.md"]
+
+[[mapping]]
+source = "docs/examples/python/quarto_code_visibility.html.md"
+destinations = ["docs_quarto_jl/examples/python/quarto_code_visibility.html.md"]
+
+# Julia example sources -> docs_quarto_jl (real .jl) and docs_jl (Literate input);
+# retained .html.md -> docs_quarto_py only.
+[[mapping]]
+source = "docs/examples/julia/dirty_dataframe.jl"
+destinations = ["docs_quarto_jl/examples/julia/dirty_dataframe.jl", "docs_jl/src/examples/julia/dirty_dataframe.jl"]
+
+[[mapping]]
+source = "docs/examples/julia/dirty_dataframe.html.md"
+destinations = ["docs_quarto_py/examples/julia/dirty_dataframe.html.md"]
+
+# literate_documenter nested example project -> docs_quarto_py and docs_quarto_jl.
+[[mapping]]
+source = "docs/examples/literate_documenter/Project.toml"
+destinations = ["docs_quarto_py/examples/literate_documenter/Project.toml", "docs_quarto_jl/examples/literate_documenter/Project.toml"]
+
+[[mapping]]
+source = "docs/examples/literate_documenter/index.md"
+destinations = ["docs_quarto_py/examples/literate_documenter/index.md", "docs_quarto_jl/examples/literate_documenter/index.md"]
+
+[[mapping]]
+source = "docs/examples/literate_documenter/docs/src/index.md"
+destinations = ["docs_quarto_py/examples/literate_documenter/docs/src/index.md", "docs_quarto_jl/examples/literate_documenter/docs/src/index.md"]
+
+[[mapping]]
+source = "docs/examples/literate_documenter/docs/make.jl"
+destinations = ["docs_quarto_jl/examples/literate_documenter/docs/make.jl"]
+
+[[mapping]]
+source = "docs/examples/literate_documenter/src/temperature_eda.jl"
+destinations = ["docs_quarto_jl/examples/literate_documenter/src/temperature_eda.jl"]
