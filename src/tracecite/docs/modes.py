@@ -65,7 +65,7 @@ def author_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo
     try:
         staged_retained = temporary / "retained"
         shutil.copytree(contract.retained_root, staged_retained, ignore=shutil.ignore_patterns(".tracecite-manifest.json"))
-        staged = replace(contract, retained_root=staged_retained, staged_root=temporary / "stage")
+        staged = replace(contract, retained_root=staged_retained, staged_root=temporary)
         canonical_retained = contract.retained_root
         stage_docs(staged, target="local", repo_root=root, link_markdown_root=canonical_retained)
         stage_docs(staged, target="public", repo_root=root, link_markdown_root=canonical_retained)
@@ -123,7 +123,7 @@ def check_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_
     try:
         expected_retained = temporary / "retained"
         shutil.copytree(contract.retained_root, expected_retained, ignore=shutil.ignore_patterns(".tracecite-manifest.json"))
-        expected = replace(contract, retained_root=expected_retained, staged_root=temporary / "stage")
+        expected = replace(contract, retained_root=expected_retained, staged_root=temporary)
         canonical_retained = contract.retained_root
         stage_docs(expected, target="local", repo_root=root, link_markdown_root=canonical_retained)
         stage_docs(expected, target="public", repo_root=root, link_markdown_root=canonical_retained)

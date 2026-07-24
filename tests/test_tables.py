@@ -507,9 +507,14 @@ class SiteExportTests(unittest.TestCase):
 
 
 class RepositoryTests(unittest.TestCase):
-    def test_repository_uses_no_qmd_files(self) -> None:
+    def test_repository_uses_no_qmd_files_outside_examples(self) -> None:
         project = Path(__file__).resolve().parents[1]
-        self.assertEqual(list(project.rglob("*.qmd")), [])
+        qmd_files = [
+            path
+            for path in project.rglob("*.qmd")
+            if "examples/report-adoption/" not in path.as_posix()
+        ]
+        self.assertEqual(qmd_files, [])
 
     def test_only_dirty_dataframe_pages_are_paired(self) -> None:
         project = Path(__file__).resolve().parents[1]

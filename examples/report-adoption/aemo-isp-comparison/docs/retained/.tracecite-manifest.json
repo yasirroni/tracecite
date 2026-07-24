@@ -1,0 +1,10 @@
+{
+  "contract_sha256": "ae926cf616950d31389d4edf4ce159af37e683c607f4787371917a9524cbe8df",
+  "public": {
+    "docs/.tracecite-stage/public/report.md": "fd2affce9f1d95612c28fb3230e81a201351eada1f9c3698a8215ca9b5418364"
+  },
+  "retained": {
+    "docs/retained/report.md": "382ef0ab2f981a205e44f3381cee0389aae52020ad80fec3bcfb3f17905ea9e3"
+  },
+  "schema_version": 1
+}
