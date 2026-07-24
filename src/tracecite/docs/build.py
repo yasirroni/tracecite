@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Literal, Mapping, Sequence
+import tempfile
+from typing import Iterator, Literal, Mapping, Sequence
 
 import yaml
 
@@ -101,7 +103,10 @@ def select_build_variant(
     julia: str | None = None,
 ) -> BuildSelection:
     project_root = Path(project_root).resolve()
-    inputs = tuple(Path(path).resolve() for path in inputs)
+    inputs = tuple(
+        path if path.is_absolute() else project_root / path
+        for path in (Path(path) for path in inputs)
+    )
     classified = classify_render_inputs(inputs)
     available = {language for language, paths in classified.items() if paths}
     if only is not None and only not in {"python", "julia"}:
@@ -198,10 +203,13 @@ def stage_retained_markdown(
         stale.unlink()
     count = 0
     for authored in inputs:
-        retained = authored.with_name(authored.stem + ".html.md")
+        retained = _retained_destination(authored)
         if not retained.is_file():
             continue
-        destination = output_root / retained.relative_to(project_root)
+        relative = authored.relative_to(project_root)
+        destination = output_root / relative.with_name(
+            relative.stem + ".html.md"
+        )
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(retained, destination)
         count += 1
@@ -211,6 +219,117 @@ def stage_retained_markdown(
 def _output_root(project_root: Path) -> Path:
     project = _load_config(project_root).get("project") or {}
     return project_root / project.get("output-dir", "_site")
+
+
+def _contains_source_symlinks(project_root: Path, output_root: Path) -> bool:
+    """Return whether a Quarto source tree contains symlinked inputs/resources."""
+    project_root = project_root.resolve()
+    output_root = output_root.resolve()
+    for path in project_root.rglob("*"):
+        if path.is_relative_to(output_root) or ".quarto" in path.parts:
+            continue
+        if path.is_symlink():
+            return True
+    return False
+
+
+def _copy_project_without_build_outputs(
+    project_root: Path,
+    staged_root: Path,
+    output_root: Path,
+) -> None:
+    """Materialise a symlinked Quarto project as ordinary files for rendering."""
+    try:
+        output_relative = output_root.relative_to(project_root)
+    except ValueError as error:
+        raise ValueError(
+            "Symlinked Quarto projects require project.output-dir to remain "
+            f"inside the project root: {output_root}"
+        ) from error
+    if not output_root.resolve().is_relative_to(project_root.resolve()):
+        raise ValueError(
+            "Symlinked Quarto projects require project.output-dir to remain "
+            f"inside the project root: {output_root}"
+        )
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        relative = Path(directory).relative_to(project_root)
+        ignored: set[str] = set()
+        for name in names:
+            candidate = relative / name
+            if candidate == output_relative or name == ".quarto":
+                ignored.add(name)
+        return ignored
+
+    shutil.copytree(
+        project_root,
+        staged_root,
+        symlinks=False,
+        ignore=ignore,
+        dirs_exist_ok=True,
+    )
+
+
+def _retained_destination(authored: Path) -> Path:
+    """Return the canonical retained-Markdown destination for an authored input."""
+    canonical = authored.resolve() if authored.is_symlink() else authored
+    return canonical.with_name(canonical.stem + ".html.md")
+
+
+def _publish_materialised_render(
+    staged_root: Path,
+    project_root: Path,
+    inputs: Sequence[Path],
+) -> None:
+    """Publish a successful staged render and its retained Markdown."""
+    staged_output = _output_root(staged_root)
+    output_root = _output_root(project_root)
+    if not staged_output.is_dir():
+        raise RuntimeError(
+            f"Quarto did not create the configured output: {staged_output}"
+        )
+
+    for authored in inputs:
+        relative = authored.relative_to(project_root)
+        staged_authored = staged_root / relative
+        staged_retained = staged_authored.with_name(
+            staged_authored.stem + ".html.md"
+        )
+        if not staged_retained.is_file():
+            continue
+        destination = _retained_destination(authored)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(staged_retained, destination)
+
+    if output_root.exists() or output_root.is_symlink():
+        if output_root.is_symlink() or output_root.is_file():
+            output_root.unlink()
+        else:
+            shutil.rmtree(output_root)
+    shutil.copytree(staged_output, output_root, symlinks=False)
+
+
+@contextmanager
+def _render_project_root(
+    project_root: Path,
+    output_root: Path,
+) -> Iterator[tuple[Path, bool]]:
+    """Yield a Quarto-safe project root, materialising symlinks when required."""
+    if not _contains_source_symlinks(project_root, output_root):
+        yield project_root, False
+        return
+
+    staged_root = Path(
+        tempfile.mkdtemp(
+            prefix=f".{project_root.name}-render-",
+            dir=project_root.parent,
+        )
+    )
+    try:
+        _copy_project_without_build_outputs(project_root, staged_root, output_root)
+        yield staged_root, True
+    finally:
+        shutil.rmtree(staged_root, ignore_errors=True)
 
 
 def build_docs(
@@ -233,11 +352,18 @@ def build_docs(
     if selection.warning:
         print(selection.warning)
     before = snapshot_retained_markdown(project_root) if check_retained else {}
-    command = [quarto_command, "render", project_root.name]
-    if selection.profile:
-        command.extend(["--profile", selection.profile])
-    subprocess.run(command, cwd=project_root.parent, check=True)
     output_root = _output_root(project_root)
+    with _render_project_root(project_root, output_root) as (render_root, staged):
+        command = [quarto_command, "render", render_root.name]
+        if selection.profile:
+            command.extend(["--profile", selection.profile])
+        subprocess.run(command, cwd=render_root.parent, check=True)
+        if staged:
+            _publish_materialised_render(
+                render_root,
+                project_root,
+                selection.included,
+            )
     retained_count = stage_retained_markdown(project_root, output_root, selection.included)
     exported = None
     if inspection:

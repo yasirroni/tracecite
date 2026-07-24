@@ -229,6 +229,101 @@ class BuildTests(unittest.TestCase):
             )
             export.assert_called_once()
 
+    def test_symlinked_project_is_materialised_before_quarto_render(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            canonical = repo / "docs"
+            canonical.mkdir()
+            canonical_source = canonical / "index.md"
+            canonical_source.write_text("# Index\n", encoding="utf-8")
+
+            root = repo / "docs_quarto"
+            root.mkdir()
+            (root / "index.md").symlink_to(canonical_source)
+            (root / "_quarto.yml").write_text(
+                "project:\n  render: [index.md]\n  output-dir: build\n",
+                encoding="utf-8",
+            )
+
+            def render(command: list[str], *, cwd: Path, check: bool) -> None:
+                rendered_root = Path(cwd) / command[2]
+                self.assertNotEqual(rendered_root, root)
+                self.assertFalse((rendered_root / "index.md").is_symlink())
+                output = rendered_root / "build"
+                output.mkdir()
+                (output / "index.html").write_text("rendered\n", encoding="utf-8")
+
+            with patch.object(docs.subprocess, "run", side_effect=render):
+                result = docs.build_docs(root, inspection=False)
+
+            self.assertEqual(result.output_root, root / "build")
+            self.assertEqual(
+                (root / "build/index.html").read_text(encoding="utf-8"),
+                "rendered\n",
+            )
+            self.assertTrue((root / "index.md").is_symlink())
+
+    def test_materialised_render_updates_canonical_retained_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            canonical = repo / "docs"
+            canonical.mkdir()
+            canonical_source = canonical / "example.py"
+            canonical_source.write_text("print('example')\n", encoding="utf-8")
+            canonical_retained = canonical / "example.html.md"
+            canonical_retained.write_text("before\n", encoding="utf-8")
+
+            root = repo / "docs_quarto"
+            root.mkdir()
+            (root / "example.py").symlink_to(canonical_source)
+            (root / "example.html.md").symlink_to(canonical_retained)
+            (root / "_quarto.yml").write_text(
+                "project:\n  render: [example.py]\n  output-dir: build\n",
+                encoding="utf-8",
+            )
+
+            def render(command: list[str], *, cwd: Path, check: bool) -> None:
+                rendered_root = Path(cwd) / command[2]
+                (rendered_root / "example.html.md").write_text(
+                    "after\n", encoding="utf-8"
+                )
+                output = rendered_root / "build"
+                output.mkdir()
+                (output / "example.html").write_text("rendered\n", encoding="utf-8")
+
+            with patch.object(docs.subprocess, "run", side_effect=render):
+                result = docs.build_docs(root, inspection=False)
+
+            self.assertEqual(result.retained_count, 1)
+            self.assertEqual(
+                canonical_retained.read_text(encoding="utf-8"),
+                "after\n",
+            )
+            self.assertTrue((root / "example.html.md").is_symlink())
+            self.assertEqual(
+                (root / "build/example.html.md").read_text(encoding="utf-8"),
+                "after\n",
+            )
+
+    def test_symlinked_project_rejects_output_outside_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            canonical = repo / "docs"
+            canonical.mkdir()
+            canonical_source = canonical / "index.md"
+            canonical_source.write_text("# Index\n", encoding="utf-8")
+
+            root = repo / "docs_quarto"
+            root.mkdir()
+            (root / "index.md").symlink_to(canonical_source)
+            (root / "_quarto.yml").write_text(
+                "project:\n  render: [index.md]\n  output-dir: ../published\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "inside the project root"):
+                docs.build_docs(root, quarto="/bin/quarto", inspection=False)
+
     def test_missing_quarto_is_reported(self) -> None:
         root, _ = self._project()
         with patch.object(docs.shutil, "which", return_value=None):
