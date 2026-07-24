@@ -17,7 +17,16 @@ from .tables import (
     normalise_pandoc_table,
     render_debug_markdown,
 )
-from .docs import author_docs, build_docs, check_docs, load_docs_contract, stage_docs
+from .docs import (
+    author_docs,
+    build_docs,
+    check_docs,
+    doctor_docs_index,
+    load_docs_contract,
+    search_docs_index,
+    stage_docs,
+    sync_docs_index,
+)
 
 EVIDENCE_COMMANDS = {"sync", "search", "page", "verify", "prune", "doctor"}
 
@@ -191,6 +200,19 @@ def build_parser() -> argparse.ArgumentParser:
         mode = docs_sub.add_parser(name, help=f"{name.title()} documentation outputs")
         mode.add_argument("--docs-config", type=Path, required=True)
         mode.add_argument("--repo-root", type=Path, default=Path.cwd())
+    for name, help_text in (
+        ("index", "Build the index-input mirror and synchronise the documentation index"),
+        ("search", "Hybrid FTS + vector search over the documentation index"),
+        ("doctor", "Integrity checks for the documentation index profile"),
+    ):
+        command = docs_sub.add_parser(name, help=help_text)
+        command.add_argument("--docs-config", type=Path, required=True)
+        command.add_argument("--repo-root", type=Path, default=Path.cwd())
+    docs_search = docs_sub.choices["search"]
+    docs_search.add_argument("query")
+    docs_search.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+    docs_search.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
+    docs_search.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
 
     check = subparsers.add_parser(
         "check", help="Strictly validate generated Markdown tables"
@@ -219,6 +241,12 @@ def main(argv: list[str] | None = None) -> int:
                 return _docs_mode(args, author_docs)
             if args.docs_command == "check":
                 return _docs_mode(args, check_docs)
+            if args.docs_command == "index":
+                return _docs_index(args)
+            if args.docs_command == "search":
+                return _docs_search(args)
+            if args.docs_command == "doctor":
+                return _docs_doctor(args)
             return _docs_build(args)
         if args.command == "check":
             return _check(args)
@@ -308,6 +336,64 @@ def _docs_mode(args: argparse.Namespace, operation) -> int:
     if result.diagnostics:
         print("\n".join(f"- {item}" for item in result.diagnostics), file=sys.stderr)
     return 0 if result.ok else 1
+
+
+def _docs_index(args: argparse.Namespace) -> int:
+    try:
+        contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+        result = sync_docs_index(contract, repo_root=args.repo_root)
+    except ModuleNotFoundError as error:
+        return _missing_evidence_exit(error)
+    report = result.sync_report
+    print(f"Documentation index input: {result.profile.input_root}")
+    print(f"Documentation index database: {result.profile.database_path}")
+    print(f"Tables normalised: {result.tables_normalized}")
+    print(f"status: {report.status}")
+    print(f"added: {report.sources_added}")
+    print(f"unchanged: {len(report.sources_unchanged)} source(s)")
+    print(f"embeddings generated: {report.embeddings_generated}")
+    return 0 if report.status == "ok" else 1
+
+
+def _docs_search(args: argparse.Namespace) -> int:
+    try:
+        contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+        results = search_docs_index(
+            contract,
+            args.query,
+            repo_root=args.repo_root,
+            limit=args.limit,
+            fts_limit=args.fts_limit,
+            vector_limit=args.vector_limit,
+        )
+    except ModuleNotFoundError as error:
+        return _missing_evidence_exit(error)
+    print(json.dumps(results, indent=2))
+    return 0
+
+
+def _docs_doctor(args: argparse.Namespace) -> int:
+    try:
+        contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+        issues = doctor_docs_index(contract, repo_root=args.repo_root)
+    except ModuleNotFoundError as error:
+        return _missing_evidence_exit(error)
+    for issue in issues:
+        print(f"ISSUE: {issue}")
+    if not issues:
+        print("doctor: no issues found")
+    return 0 if not issues else 1
+
+
+def _missing_evidence_exit(error: ModuleNotFoundError) -> int:
+    if _is_missing_evidence_dependency(error):
+        print(
+            "tracecite: evidence commands require the optional evidence dependencies; "
+            "install with tracecite[evidence]",
+            file=sys.stderr,
+        )
+        return 2
+    raise error
 
 
 def _table_normalise(args: argparse.Namespace) -> int:

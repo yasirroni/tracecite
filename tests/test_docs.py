@@ -256,7 +256,7 @@ class BuildTests(unittest.TestCase):
             with patch.object(docs.subprocess, "run", side_effect=render):
                 result = docs.build_docs(root, inspection=False)
 
-            self.assertEqual(result.output_root, root / "build")
+            self.assertEqual(result.output_root, (root / "build").resolve())
             self.assertEqual(
                 (root / "build/index.html").read_text(encoding="utf-8"),
                 "rendered\n",

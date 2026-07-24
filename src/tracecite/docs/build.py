@@ -95,6 +95,17 @@ def classify_render_inputs(paths: Sequence[Path]) -> dict[Language, tuple[Path, 
     return {key: tuple(value) for key, value in result.items()}
 
 
+def _normalize_input_path(path: Path, project_root: Path) -> Path:
+    """Resolve an input path when it stays inside the project root."""
+    candidate = path if path.is_absolute() else project_root / path
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(project_root)
+    except ValueError:
+        return candidate
+    return resolved
+
+
 def select_build_variant(
     project_root: Path,
     inputs: Sequence[Path],
@@ -104,8 +115,8 @@ def select_build_variant(
 ) -> BuildSelection:
     project_root = Path(project_root).resolve()
     inputs = tuple(
-        path if path.is_absolute() else project_root / path
-        for path in (Path(path) for path in inputs)
+        _normalize_input_path(Path(path), project_root)
+        for path in inputs
     )
     classified = classify_render_inputs(inputs)
     available = {language for language, paths in classified.items() if paths}

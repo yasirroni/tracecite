@@ -13,6 +13,7 @@ import tempfile
 
 from .contract import DocsEvidenceContract
 from .stage import stage_docs
+from .vectorize import docs_index_freshness_diagnostics
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,8 +66,9 @@ def author_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo
         staged_retained = temporary / "retained"
         shutil.copytree(contract.retained_root, staged_retained, ignore=shutil.ignore_patterns(".tracecite-manifest.json"))
         staged = replace(contract, retained_root=staged_retained, staged_root=temporary / "stage")
-        stage_docs(staged, target="local", repo_root=root)
-        stage_docs(staged, target="public", repo_root=root)
+        canonical_retained = contract.retained_root
+        stage_docs(staged, target="local", repo_root=root, link_markdown_root=canonical_retained)
+        stage_docs(staged, target="public", repo_root=root, link_markdown_root=canonical_retained)
         manifest = _manifest(contract, config, root, staged.staged_root / "public")
         manifest_tmp = temporary / "manifest.json"
         _dump(manifest, manifest_tmp)
@@ -115,15 +117,16 @@ def check_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_
     if manifest.get("contract_sha256") != _sha(Path(config_path).resolve()):
         diagnostics.append("contract hash mismatch")
     try:
-        temporary = Path(tempfile.mkdtemp(prefix=".tracecite-check-", dir=contract.staged_root.parent.parent))
+        temporary = Path(tempfile.mkdtemp(prefix=".tracecite-check-", dir=contract.staged_root.parent))
     except OSError as exc:
         return DocsModeResult("check", False, manifest_path, (f"temporary staging setup failed: {exc}",))
     try:
         expected_retained = temporary / "retained"
         shutil.copytree(contract.retained_root, expected_retained, ignore=shutil.ignore_patterns(".tracecite-manifest.json"))
         expected = replace(contract, retained_root=expected_retained, staged_root=temporary / "stage")
-        stage_docs(expected, target="local", repo_root=root)
-        stage_docs(expected, target="public", repo_root=root)
+        canonical_retained = contract.retained_root
+        stage_docs(expected, target="local", repo_root=root, link_markdown_root=canonical_retained)
+        stage_docs(expected, target="public", repo_root=root, link_markdown_root=canonical_retained)
         expected_local = _staged_files(expected.staged_root / "local", contract.staged_root / "local", root)
         expected_public = _staged_files(expected.staged_root / "public", contract.staged_root / "public", root)
         actual_local = _staged_files(contract.staged_root / "local", contract.staged_root / "local", root)
@@ -142,6 +145,9 @@ def check_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_
         recorded_public = manifest.get("public", {})
         if recorded_public != expected_public:
             diagnostics.append("public staged manifest is stale")
+        diagnostics.extend(
+            docs_index_freshness_diagnostics(contract, repo_root=root)
+        )
     except Exception as exc:
         diagnostics.append(f"staging expectation failed: {exc}")
     finally:

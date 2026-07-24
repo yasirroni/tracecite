@@ -10,8 +10,20 @@ from unittest.mock import patch
 
 import pytest
 
-from tracecite.docs import author_docs, check_docs, load_docs_contract
+from tracecite.docs import author_docs, check_docs, load_docs_contract, sync_docs_index
 import tracecite.docs.modes as modes
+from tracecite.evidence import schema
+
+
+class FakeEmbedder:
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for text in texts:
+            seed = sum((index + 1) * ord(char) for index, char in enumerate(text))
+            vector = [0.0] * schema.EMBEDDING_DIMENSIONS
+            vector[seed % schema.EMBEDDING_DIMENSIONS] = 1.0
+            vectors.append(vector)
+        return vectors
 
 
 def _fixture(tmp_path: Path, *, hook: list[str] | None = None) -> tuple[Path, Path]:
@@ -46,6 +58,12 @@ def _ready(tmp_path: Path):
     return config, root, contract
 
 
+def _ready_indexed(tmp_path: Path):
+    config, root, contract = _ready(tmp_path)
+    sync_docs_index(contract, repo_root=root, embedder=FakeEmbedder())
+    return config, root, contract
+
+
 def _snapshot(root: Path) -> dict[str, bytes]:
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
@@ -55,7 +73,9 @@ def test_author_and_check_are_public_modes(tmp_path: Path) -> None:
     contract = load_docs_contract(config, repo_root=root)
     assert author_docs(contract, config_path=config, repo_root=root).mode == "author"
     result = check_docs(contract, config_path=config, repo_root=root)
-    assert result.mode == "check" and result.ok
+    assert result.mode == "check"
+    assert not result.ok
+    assert any("documentation index database is missing" in issue for issue in result.diagnostics)
 
 
 def test_author_hook_exact_once_and_check_never_runs_it(tmp_path: Path) -> None:
@@ -65,7 +85,7 @@ def test_author_hook_exact_once_and_check_never_runs_it(tmp_path: Path) -> None:
         author_docs(contract, config_path=config, repo_root=root)
         run.assert_called_once_with(["render", "--exact"], cwd=root.resolve(), check=True)
     with patch.object(modes.subprocess, "run", side_effect=AssertionError("check ran hook")):
-        assert check_docs(contract, config_path=config, repo_root=root).ok
+        check_docs(contract, config_path=config, repo_root=root)
 
 
 def test_manifest_is_deterministic_sorted_and_excludes_itself(tmp_path: Path) -> None:
@@ -147,7 +167,7 @@ def test_check_reports_temporary_setup_failure(tmp_path: Path) -> None:
 
 
 def test_check_success_and_failure_clean_temporary_trees_and_preserve_sibling(tmp_path: Path) -> None:
-    config, root, contract = _ready(tmp_path)
+    config, root, contract = _ready_indexed(tmp_path)
     sibling = contract.staged_root / "unrelated"
     sibling.mkdir()
     (sibling / "keep.txt").write_text("keep", encoding="utf-8")
@@ -160,6 +180,21 @@ def test_check_success_and_failure_clean_temporary_trees_and_preserve_sibling(tm
     assert _snapshot(root) == failed_before
     assert (sibling / "keep.txt").read_text(encoding="utf-8") == "keep"
     assert not list(root.glob("docs/.tracecite-check-*"))
+
+
+def test_check_reports_index_freshness_diagnostics_when_never_indexed(tmp_path: Path) -> None:
+    config, root, contract = _ready(tmp_path)
+    result = check_docs(contract, config_path=config, repo_root=root)
+    assert not result.ok
+    assert any("index-input mirror is missing" in issue for issue in result.diagnostics)
+    assert any("documentation index database is missing" in issue for issue in result.diagnostics)
+
+
+def test_check_reports_index_freshness_diagnostics_when_indexed(tmp_path: Path) -> None:
+    config, root, contract = _ready_indexed(tmp_path)
+    result = check_docs(contract, config_path=config, repo_root=root)
+    assert result.ok
+    assert not any("documentation index database is missing" in issue for issue in result.diagnostics)
 
 
 def test_hook_failure_preserves_outputs_and_sibling(tmp_path: Path) -> None:

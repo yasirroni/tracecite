@@ -195,6 +195,30 @@ def _search(conn, sources_dir, query, limit, fts_limit, vector_limit, model_cach
     return results
 
 
+def hybrid_search(
+    conn,
+    sources_dir,
+    query,
+    limit,
+    fts_limit,
+    vector_limit,
+    model_cache_dir,
+    database_path,
+    *,
+    embedder=None,
+):
+    return _search(
+        conn,
+        sources_dir,
+        query,
+        limit,
+        fts_limit,
+        vector_limit,
+        embedder if embedder is not None else model_cache_dir,
+        database_path,
+    )
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     from . import schema
 

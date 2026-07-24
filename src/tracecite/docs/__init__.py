@@ -17,6 +17,15 @@ from .contract import DocsEvidenceContract
 from .config import load_docs_contract
 from .stage import DocsStageResult, stage_docs
 from .modes import DocsModeResult, author_docs, check_docs
+from .vectorize import (
+    DocsIndexProfile,
+    DocsIndexResult,
+    doctor_docs_index,
+    prepare_docs_index_input,
+    resolve_docs_index_profile,
+    search_docs_index,
+    sync_docs_index,
+)
 
 # Keep module attributes used by existing callers and tests while the
 # implementation moves from ``tracecite.docs`` to ``tracecite.docs.build``.
@@ -53,4 +62,11 @@ __all__ = [
     "stage_retained_markdown",
     "author_docs",
     "check_docs",
+    "DocsIndexProfile",
+    "DocsIndexResult",
+    "doctor_docs_index",
+    "prepare_docs_index_input",
+    "resolve_docs_index_profile",
+    "search_docs_index",
+    "sync_docs_index",
 ]

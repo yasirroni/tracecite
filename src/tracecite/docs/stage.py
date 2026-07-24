@@ -216,8 +216,13 @@ def _rewrite_markdown(text: str, markdown_path: Path, repo_root: Path,
     return "".join(output)
 
 
-def stage_docs(contract: DocsEvidenceContract, *, target: StageTarget,
-               repo_root: str | Path) -> DocsStageResult:
+def stage_docs(
+    contract: DocsEvidenceContract,
+    *,
+    target: StageTarget,
+    repo_root: str | Path,
+    link_markdown_root: Path | None = None,
+) -> DocsStageResult:
     if target not in {"local", "public"}:
         raise ValueError("target must be local or public")
     root = Path(repo_root).resolve()
@@ -232,12 +237,25 @@ def stage_docs(contract: DocsEvidenceContract, *, target: StageTarget,
     try:
         shutil.copytree(contract.retained_root, temporary, dirs_exist_ok=True)
         changed: list[Path] = []
+        link_root = link_markdown_root or contract.retained_root
+        if target == "public":
+            for entries in registry.values():
+                for entry in entries:
+                    source = (root / entry.local_path).resolve()
+                    try:
+                        relative = source.relative_to(link_root.resolve())
+                    except ValueError:
+                        continue
+                    candidate = temporary / relative
+                    if candidate.is_file():
+                        candidate.unlink()
         for path in temporary.rglob("*.md"):
             original = path.read_text(encoding="utf-8")
-            retained_path = contract.retained_root / path.relative_to(temporary)
+            relative = path.relative_to(temporary)
+            link_path = link_root / relative
             transformed = _rewrite_markdown(
-                original, retained_path, root, registry, target,
-                output_markdown_path=target_path / path.relative_to(temporary),
+                original, link_path, root, registry, target,
+                output_markdown_path=target_path / relative,
             )
             if transformed != original:
                 path.write_text(transformed, encoding="utf-8")
@@ -256,3 +274,47 @@ def stage_docs(contract: DocsEvidenceContract, *, target: StageTarget,
             os.replace(backup, target_path)
         raise
     return DocsStageResult(target, target_path, tuple(changed))
+
+
+def _is_publication_excluded_markdown(path: Path, contract: DocsEvidenceContract) -> bool:
+    resolved = path.resolve()
+    for exclude in contract.publication_exclude:
+        target = exclude.resolve()
+        if resolved == target:
+            return True
+        if target.is_dir():
+            try:
+                resolved.relative_to(target)
+                return True
+            except ValueError:
+                continue
+    return False
+
+
+def validate_retained_source_links(
+    contract: DocsEvidenceContract,
+    *,
+    repo_root: str | Path,
+) -> tuple[str, ...]:
+    """Validate source-PDF link candidates in retained Markdown without rewriting."""
+    root = Path(repo_root).resolve()
+    registry, issues = load_source_links(contract.source_links, root)
+    if issues:
+        return tuple(f"source-links registry: {issue}" for issue in issues)
+    diagnostics: list[str] = []
+    for path in sorted(contract.retained_root.rglob("*.md")):
+        if _is_publication_excluded_markdown(path, contract):
+            continue
+        relative = path.relative_to(contract.retained_root).as_posix()
+        try:
+            _rewrite_markdown(
+                path.read_text(encoding="utf-8"),
+                path,
+                root,
+                registry,
+                "local",
+                output_markdown_path=path,
+            )
+        except ValueError as exc:
+            diagnostics.append(f"{relative}: {exc}")
+    return tuple(diagnostics)
