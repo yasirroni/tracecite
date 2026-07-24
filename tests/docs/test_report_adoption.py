@@ -257,6 +257,23 @@ def test_author_index_search_doctor_check_succeed_in_order(
         contract, "Integrated System Plan", repo_root=root, embedder=make_embedder()
     )
     assert results
+    # Verify stable schema: each result must be a dict with expected keys
+    expected_keys = {
+        "rank",
+        "source_path",
+        "heading_path",
+        "passage",
+        "physical_page",
+        "page_offsets",
+        "page_range",
+        "line_range",
+        "content_type",
+        "provenance",
+        "fused_score",
+    }
+    for result in results:
+        assert isinstance(result, dict)
+        assert set(result.keys()) >= expected_keys, f"result keys {set(result.keys())} missing from {expected_keys}"
 
     assert doctor_docs_index(contract, repo_root=root) == ()
 
@@ -285,7 +302,7 @@ def test_index_input_mirror_excludes_non_report_paths(
 def test_two_fresh_copies_are_deterministic_for_sources_and_search(
     tmp_path: Path, make_embedder
 ) -> None:
-    def build_fresh(name: str) -> tuple[dict[str, object], list[dict]]:
+    def build_fresh(name: str) -> tuple[dict[str, object], list[dict], bytes, bytes]:
         root = _copy_example(tmp_path, name=name)
         config = root / "docs/tracecite.toml"
         config.write_text(
@@ -301,12 +318,17 @@ def test_two_fresh_copies_are_deterministic_for_sources_and_search(
         results = search_docs_index(
             contract, "Integrated System Plan", repo_root=root, embedder=make_embedder()
         )
-        return _index_snapshot(contract.index_output), results
+        # Compare retained and public staged markdown files for byte-identity
+        retained_bytes = (contract.retained_root / "report.md").read_bytes()
+        public_bytes = (contract.staged_root / "public" / "report.md").read_bytes()
+        return _index_snapshot(contract.index_output), results, retained_bytes, public_bytes
 
-    first_snapshot, first_results = build_fresh("fresh-a")
-    second_snapshot, second_results = build_fresh("fresh-b")
+    first_snapshot, first_results, first_retained, first_public = build_fresh("fresh-a")
+    second_snapshot, second_results, second_retained, second_public = build_fresh("fresh-b")
     assert first_snapshot == second_snapshot
     assert first_results == second_results
+    assert first_retained == second_retained, "retained markdown differs between fresh builds"
+    assert first_public == second_public, "public staged markdown differs between fresh builds"
 
 
 def test_publish_static_is_isolated_and_matches_committed_public_snapshot(
