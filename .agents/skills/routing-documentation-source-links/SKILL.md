@@ -20,7 +20,7 @@ Maintain one Markdown authority. Route only the generated build copy to a local 
 
 ## Required architecture
 
-This skill is the control-plane contract for the companion Julia implementation normally placed under `tools/doc-link-routing/`. Installing the skill ZIP alone does not patch a host repository or create that tool project.
+`tracecite.docs.stage_docs` (CLI: `tracecite docs stage --docs-config PATH --repo-root ROOT --target local|public`) is the sole reference implementation of this contract. A host repository that needs this capability in a different runtime (e.g. a Julia/Documenter.jl package) vendors its own independent implementation of the schema-v2 registry and rewriting rules described here, rather than depending on `tracecite` directly — PISP.jl is one real example of a Julia package that does this.
 
 ```text
 maintained Markdown with local links
@@ -58,19 +58,6 @@ generated site                  = docs/build/ or equivalent
 8. **Validate before build.** Apply target-specific path, URL, duplicate-path, ambiguity, and no-mutation checks. See `references/validation-and-failure-modes.md`.
 9. **Build from the staged source.** Upload only generated HTML/assets intended for publication. Never include local PDFs, `tracecite.sqlite`, embedding caches, source-capture workspaces, or private evidence.
 10. **Reconcile the verifier contract.** TraceCite report verification and the routing implementation must parse the same schema-v2 `[[source]]` registry keyed by `local_path` and the same narrow positive-`#page=N` Markdown candidates. Patch existing readers rather than creating a second parser, then rerun the relevant tests.
-
-Expected companion-tool paths:
-
-```text
-tools/doc-link-routing/src/source_links.jl
-tools/doc-link-routing/test/runtests.jl
-```
-
-Run its fixture suite with:
-
-```sh
-julia --project=tools/doc-link-routing tools/doc-link-routing/test/runtests.jl
-```
 
 ## Final registry shape
 
