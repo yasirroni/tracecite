@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 
+from . import __version__
 from .tables import (
     TableContext,
     TableNormalisationError,
@@ -103,7 +104,7 @@ def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.Argume
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tracecite")
     parser.add_argument("--config", type=Path, default=None, help="TraceCite profile TOML.")
-    parser.add_argument("--version", action="version", version="TraceCite 0.4.0")
+    parser.add_argument("--version", action="version", version=f"TraceCite {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     table = subparsers.add_parser("table", help="Normalise one table")

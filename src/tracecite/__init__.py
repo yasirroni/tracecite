@@ -1,5 +1,7 @@
 """TraceCite: source-linked normalisation for executable knowledge documents."""
 
+from importlib.metadata import version
+
 from .tables import (
     NORMALISER_VERSION,
     NormalisedTable,
@@ -15,7 +17,7 @@ from .tables import (
     normalise_pandoc_table,
 )
 
-__version__ = "0.4.0"
+__version__ = version("tracecite")
 
 __all__ = [
     "NORMALISER_VERSION",
