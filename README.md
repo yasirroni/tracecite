@@ -70,9 +70,9 @@ tracecite document normalise report.md --to embedding-markdown --output report.e
 ### Build the documentation
 
 ```sh
-uv run tracecite docs build docs
-uv run tracecite docs build docs_quarto_py --only python
-uv run tracecite docs build docs_quarto_jl --only julia
+tracecite docs build docs
+tracecite docs build docs_quarto_py --only python
+tracecite docs build docs_quarto_jl --only julia
 ```
 
 <!-- TODO:
@@ -88,7 +88,7 @@ See `examples/report-adoption/aemo-isp-comparison/` for a complete, real example
 Repository integrations may validate the docs evidence contract before building:
 
 ```sh
-uv run tracecite docs build docs --docs-config docs/tracecite.toml --repo-root .
+tracecite docs build docs --docs-config docs/tracecite.toml --repo-root .
 ```
 
 Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`,
