@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 import tempfile
+import tomllib
 import unittest
 
 import yaml
@@ -31,6 +32,22 @@ def python_code_cell_labels(docs: Path) -> list[str | None]:
 
 class DocumentationInvariantTests(unittest.TestCase):
     ROOT = Path(__file__).parents[1]
+
+    def test_independent_quarto_projects_retain_executed_markdown(self) -> None:
+        for project in ("docs_quarto_py", "docs_quarto_jl"):
+            config = yaml.safe_load((self.ROOT / project / "_quarto.yml").read_text())
+            self.assertEqual(config["project"]["type"], "website")
+            self.assertIs(config["format"]["html"]["keep-md"], True)
+            self.assertIs(config["execute"]["error"], False)
+
+    def test_documenter_environment_uses_local_tracecite_without_warnonly(self) -> None:
+        project = tomllib.loads((self.ROOT / "docs_jl" / "Project.toml").read_text())
+        self.assertIn("TraceCite", project["deps"])
+        self.assertEqual(project["sources"]["TraceCite"]["path"], "..")
+
+        make = (self.ROOT / "docs_jl" / "make.jl").read_text(encoding="utf-8")
+        self.assertIn("quarto_percent_to_literate", make)
+        self.assertNotIn("warnonly", make)
 
     def test_four_page_tutorial_structure_and_navigation(self) -> None:
         root = self.ROOT

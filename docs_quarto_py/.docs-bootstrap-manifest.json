@@ -37,7 +37,7 @@
       "source": "docs/formats/html-documenter.md"
     },
     "formats/pandoc-tables.md": {
-      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
+      "sha256": "e6ec910f07a142f9c5f93a1a4620bef2160de1d4b66f0ef1a3ec095db2513fa8",
       "source": "docs/formats/pandoc-tables.md"
     },
     "guide/api.md": {

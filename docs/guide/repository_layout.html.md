@@ -60,12 +60,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── embedding-site.md
 │   │   ├── repository_layout.html.md
 │   │   └── searchable-evidence.md
-│   ├── site_libs/
-│   │   ├── bootstrap/
-│   │   ├── clipboard/
-│   │   ├── quarto-html/
-│   │   ├── quarto-nav/
-│   │   └── quarto-search/
 │   ├── _quarto.yml
 │   └── index.md
 ├── docs_quarto_py/
@@ -83,12 +77,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── embedding-site.md
 │   │   ├── repository_layout.py
 │   │   └── searchable-evidence.md
-│   ├── site_libs/
-│   │   ├── bootstrap/
-│   │   ├── clipboard/
-│   │   ├── quarto-html/
-│   │   ├── quarto-nav/
-│   │   └── quarto-search/
 │   ├── _quarto.yml
 │   └── index.md
 ├── examples/
@@ -148,7 +136,8 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── test_docs.py
 │   ├── test_evidence_imports.py
 │   ├── test_repository_tree.py
-│   └── test_tables.py
+│   ├── test_tables.py
+│   └── test_version.py
 ├── LICENSE
 ├── Project.toml
 ├── pyproject.toml

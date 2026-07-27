@@ -14,7 +14,7 @@ title: "Pandoc Markdown tables"
 ## Grid table
 
 +------+----------------------+-------------+
-| Rank | Technology           | Cost ($/kW) |
+| Rank | Technology           | Cost (\$/kW) |
 +======+======================+=============+
 | 1    | Solar PV             | 1250        |
 +------+----------------------+-------------+

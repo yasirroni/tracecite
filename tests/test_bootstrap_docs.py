@@ -7,11 +7,13 @@ tests exercise the script as a subprocess rather than importing it.
 from __future__ import annotations
 
 from pathlib import Path
+import importlib.util
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_SCRIPT_SOURCE = REPO_ROOT / "scripts" / "bootstrap_docs.py"
@@ -40,14 +42,29 @@ def _build_minimal_fixture(root: Path) -> None:
     (root / "docs" / "guide" / "hello.md").write_text("# Hello\n", encoding="utf-8")
 
     (root / "projectA" / "guide").mkdir(parents=True)
+    (root / "projectA" / "_quarto.yml").write_text("project: {}\n", encoding="utf-8")
 
     (root / "docs" / "bootstrap.toml").write_text(
         "schema_version = 1\n\n"
+        "[[project]]\n"
+        'name = "projectA"\n'
+        'owned = ["_quarto.yml"]\n\n'
         "[[mapping]]\n"
         'source = "docs/guide/hello.md"\n'
         'destinations = ["projectA/guide/hello.md"]\n',
         encoding="utf-8",
     )
+
+
+def _load_bootstrap_module(root: Path):
+    script = root / "scripts" / "bootstrap_docs.py"
+    spec = importlib.util.spec_from_file_location("fixture_bootstrap_docs", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {script}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 class BootstrapCleanCheckTests(unittest.TestCase):
@@ -89,6 +106,52 @@ class BootstrapCleanCheckTests(unittest.TestCase):
             self.assertEqual(check_result.returncode, 1)
             self.assertIn("stale", check_result.stderr)
             self.assertIn("hello.md", check_result.stderr)
+
+    def test_check_reports_unexpected_unowned_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _build_minimal_fixture(root)
+            self.assertEqual(_run(root).returncode, 0)
+
+            (root / "projectA" / "leaked.md").write_text("leak\n", encoding="utf-8")
+            check_result = _run(root, "--check")
+
+            self.assertEqual(check_result.returncode, 1)
+            self.assertIn("unexpected unowned file leaked.md", check_result.stderr)
+
+    def test_failed_manifest_promotion_restores_previous_project_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _build_minimal_fixture(root)
+            self.assertEqual(_run(root).returncode, 0)
+
+            destination = root / "projectA" / "guide" / "hello.md"
+            manifest = root / "projectA" / ".docs-bootstrap-manifest.json"
+            old_destination = destination.read_bytes()
+            old_manifest = manifest.read_bytes()
+            (root / "docs" / "guide" / "hello.md").write_text(
+                "# Replacement\n", encoding="utf-8"
+            )
+
+            module = _load_bootstrap_module(root)
+            mappings, _ = module._load_config(root / "docs" / "bootstrap.toml")
+            real_replace = module.os.replace
+            calls = 0
+
+            def fail_once_on_manifest(source, target):
+                nonlocal calls
+                calls += 1
+                if calls == 4:
+                    raise OSError("injected manifest promotion failure")
+                return real_replace(source, target)
+
+            with mock.patch.object(module.os, "replace", side_effect=fail_once_on_manifest):
+                with self.assertRaisesRegex(OSError, "injected manifest"):
+                    module.bootstrap(mappings)
+
+            self.assertEqual(destination.read_bytes(), old_destination)
+            self.assertEqual(manifest.read_bytes(), old_manifest)
+            self.assertFalse(any(root.glob(".bootstrap-backup-*")))
 
     def test_bootstrap_is_idempotent_with_clean_git_status_between_runs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

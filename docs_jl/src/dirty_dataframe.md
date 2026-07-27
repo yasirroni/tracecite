@@ -2,29 +2,20 @@
 EditURL = "examples/julia/dirty_dataframe.jl"
 ```
 
-%% [markdown]
----
-title: "TraceCite with Julia"
-subtitle: "The optional Julia route into TraceCite's canonical table model"
----
+# TraceCite with Julia
 
-%% [markdown]
+*The optional Julia route into TraceCite's canonical table model*
 
-````@example dirty_dataframe
-"""
-# Julia is optional
+## Julia is optional
 
 Julia is optional. TraceCite's Python normaliser and CLI do not require Julia.
 Rendering this executable page requires Julia 1.10 or newer, DataFrames.jl,
-Tables.jl, and Quarto's Julia engine.
+and Tables.jl. The Quarto site uses Quarto's Julia engine; the standalone
+Documenter site executes the same canonical source through Literate.jl.
 
 This page uses the same table contract as the Python introduction: HTML MIME
 and native Pandoc output are two evidence routes into TraceCite's canonical
 model.
-"""
-````
-
-%%
 
 ````@example dirty_dataframe
 using DataFrames
@@ -52,38 +43,20 @@ dirty_table = DataFrame(
 )
 ````
 
-%% [markdown]
-
-````@example dirty_dataframe
-"""
-# Evidence route 1: HTML MIME
+## Evidence route 1: HTML MIME
 
 The native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.
-"""
-````
-
-%%
 
 ````@example dirty_dataframe
 dirty_table
 ````
 
-%% [markdown]
-
-````@example dirty_dataframe
-"""
-# Evidence route 2: Native Pandoc tables
+## Evidence route 2: Native Pandoc tables
 
 `knowledge_table()` needs a stable table identifier. A caption is optional, so
 the minimal form emits a bare pipe table without a numbered Quarto caption.
-"""
-````
-
-%%
 
 ````@example dirty_dataframe
-#| output: asis
-
 print(
     knowledge_table(
         dirty_table;
@@ -92,22 +65,12 @@ print(
 )
 ````
 
-%% [markdown]
-
-````@example dirty_dataframe
-"""
 The advanced call below controls presentation, retrieval context, stable row
 identity, and the data-derived finding. TraceCite can also normalise tables
 produced by other libraries; this helper is a convenient Pandoc Markdown output
 route.
-"""
-````
-
-%%
 
 ````@example dirty_dataframe
-#| output: asis
-
 print(
     knowledge_table(
         dirty_table;
@@ -134,15 +97,10 @@ print(
         ],
     ),
 )
-````
 
-%%
 
-````@example dirty_dataframe
-#| include: false
-
-@assert size(dirty_table) == (5, 5)
-@assert "Battery | BESS" in dirty_table.technology
+@assert size(dirty_table) == (5, 5) # hide
+@assert "Battery | BESS" in dirty_table.technology # hide
 ````
 
 ---

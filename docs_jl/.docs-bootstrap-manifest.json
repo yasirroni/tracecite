@@ -1,7 +1,7 @@
 {
   "files": {
     "src/examples/julia/dirty_dataframe.jl": {
-      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
+      "sha256": "fcdadad6771f1e8c01f9ae9f2509c0dcee7c49a311904ab3b239ee9ab935bba0",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "src/formats/diagnostics.md": {
@@ -13,7 +13,7 @@
       "source": "docs/formats/html-documenter.md"
     },
     "src/formats/pandoc-tables.md": {
-      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
+      "sha256": "e6ec910f07a142f9c5f93a1a4620bef2160de1d4b66f0ef1a3ec095db2513fa8",
       "source": "docs/formats/pandoc-tables.md"
     },
     "src/guide/api.md": {

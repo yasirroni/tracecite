@@ -10,7 +10,8 @@
 
 Julia is optional. TraceCite's Python normaliser and CLI do not require Julia.
 Rendering this executable page requires Julia 1.10 or newer, DataFrames.jl,
-Tables.jl, and Quarto's Julia engine.
+and Tables.jl. The Quarto site uses Quarto's Julia engine; the standalone
+Documenter site executes the same canonical source through Literate.jl.
 
 This page uses the same table contract as the Python introduction: HTML MIME
 and native Pandoc output are two evidence routes into TraceCite's canonical

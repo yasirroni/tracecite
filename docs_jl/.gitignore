@@ -1,2 +1,4 @@
 build/
+Manifest.toml
+.documenter-source/
 .DS_Store

@@ -1,6 +1,7 @@
 engines:
 - julia
 project:
+  type: website
   output-dir: build
   render:
   - '!examples/python/*.py'
@@ -12,7 +13,24 @@ project:
   - '!formats/*.html.md'
   - examples/julia/*.jl
   - examples/literate_documenter/index.md
+format:
+  html:
+    toc: true
+    code-fold: true
+    code-summary: Show source code
+    code-overflow: wrap
+    code-line-numbers: true
+    embed-resources: true
+    keep-md: true
+execute:
+  echo: true
+  warning: true
+  error: false
 website:
+  title: TraceCite table normalisation — Julia
+  search: true
+  page-navigation: true
+  reader-mode: true
   sidebar:
     contents:
     - href: index.md
