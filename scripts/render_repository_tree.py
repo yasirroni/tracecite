@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 
@@ -23,9 +24,53 @@ def render_repository_tree(root: Path, *, max_depth: int = 3) -> str:
     root = root.resolve()
     if max_depth < 1:
         raise ValueError("max_depth must be at least 1")
+    git_visible_files = _git_visible_files(root)
     lines = ["."]
-    _append_children(root, root, lines, prefix="", depth=1, max_depth=max_depth)
+    _append_children(
+        root,
+        root,
+        lines,
+        prefix="",
+        depth=1,
+        max_depth=max_depth,
+        git_visible_files=git_visible_files,
+    )
     return "\n".join(lines)
+
+
+def _git_visible_files(root: Path) -> frozenset[tuple[str, ...]] | None:
+    """Return Git-visible files, or ``None`` outside a Git work tree.
+
+    Tracked files and untracked files that are not ignored are included. Git is
+    the authority for nested ``.gitignore`` files, negation rules, and any
+    repository-local exclude configuration.
+    """
+
+    try:
+        result = subprocess.run(
+            (
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+                "--",
+            ),
+            check=False,
+            capture_output=True,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    return frozenset(
+        Path(raw.decode("utf-8", errors="surrogateescape")).parts
+        for raw in result.stdout.split(b"\0")
+        if raw
+    )
 
 
 def _append_children(
@@ -36,13 +81,17 @@ def _append_children(
     prefix: str,
     depth: int,
     max_depth: int,
+    git_visible_files: frozenset[tuple[str, ...]] | None,
 ) -> None:
     children = sorted(
         (
             path
             for path in directory.iterdir()
-            if _is_visible(root, path)
-            and (not path.is_dir() or _has_visible_entries(root, path))
+            if _is_visible(root, path, git_visible_files)
+            and (
+                not path.is_dir()
+                or _has_visible_entries(root, path, git_visible_files)
+            )
         ),
         key=lambda path: (not path.is_dir(), path.name.casefold()),
     )
@@ -60,6 +109,7 @@ def _append_children(
                 prefix=prefix + continuation,
                 depth=depth + 1,
                 max_depth=max_depth,
+                git_visible_files=git_visible_files,
             )
 
 
@@ -78,17 +128,35 @@ def _is_excluded(root: Path, path: Path) -> bool:
     return relative.parts[:1] in {("build",), ("dist",)}
 
 
-def _is_visible(root: Path, path: Path) -> bool:
+def _is_visible(
+    root: Path,
+    path: Path,
+    git_visible_files: frozenset[tuple[str, ...]] | None = None,
+) -> bool:
     """Whether ``path`` is a visible tree entry."""
-    return not _is_excluded(root, path)
+    if _is_excluded(root, path):
+        return False
+    if git_visible_files is None:
+        return True
+    relative_parts = path.relative_to(root).parts
+    if path.is_dir():
+        return any(
+            parts[: len(relative_parts)] == relative_parts
+            for parts in git_visible_files
+        )
+    return relative_parts in git_visible_files
 
 
-def _has_visible_entries(root: Path, directory: Path) -> bool:
+def _has_visible_entries(
+    root: Path,
+    directory: Path,
+    git_visible_files: frozenset[tuple[str, ...]] | None = None,
+) -> bool:
     """Whether a directory has any visible file or non-empty directory."""
     if directory.is_symlink():
         return False
     for child in directory.iterdir():
-        if not _is_visible(root, child):
+        if not _is_visible(root, child, git_visible_files):
             continue
         if child.is_symlink():
             if not child.is_dir():
@@ -96,7 +164,7 @@ def _has_visible_entries(root: Path, directory: Path) -> bool:
             continue
         if (
             not child.is_dir()
-            or _has_visible_entries(root, child)
+            or _has_visible_entries(root, child, git_visible_files)
         ):
             return True
     return False

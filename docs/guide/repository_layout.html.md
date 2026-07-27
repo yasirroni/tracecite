@@ -51,16 +51,24 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── literate_documenter/
 │   │   └── python/
 │   ├── formats/
+│   │   ├── diagnostics.html.md
 │   │   ├── diagnostics.md
+│   │   ├── html-documenter.html.md
 │   │   ├── html-documenter.md
+│   │   ├── pandoc-tables.html.md
 │   │   └── pandoc-tables.md
 │   ├── guide/
+│   │   ├── api.html.md
 │   │   ├── api.md
+│   │   ├── architecture.html.md
 │   │   ├── architecture.md
+│   │   ├── embedding-site.html.md
 │   │   ├── embedding-site.md
 │   │   ├── repository_layout.html.md
+│   │   ├── searchable-evidence.html.md
 │   │   └── searchable-evidence.md
 │   ├── _quarto.yml
+│   ├── index.html.md
 │   └── index.md
 ├── docs_quarto_py/
 │   ├── examples/
@@ -68,16 +76,25 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── literate_documenter/
 │   │   └── python/
 │   ├── formats/
+│   │   ├── diagnostics.html.md
 │   │   ├── diagnostics.md
+│   │   ├── html-documenter.html.md
 │   │   ├── html-documenter.md
+│   │   ├── pandoc-tables.html.md
 │   │   └── pandoc-tables.md
 │   ├── guide/
+│   │   ├── api.html.md
 │   │   ├── api.md
+│   │   ├── architecture.html.md
 │   │   ├── architecture.md
+│   │   ├── embedding-site.html.md
 │   │   ├── embedding-site.md
+│   │   ├── repository_layout.html.md
 │   │   ├── repository_layout.py
+│   │   ├── searchable-evidence.html.md
 │   │   └── searchable-evidence.md
 │   ├── _quarto.yml
+│   ├── index.html.md
 │   └── index.md
 ├── examples/
 │   └── report-adoption/
