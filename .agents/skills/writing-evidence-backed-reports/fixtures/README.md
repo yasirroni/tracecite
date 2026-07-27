@@ -1,6 +1,6 @@
 # Writing evidence-backed reports fixtures
 
-This fixture package is synthetic and redistributable. It stores Markdown reports and a schema-v2 source-link registry, while `validate_fixtures.py` creates fresh temporary PDFs, assets, and a corpus-specific SQLite database at validation time.
+This fixture package is synthetic and redistributable. It stores Markdown reports and a schema-v3 source-link registry, while `validate_fixtures.py` creates fresh temporary PDFs, assets, and a corpus-specific SQLite database at validation time.
 
 Run from a checkout:
 

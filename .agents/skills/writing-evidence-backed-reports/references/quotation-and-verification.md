@@ -40,4 +40,4 @@ Before acceptance, manually check:
 
 ## Source-link compatibility
 
-Use `--source-links` with the schema-v2 `[[source]]` registry owned by `routing-documentation-source-links`. Do not create a parallel registry merely to satisfy a verifier.
+Use `--source-links` with the schema-v3 `[[source]]` registry owned by `routing-documentation-source-links`. Do not create a parallel registry merely to satisfy a verifier.

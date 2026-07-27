@@ -202,14 +202,15 @@ def test_source_links_registry_consistency_without_mutating_report(
 
     source_links_path = tmp_path / "source-links.toml"
     source_links_path.write_text(
-        """schema_version = 2
+        """schema_version = 3
 
 [[source]]
-title = "2026 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2026"
 local_path = "AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/aemo-2026-isp.pdf"
-public_origin = "official"
+
+[source.metadata]
+publisher = "Australian Energy Market Operator"
 """,
         encoding="utf-8",
     )
@@ -224,7 +225,7 @@ public_origin = "official"
     assert report_path.read_text(encoding="utf-8") == original_text  # never mutated
 
     # Now make the registry inconsistent (missing entry) and confirm it's flagged.
-    source_links_path.write_text("schema_version = 2\n", encoding="utf-8")
+    source_links_path.write_text("schema_version = 3\n", encoding="utf-8")
     conn = schema.connect(database_path)
     try:
         result = verify.verify_report(conn, report_path, corpus_dir, source_links_path=source_links_path)
@@ -243,14 +244,12 @@ def test_source_links_registry_flags_local_path_mismatch(
 
     source_links_path = tmp_path / "source-links.toml"
     source_links_path.write_text(
-        """schema_version = 2
+        """schema_version = 3
 
 [[source]]
-title = "2026 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2026"
 local_path = "wrong/path/AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/aemo-2026-isp.pdf"
-public_origin = "official"
 """,
         encoding="utf-8",
     )
@@ -273,14 +272,12 @@ def test_source_links_registry_root_distinct_from_evidence_root_matches_by_canon
     registry_root = tmp_path
     source_links_path = tmp_path / "source-links.toml"
     source_links_path.write_text(
-        f"""schema_version = 2
+        f"""schema_version = 3
 
 [[source]]
-title = "2026 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2026"
 local_path = "{corpus_dir.name}/AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/aemo-2026-isp.pdf"
-public_origin = "official"
 """,
         encoding="utf-8",
     )
@@ -304,14 +301,12 @@ def test_source_links_registry_cross_root_mismatch_reports_specific_issue(
     (other_root / "AEMO_2026_ISP.pdf").write_text("not the indexed PDF", encoding="utf-8")
     source_links_path = tmp_path / "source-links.toml"
     source_links_path.write_text(
-        """schema_version = 2
+        """schema_version = 3
 
 [[source]]
-title = "2026 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2026"
 local_path = "AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/aemo-2026-isp.pdf"
-public_origin = "official"
 """,
         encoding="utf-8",
     )
@@ -323,7 +318,7 @@ public_origin = "official"
         conn.close()
 
 
-def test_source_links_rejects_legacy_schema_id_missing_fields_and_duplicates(
+def test_source_links_rejects_schema_v2_unknown_field_missing_field_and_duplicates(
     corpus_dir, manifest_path, database_path, make_embedder, tmp_path
 ):
     _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
@@ -332,49 +327,56 @@ def test_source_links_rejects_legacy_schema_id_missing_fields_and_duplicates(
     source_links_path = tmp_path / "source-links.toml"
 
     cases = [
-        ("schema_version = 1\n", "schema_version = 2"),
+        ("schema_version = 1\n", "schema_version = 3"),
+        ("schema_version = 2\n", "schema_version = 3"),
         (
-            """schema_version = 2
+            """schema_version = 3
 
 [[source]]
-id = "legacy"
-title = "Title"
-publisher = "Publisher"
+name = "report"
 local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-public_origin = "official"
+publc_url = "https://example.invalid/source.pdf"
 """,
             "unknown field",
         ),
         (
-            """schema_version = 2
+            """schema_version = 3
 
 [[source]]
-title = "Title"
-publisher = "Publisher"
 local_path = "AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/source.pdf"
 """,
             "missing required field",
         ),
         (
-            """schema_version = 2
+            """schema_version = 3
 
 [[source]]
-title = "Title"
-publisher = "Publisher"
+name = "report"
 local_path = "AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/source.pdf"
-public_origin = "official"
 
 [[source]]
-title = "Duplicate"
-publisher = "Publisher"
+name = "report-duplicate"
 local_path = "./AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/source2.pdf"
-public_origin = "official"
 """,
             "duplicate",
+        ),
+        (
+            """schema_version = 3
+
+[[source]]
+name = "report"
+local_path = "AEMO_2026_ISP.pdf"
+public_url = "https://example.invalid/source.pdf"
+
+[[source]]
+name = "report"
+local_path = "AEMO_2026_ISP_2.pdf"
+public_url = "https://example.invalid/source2.pdf"
+""",
+            "duplicate source-link name",
         ),
     ]
 
@@ -388,7 +390,7 @@ public_origin = "official"
         conn.close()
 
 
-def test_source_links_registry_rejects_legacy_id_field(
+def test_source_links_registry_preserves_opaque_metadata_without_affecting_verification(
     corpus_dir, manifest_path, database_path, make_embedder, tmp_path
 ):
     _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
@@ -397,22 +399,20 @@ def test_source_links_registry_rejects_legacy_id_field(
 
     source_links_path = tmp_path / "source-links.toml"
     source_links_path.write_text(
-        """schema_version = 2
+        """schema_version = 3
 
 [[source]]
-title = "2026 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2026"
 local_path = "AEMO_2026_ISP.pdf"
 public_url = "https://example.invalid/aemo-2026-isp.pdf"
-public_origin = "official"
 
-[[source]]
-id = "AEMO-2026-ISP"
-title = "2026 Integrated System Plan (duplicate)"
+[source.metadata]
+bibtex_id = "aemo2026isp"
 publisher = "Australian Energy Market Operator"
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/aemo-2026-isp-2.pdf"
-public_origin = "official"
+type = "report"
+
+[source.metadata.nested]
+depth = 1
 """,
         encoding="utf-8",
     )
@@ -420,8 +420,7 @@ public_origin = "official"
     conn = schema.connect(database_path)
     try:
         result = verify.verify_report(conn, report_path, corpus_dir, source_links_path=source_links_path)
-        assert result.source_link_issues
-        assert any("unknown field" in issue and "id" in issue for issue in result.source_link_issues)
+        assert result.source_link_issues == []
     finally:
         conn.close()
 
@@ -603,7 +602,7 @@ def test_code_and_comments_are_ignored_by_citation_scanner(corpus_dir, manifest_
     assert len(result.quote_results) == 1
 
 
-@pytest.mark.parametrize("field", ["title", "publisher", "local_path", "public_url", "public_origin"])
+@pytest.mark.parametrize("field", ["name", "local_path", "public_url"])
 @pytest.mark.parametrize("value", ["", 7, [], None])
 def test_source_link_fields_reject_non_string_and_empty_values(
     field, value, corpus_dir, manifest_path, database_path, make_embedder, tmp_path
@@ -613,12 +612,12 @@ def test_source_link_fields_reject_non_string_and_empty_values(
     report_path.parent.mkdir(parents=True)
     _write_report(report_path, corpus_dir)
     values = {
-        "title": "Title", "publisher": "Publisher", "local_path": "AEMO_2026_ISP.pdf",
-        "public_url": "https://example.invalid/source.pdf", "public_origin": "official",
+        "name": "report", "local_path": "AEMO_2026_ISP.pdf",
+        "public_url": "https://example.invalid/source.pdf",
     }
     values[field] = value
     source_links_path = tmp_path / "source-links.toml"
-    lines = ["schema_version = 2", "", "[[source]]"]
+    lines = ["schema_version = 3", "", "[[source]]"]
     for key, item in values.items():
         if isinstance(item, str):
             lines.append(f'{key} = "{item}"')
@@ -700,7 +699,7 @@ def test_reference_destinations_accept_true_angle_and_escaped_space_paths(
 
 def test_source_links_top_level_source_must_be_array_of_tables(tmp_path):
     source_links_path = tmp_path / "source-links.toml"
-    source_links_path.write_text("schema_version = 2\nsource = 42\n", encoding="utf-8")
+    source_links_path.write_text("schema_version = 3\nsource = 42\n", encoding="utf-8")
 
     registry, issues = verify._load_source_links(source_links_path, tmp_path)
 
@@ -712,14 +711,12 @@ def test_source_links_top_level_source_must_be_array_of_tables(tmp_path):
 def test_verifier_source_link_loader_rejects_local_path_query_or_fragment(tmp_path, local_path):
     source_links_path = tmp_path / "source-links.toml"
     source_links_path.write_text(
-        f'''schema_version = 2
+        f'''schema_version = 3
 
 [[source]]
-title = "Title"
-publisher = "Publisher"
+name = "report"
 local_path = "{local_path}"
 public_url = "https://example.invalid/source.pdf"
-public_origin = "official"
 ''',
         encoding="utf-8",
     )

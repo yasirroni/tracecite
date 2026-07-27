@@ -33,7 +33,7 @@ def _fixture(tmp_path: Path, *, hook: list[str] | None = None) -> tuple[Path, Pa
     (retained / "index.md").write_text("# docs\n", encoding="utf-8")
     (retained / "nested").mkdir()
     (retained / "nested/page.md").write_text("# nested\n", encoding="utf-8")
-    (tmp_path / "docs/source-links.toml").write_text("schema_version = 2\nsource = []\n", encoding="utf-8")
+    (tmp_path / "docs/source-links.toml").write_text("schema_version = 3\nsource = []\n", encoding="utf-8")
     command = "\nhost_render_command = [\"render\", \"--exact\"]" if hook else ""
     config = tmp_path / "docs/tracecite.toml"
     config.write_text(

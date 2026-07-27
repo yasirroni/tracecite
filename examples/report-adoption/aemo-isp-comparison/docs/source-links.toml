@@ -1,15 +1,17 @@
-schema_version = 2
+schema_version = 3
 
 [[source]]
-title = "2024 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2024"
 local_path = "sources/aemo/2024-integrated-system-plan.pdf"
 public_url = "https://www.aemo.com.au/-/media/files/major-publications/isp/2024/2024-integrated-system-plan-isp.pdf?la=en"
-public_origin = "official"
+
+[source.metadata]
+publisher = "Australian Energy Market Operator"
 
 [[source]]
-title = "2026 Integrated System Plan"
-publisher = "Australian Energy Market Operator"
+name = "aemo-isp-2026"
 local_path = "sources/aemo/2026-integrated-system-plan.pdf"
 public_url = "https://www.aemo.com.au/-/media/files/major-publications/isp/2026/2026-integrated-system-plan-isp.pdf?rev=7f5dfd18aa1b4a3aab704c424f75afd3&sc_lang=en"
-public_origin = "official"
+
+[source.metadata]
+publisher = "Australian Energy Market Operator"

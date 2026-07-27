@@ -5,20 +5,24 @@
 Test both targets with fixtures covering:
 
 - a valid local PDF definition;
-- an official URL containing a query string;
+- a valid local Markdown-to-HTML mapping, with and without an authored anchor;
+- an official URL containing a query string (PDF and Markdown);
 - a positive physical page fragment;
 - repeated use of one reference definition;
 - multiple reports referencing the same source;
 - fenced-code and Documenter raw-block examples that remain byte-identical;
-- malformed, missing, duplicate, and ambiguous mappings;
+- malformed, missing, duplicate (by `name` and by `local_path`), and ambiguous mappings;
 - path traversal and absolute-path rejection;
 - public URL scheme and fragment rejection;
+- opaque `metadata` surviving parsing without affecting routing or verification;
+- explicit schema-v2 (or earlier) rejection with a clear schema-v3 message;
 - atomic staging failure that preserves the previous valid tree;
 - idempotent repeated builds;
-- no mutation of maintained Markdown.
-- multiple inline PDF links on one line;
+- no mutation of maintained Markdown;
+- multiple inline PDF/Markdown links on one line;
 - positive and malformed inline page fragments, query strings, titles, images,
   autolinks, inline code, escaped syntax, and nested file-relative paths;
+- an unmapped local Markdown candidate left untouched rather than erroring;
 - a host-renderer pressure test that checks the selected maintained syntax
   produces an actual HTML anchor.
 
@@ -54,10 +58,10 @@ Errors must identify:
 
 - Markdown file and line;
 - reference key or inline link text;
-- parsed local destination and page fragment;
+- parsed local destination and page fragment or anchor;
 - expected source path;
 - registry entries considered;
 - target mode;
 - corrective action.
 
-Do not silently leave a local link in public output when routing was required. Conversely, do not turn an unmapped local file into a guessed public URL.
+Do not silently leave a local PDF link in public output when routing was required. Conversely, do not turn an unmapped local file into a guessed public URL. An unmapped local Markdown link is deliberately left untouched rather than treated as an error (see `references/staging-and-rewriting.md`).

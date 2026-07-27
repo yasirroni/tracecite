@@ -48,7 +48,7 @@ Ambiguous, missing, or empty quote associations are structural errors. Each quot
 bound `citation_key` and resolved `source_path`, or `null` when no unique binding exists. Report
 verification never writes to the report file — read-only, always.
 
-When `--source-links docs/source-links.toml` is supplied, report verification additionally confirms every cited source path has exactly one schema-v2 registry entry keyed by `local_path`; it never edits the registry or the report. The `source-links.toml` schema is owned by `routing-documentation-source-links` and uses a `[[source]]` array of tables with `local_path`, `public_url`, and `public_origin`. Do not restore an obsolete placeholder registry shape.
+When `--source-links docs/source-links.toml` is supplied, report verification additionally confirms every cited source path has exactly one schema-v3 registry entry keyed by `local_path`; it never edits the registry or the report. The `source-links.toml` schema is owned by `routing-documentation-source-links` and uses a `[[source]]` array of tables with `name`, `local_path`, `public_url`, and an opaque optional `metadata` table. Do not restore an obsolete placeholder registry shape.
 
 ## Assets
 

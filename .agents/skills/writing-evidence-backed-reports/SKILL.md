@@ -11,7 +11,7 @@ Write one maintained Markdown report per investigation. Use TraceCite to find ca
 
 - Hand off to `source-capture` before this skill when sources still need to be searched, downloaded, preserved, or catalogued.
 - Load `using-tracecite` when the corpus must be synced, searched, inspected by page, quote-checked, report-verified, or checked with `doctor`; use its shipped CLI, not a second parser, store, vector search, hash checker, or verifier.
-- Load `routing-documentation-source-links` after the maintained report is locally verified when local PDF reference definitions must become official public URLs in a generated documentation build; use its schema-v2 `[[source]]` registry for `--source-links`.
+- Load `routing-documentation-source-links` after the maintained report is locally verified when local PDF reference definitions must become public URLs in a generated documentation build; use its schema-v3 `[[source]]` registry for `--source-links`.
 - Do not create a YAML evidence registry, `docs/dense/`, a local/public report pair, or visible database-row citations.
 
 ## Prerequisites

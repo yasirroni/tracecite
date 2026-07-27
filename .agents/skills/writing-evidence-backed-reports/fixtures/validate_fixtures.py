@@ -232,7 +232,7 @@ def main() -> int:
             raise AssertionError(grammar_invalid.stdout)
 
         source_link_data = source_links.read_text(encoding="utf-8")
-        for required in ['schema_version = 2', 'local_path = "evidence/planning-note.pdf"']:
+        for required in ['schema_version = 3', 'local_path = "evidence/planning-note.pdf"']:
             if required not in source_link_data:
                 raise AssertionError(f"source-links fixture missing {required}")
 

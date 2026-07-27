@@ -37,8 +37,8 @@ checkout.
 ## Compatibility checks
 
 Before depending on `--source-links`, confirm that the installed verifier
-supports the final schema-v2 `[[source]]` registry owned by
-`routing-documentation-source-links`. Do not silently generate the obsolete
-temporary `[sources]` shape. If the verifier has not yet been reconciled, omit
+supports the final schema-v3 `[[source]]` registry owned by
+`routing-documentation-source-links`. Do not silently generate an obsolete
+registry shape. If the verifier has not yet been reconciled, omit
 `--source-links`, report the missing compatibility patch, and continue only
 with database/local-path verification.

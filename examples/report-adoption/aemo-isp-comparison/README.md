@@ -22,7 +22,7 @@ Both are also available on AEMO's general program page: https://www.aemo.com.au/
 ├── _quarto.yml                          # Quarto project config; renders to gfm format
 ├── docs/
 │   ├── tracecite.toml                   # TraceCite docs contract (schema_version 1)
-│   ├── source-links.toml                # Maps local PDFs to official public URLs (schema_version 2)
+│   ├── source-links.toml                # Maps local PDFs to official public URLs (schema_version 3)
 │   ├── authored/
 │   │   └── report.qmd                   # Authored Quarto report (human-edited source)
 │   ├── retained/

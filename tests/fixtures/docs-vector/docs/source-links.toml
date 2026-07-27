@@ -1,8 +1,9 @@
-schema_version = 2
+schema_version = 3
 
 [[source]]
-title = "Fixture report"
-publisher = "Publisher"
+name = "fixture-report"
 local_path = "sources/report.pdf"
 public_url = "https://publisher.example/report.pdf"
-public_origin = "official"
+
+[source.metadata]
+publisher = "Publisher"

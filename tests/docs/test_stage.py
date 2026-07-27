@@ -20,14 +20,15 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, str]:
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"pdf")
     (tmp_path / "docs/source-links.toml").write_text(
-        """schema_version = 2
+        """schema_version = 3
 
 [[source]]
-title = "Report"
-publisher = "Publisher"
+name = "report"
 local_path = "sources/report.pdf"
 public_url = "https://publisher.example/report.pdf?rev=1"
-public_origin = "official"
+
+[source.metadata]
+publisher = "Publisher"
 """,
         encoding="utf-8",
     )
@@ -268,3 +269,121 @@ def test_stage_failure_preserves_previous_target_and_siblings(tmp_path: Path) ->
     assert (public_root / "sentinel.md").read_text(encoding="utf-8") == "previous"
     assert (contract.staged_root / "local/index.md").is_file()
     assert (sibling / "keep.txt").read_text(encoding="utf-8") == "keep"
+
+
+def _markdown_fixture(tmp_path: Path) -> tuple[Path, Path, str]:
+    """A docs contract with a Markdown-to-HTML source-link mapping alongside a PDF one."""
+    (tmp_path / "docs/authored").mkdir(parents=True)
+    retained = tmp_path / "docs/retained"
+    retained.mkdir()
+    (tmp_path / "sources").mkdir()
+    (tmp_path / "sources/report.pdf").write_bytes(b"pdf")
+    (tmp_path / "sources/architecture-note.md").write_text("# Architecture note\n", encoding="utf-8")
+    (tmp_path / "docs/source-links.toml").write_text(
+        """schema_version = 3
+
+[[source]]
+name = "report"
+local_path = "sources/report.pdf"
+public_url = "https://publisher.example/report.pdf?rev=1"
+
+[[source]]
+name = "architecture-note"
+local_path = "sources/architecture-note.md"
+public_url = "https://example.org/guide/architecture-note/?rev=2"
+
+[source.metadata]
+type = "documentation"
+""",
+        encoding="utf-8",
+    )
+    source = """# Links
+
+See [architecture note](../../sources/architecture-note.md#overview).
+
+[note]: ../../sources/architecture-note.md#overview
+[bare]: ../../sources/architecture-note.md
+[unrelated]: ../../sources/unregistered-note.md#somewhere
+[query-note](../../sources/architecture-note.md?download=1#overview)
+[remote](https://example.invalid/architecture-note.md#overview)
+
+`[code-note]: ../../sources/architecture-note.md#overview`
+Use `[code-note](../../sources/architecture-note.md#overview)` literally.
+
+    See [indented](../../sources/architecture-note.md#overview).
+<!-- See [comment](../../sources/architecture-note.md#overview). -->
+<div>See [raw](../../sources/architecture-note.md#overview).</div>
+![image](../../sources/architecture-note.md#overview)
+<../../sources/architecture-note.md#overview>
+
+Also [pdf report](../../sources/report.pdf#page=3).
+"""
+    (retained / "index.md").write_text(source, encoding="utf-8")
+    config = tmp_path / "docs/tracecite.toml"
+    config.write_text(
+        """schema_version = 1
+[docs]
+authored_root = "docs/authored"
+retained_root = "docs/retained"
+staged_root = "docs/.tracecite-stage"
+source_links = "docs/source-links.toml"
+index_output = ".tracecite/docs/tracecite.sqlite"
+publication_exclude = []
+""",
+        encoding="utf-8",
+    )
+    return config, retained / "index.md", source
+
+
+def test_markdown_to_html_routing_local_and_public_with_and_without_anchor(tmp_path: Path) -> None:
+    config_path, retained_file, original = _markdown_fixture(tmp_path)
+    contract = load_docs_contract(config_path, repo_root=tmp_path)
+
+    local = stage_docs(contract, target="local", repo_root=tmp_path)
+    local_text = (local.staged_root / "index.md").read_text(encoding="utf-8")
+    # Local staging keeps the equivalent relative Markdown destination,
+    # recomputed for the staged tree's own depth (one level deeper than
+    # retained here, matching the existing PDF recompute behaviour).
+    assert "../../../sources/architecture-note.md#overview" in local_text
+    assert "[bare]: ../../../sources/architecture-note.md" in local_text
+    assert retained_file.read_text(encoding="utf-8") == original
+
+    public = stage_docs(contract, target="public", repo_root=tmp_path)
+    public_text = (public.staged_root / "index.md").read_text(encoding="utf-8")
+    # Public staging substitutes the mapped public URL, appending the anchor
+    # after any public-URL query string, and omits the anchor entirely for
+    # the anchor-free reference definition.
+    assert "https://example.org/guide/architecture-note/?rev=2#overview" in public_text
+    assert "[bare]: https://example.org/guide/architecture-note/?rev=2\n" in public_text
+    # The unrelated PDF mapping keeps working exactly as before.
+    assert "https://publisher.example/report.pdf?rev=1#page=3" in public_text
+
+
+def test_markdown_routing_leaves_unrelated_and_unsupported_candidates_untouched(tmp_path: Path) -> None:
+    config_path, _, original = _markdown_fixture(tmp_path)
+    contract = load_docs_contract(config_path, repo_root=tmp_path)
+    result = stage_docs(contract, target="public", repo_root=tmp_path)
+    staged = (result.staged_root / "index.md").read_text(encoding="utf-8")
+
+    untouched = [
+        "[unrelated]: ../../sources/unregistered-note.md#somewhere",
+        "[query-note](../../sources/architecture-note.md?download=1#overview)",
+        "[remote](https://example.invalid/architecture-note.md#overview)",
+        "`[code-note]: ../../sources/architecture-note.md#overview`",
+        "Use `[code-note](../../sources/architecture-note.md#overview)` literally.",
+        "    See [indented](../../sources/architecture-note.md#overview).",
+        "<!-- See [comment](../../sources/architecture-note.md#overview). -->",
+        "<div>See [raw](../../sources/architecture-note.md#overview).</div>",
+        "![image](../../sources/architecture-note.md#overview)",
+        "<../../sources/architecture-note.md#overview>",
+    ]
+    for line in untouched:
+        assert line in staged, line
+
+
+def test_markdown_routing_preserves_protected_regions_byte_for_byte(tmp_path: Path) -> None:
+    config_path, _, original = _markdown_fixture(tmp_path)
+    contract = load_docs_contract(config_path, repo_root=tmp_path)
+    result = stage_docs(contract, target="public", repo_root=tmp_path)
+    staged = (result.staged_root / "index.md").read_text(encoding="utf-8")
+    assert original.splitlines()[0] in staged

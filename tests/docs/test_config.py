@@ -10,7 +10,7 @@ from tracecite.docs.config import load_docs_contract
 def _write_valid(root: Path, *, extra: str = "") -> Path:
     (root / "docs/authored").mkdir(parents=True)
     (root / "docs/retained").mkdir(parents=True)
-    (root / "docs/source-links.toml").write_text("schema_version = 2\n", encoding="utf-8")
+    (root / "docs/source-links.toml").write_text("schema_version = 3\n", encoding="utf-8")
     path = root / "docs/tracecite.toml"
     path.write_text(
         'schema_version = 1\n[docs]\n'

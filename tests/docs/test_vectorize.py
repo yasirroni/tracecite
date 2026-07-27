@@ -56,14 +56,15 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
     (tmp_path / "docs/source-links.toml").write_text(
-        """schema_version = 2
+        """schema_version = 3
 
 [[source]]
-title = "Report"
-publisher = "Publisher"
+name = "report"
 local_path = "sources/report.pdf"
 public_url = "https://publisher.example/report.pdf"
-public_origin = "official"
+
+[source.metadata]
+publisher = "Publisher"
 """,
         encoding="utf-8",
     )

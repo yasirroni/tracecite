@@ -11,7 +11,7 @@ TraceCite uses a fresh schema. It does not migrate or accept old bootstrap/index
 - Public evidence identity is the normalised root-relative POSIX source path plus a physical PDF page or Markdown line locator.
 - Internal keys such as `source_pk`, page row IDs, chunk IDs, and asset IDs are private implementation details.
 - Markdown reference labels are opaque. A report citation is authoritative because its reference definition points to a local path and positive `#page=N` fragment, not because the label encodes an ID.
-- Source-link registries use schema version 2 and match by `local_path`.
+- Source-link registries use schema version 3 and match by `local_path`.
 
 ## Manifest contract
 
