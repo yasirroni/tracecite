@@ -1,4 +1,4 @@
-name: Docs bootstrap consistency
+name: Test documentation variants
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - docs_jl/**
       - scripts/bootstrap_docs.py
       - docs/bootstrap.toml
-      - .github/workflows/docs-bootstrap.yml
+      - .github/workflows/test-docs-variants.yml
   pull_request:
     paths:
       - docs/**
@@ -18,7 +18,7 @@ on:
       - docs_jl/**
       - scripts/bootstrap_docs.py
       - docs/bootstrap.toml
-      - .github/workflows/docs-bootstrap.yml
+      - .github/workflows/test-docs-variants.yml
   workflow_dispatch:
 
 jobs:
@@ -57,6 +57,7 @@ jobs:
           set -euxo pipefail
           uv sync --locked
           julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+          julia --project=docs_jl -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
       - name: Check bootstrap consistency
         shell: bash
@@ -70,9 +71,9 @@ jobs:
           set -euxo pipefail
           rm -rf docs/build docs_quarto_py/build docs_quarto_jl/build docs_jl/build
           uv run tracecite docs build docs
-          uv run tracecite docs build docs_quarto_py --only python
-          uv run tracecite docs build docs_quarto_jl --only julia
-          julia --project=docs_jl docs_jl/make.jl
+          uv run tracecite docs build docs_quarto_py --only python | tee /tmp/docs-quarto-py.log
+          uv run tracecite docs build docs_quarto_jl --only julia | tee /tmp/docs-quarto-jl.log
+          julia --project=docs_jl docs_jl/make.jl 2>&1 | tee /tmp/docs-jl.log
 
       - name: Verify build artifacts
         shell: bash
@@ -82,3 +83,50 @@ jobs:
           test -f docs_quarto_py/build/index.html
           test -f docs_quarto_jl/build/index.html
           test -f docs_jl/build/index.html
+          grep -Eq 'Retained Markdown pages: [1-9][0-9]*' /tmp/docs-quarto-py.log
+          grep -Eq 'Retained Markdown pages: [1-9][0-9]*' /tmp/docs-quarto-jl.log
+          test -f docs_quarto_py/examples/python/dirty_dataframe.html.md
+          test -f docs_quarto_jl/examples/julia/dirty_dataframe.html.md
+          python - <<'PY'
+          from pathlib import Path
+          from bs4 import BeautifulSoup
+
+          pages = list(Path("docs_jl/build").rglob("*dirty_dataframe*.html"))
+          if not pages:
+              pages = list((Path("docs_jl/build") / "dirty_dataframe").rglob("*.html"))
+          assert pages, "Documenter tutorial page was not generated"
+          rendered = "\n".join(
+              BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser").get_text(
+                  " ", strip=True
+              )
+              for path in pages
+          )
+          assert 'title: "TraceCite with Julia"' not in rendered
+          assert "Capital cost ($/kW)" in rendered
+          assert "Battery | BESS" in rendered
+
+          pandoc_pages = list(
+              (Path("docs_jl/build") / "formats" / "pandoc-tables").rglob("*.html")
+          )
+          if not pandoc_pages:
+              pandoc_pages = [Path("docs_jl/build/formats/pandoc-tables.html")]
+          assert all(path.is_file() for path in pandoc_pages)
+          pandoc_rendered = "\n".join(
+              BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser").get_text(
+                  " ", strip=True
+              )
+              for path in pandoc_pages
+          )
+          assert 'title: "Pandoc Markdown tables"' not in pandoc_rendered
+          assert "Cost ($/kW)" in pandoc_rendered
+
+          searchable = "\n".join(
+              path.read_text(encoding="utf-8")
+              for suffix in ("*.html", "*.js", "*.json")
+              for path in Path("docs_jl/build").rglob(suffix)
+          )
+          assert "TRACECITELITERALDOLLAR7F3A9C" not in searchable
+          PY
+          python scripts/bootstrap_docs.py --check
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
