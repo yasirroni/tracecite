@@ -221,6 +221,7 @@ def hybrid_search(
 
 def cmd_search(args: argparse.Namespace) -> int:
     from . import schema
+    from .page_output import PageAssetMissingError, PageOutputError, enrich_search_result_with_page_assets
 
     conn = _connect_existing_or_report(schema, args.database, read_only=True)
     if conn is None:
@@ -237,7 +238,25 @@ def cmd_search(args: argparse.Namespace) -> int:
             args.model_cache_dir,
             args.database,
         )
+        source_cache: dict[str, object] = {}
+        for result in results:
+            source_path = result.get("source_path")
+            if not source_path:
+                result["page_render"] = None
+                result["figure_crops"] = []
+                continue
+            source_row = source_cache.get(source_path)
+            if source_row is None:
+                source_row = conn.execute("SELECT * FROM sources WHERE path = ?", (source_path,)).fetchone()
+                source_cache[source_path] = source_row
+            result = enrich_search_result_with_page_assets(conn, args.database, source_row, result)
         print(json.dumps(results, indent=2))
+    except PageAssetMissingError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except PageOutputError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     finally:
         conn.close()
     return 0
@@ -245,6 +264,8 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 def cmd_page(args: argparse.Namespace) -> int:
     from . import schema
+    from .page_output import PageAssetMissingError, PageOutputError, page_json_payload
+    from .page_selection import PageSelectionSyntaxError, PageSelectionUnavailableError, resolve_page_selection
     from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
     conn = _connect_existing_or_report(schema, args.database, read_only=True)
@@ -260,16 +281,81 @@ def cmd_page(args: argparse.Namespace) -> int:
             return 2
         source_row = source_row_for_path(conn, source_path)
         if source_row is None:
-            print(f"not-found: {source_path} page {args.page}", file=sys.stderr)
+            print(f"not-found: {source_path} page 1", file=sys.stderr)
             return 1
-        row = conn.execute(
-            "SELECT pages.* FROM pages WHERE source_pk = ? AND physical_page = ?",
-            (source_row["source_pk"], args.page),
-        ).fetchone()
-        if row is None:
-            print(f"not-found: {source_path} page {args.page}", file=sys.stderr)
+        rows = conn.execute(
+            "SELECT * FROM pages WHERE source_pk = ? ORDER BY physical_page",
+            (source_row["source_pk"],),
+        ).fetchall()
+        available_pages = [row["physical_page"] for row in rows]
+        try:
+            selected_pages = resolve_page_selection(args.page, available_pages)
+        except PageSelectionSyntaxError as exc:
+            print(f"tracecite: {exc}", file=sys.stderr)
+            return 2
+        except PageSelectionUnavailableError as exc:
+            print(f"not-found: {source_path} page {exc.page}", file=sys.stderr)
             return 1
-        print(row["text"])
+        selected_rows = {row["physical_page"]: row for row in rows if row["physical_page"] in selected_pages}
+        if args.format == "json":
+            try:
+                payload = [page_json_payload(conn, args.database, source_row, selected_rows[page]) for page in selected_pages]
+            except PageAssetMissingError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except PageOutputError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            print(json.dumps(payload, indent=2))
+        elif len(selected_pages) == 1:
+            print(selected_rows[selected_pages[0]]["text"])
+        else:
+            for index, page in enumerate(selected_pages):
+                if index:
+                    print()
+                print(f"--- physical page {page} ---")
+                print(selected_rows[page]["text"])
+    finally:
+        conn.close()
+    return 0
+
+
+def cmd_extract_pages(args: argparse.Namespace) -> int:
+    from . import schema
+    from .page_extraction import (
+        PageExtractionError,
+        PageExtractionMissingError,
+        PageExtractionPathError,
+        PageExtractionPdfMismatchError,
+        PageExtractionSelectionError,
+        PageExtractionTypeError,
+        extract_pages,
+    )
+
+    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    if conn is None:
+        return 2
+    try:
+        schema.ensure_schema(conn)
+        root = Path(getattr(args, "root", None) or Path.cwd()).resolve()
+        try:
+            result = extract_pages(conn, args.database, root, args.source_path, args.page, args.output_dir)
+        except PageExtractionMissingError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except (PageExtractionPathError, PageExtractionSelectionError, PageExtractionTypeError, PageExtractionPdfMismatchError, PageExtractionError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                {
+                    "pdf_path": str(result.pdf_path),
+                    "manifest_path": str(result.manifest_path),
+                    "normalized_pages": result.normalized_pages,
+                },
+                indent=2,
+            )
+        )
     finally:
         conn.close()
     return 0
@@ -430,5 +516,5 @@ def dispatch(args: argparse.Namespace) -> int:
     args = _resolve_runtime_args(args)
     if args.command == "verify":
         return {"quote": cmd_verify_quote, "report": cmd_verify_report}[args.verify_command](args)
-    handlers = {"sync": cmd_sync, "search": cmd_search, "page": cmd_page, "prune": cmd_prune, "doctor": cmd_doctor}
+    handlers = {"sync": cmd_sync, "search": cmd_search, "page": cmd_page, "extract-pages": cmd_extract_pages, "prune": cmd_prune, "doctor": cmd_doctor}
     return handlers[args.command](args)

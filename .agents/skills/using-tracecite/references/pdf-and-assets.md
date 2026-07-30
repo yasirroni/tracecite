@@ -28,8 +28,11 @@ gets one synthetic `pages` row (`physical_page = 1`) holding the full document t
 
 ## Physical-page retrieval
 
-`tracecite page <source-path> <page>` prints `pages.text` for that `(source_path, physical_page)`
-directly — no search ranking involved, since a report citation names an exact page.
+`tracecite page <source-path> [selector]` reads `pages.text` directly from SQLite—no search ranking or PDF reopening is involved. Omission selects physical page 1. A selector accepts a positive page, a closed range (`5-9`), an open range (`5-` or `-9`), or comma-separated combinations. Terms are expanded against indexed pages, deduplicated, and returned in ascending physical-page order. The standalone selector `all` selects every indexed page and cannot be combined with another term. TraceCite validates the complete selection before writing stdout, so a missing implied page cannot produce partial output.
+
+Plain-text output for one selected page retains the original page command contract. Multiple pages have explicit physical-page delimiters. `--format json` always returns an ordered array; each element contains retained text, printed-label and extraction metadata, a `pdf_link`, one validated whole-page render or `null`, and validated figure-crop entries. Asset entries expose their database-relative identifier, validated local path, SHA-256, dimensions, labels, nearby text, and bounding box. Missing, escaped, or hash-mismatched assets fail before JSON is printed.
+
+`tracecite extract-pages <source-path> [selector] --output-dir <dir>` uses the same selector grammar and page-1 omission default. Unlike `page`, it verifies and opens the indexed source PDF, writes only the normalized selected pages, and creates a provenance manifest. The existing output directory must be a real directory outside the source root. Source-hash mismatch, PDF/index page-count mismatch, overlap, symlinks, and existing outputs are rejected. The PDF and manifest are staged together and rolled back together after promotion failure; generated files remain caller-owned disposable runtime artifacts.
 
 ## Quotation verification
 
@@ -60,3 +63,5 @@ per embedded raster image found on that page (`pdf.render_figure_crops()`, via
 dimensions, and (for crops) bounding box. **Limitation:** only embedded raster images are cropped;
 a figure composed purely of vector graphics has no dedicated crop yet — use the whole-page render
 for those until a fixture demonstrates the need for vector-composited crops. Assets live under `imgs/` next to the database (never inside SQLite); active database rows and `doctor` validate asset paths and hashes by internal key, not public source identity.
+
+Page JSON and PDF search output resolve these existing asset rows only. Retrieval never regenerates a page render or crop and never treats an unchecked database path as a filesystem path.

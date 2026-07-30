@@ -1,6 +1,6 @@
 ---
 name: using-tracecite
-description: Use when local PDF or Markdown sources must be synchronised into a TraceCite SQLite evidence database, searched, retrieved by path and physical page, quote-checked, report-verified, pruned explicitly, or diagnosed with doctor. Requires explicit roots, manifests, database, and model-cache paths or a named profile. Do not use for source capture, report prose, or public-link routing.
+description: Use when local PDF or Markdown sources must be synchronised into a TraceCite SQLite evidence database, searched, retrieved by selected physical pages, inspected through indexed page assets or selected-page derivative PDFs, quote-checked, report-verified, pruned explicitly, or diagnosed with doctor. Requires explicit roots, manifests, database, and model-cache paths or a named profile. Do not use for source capture, report prose, or public-link routing.
 ---
 
 # Using TraceCite
@@ -49,13 +49,18 @@ When the package checkout and runtime environment differ, resolve them separatel
    ```bash
    tracecite search "later coal retirement" --database <db> --limit 20
    tracecite page path/to/source.pdf 65 --database <db>
+   tracecite page path/to/source.pdf 63-66 --database <db>
+   tracecite page path/to/source.pdf 63-66 --format json --database <db>
+   tracecite extract-pages path/to/source.pdf 63-66 --output-dir <dir> --database <db>
    tracecite verify quote path/to/source.pdf 65 "Exact quotation" --database <db>
    tracecite verify report docs/reports/<report>.md --root <dir> --database <db> [--source-links docs/source-links.toml --source-links-root <dir>]
     tracecite doctor --database <db>
     ```
 4. **Build evidence from retrieval results.** Treat search rank and fused score as candidate-discovery signals, not proof. Narrow a mixed corpus with more specific wording and by inspecting the returned `source_path`; do not infer that a result is from the intended year or source merely because it ranked first. Markdown results can help locate a claim but are not external-source proof.
 
-   For each candidate, retrieve the complete physical page with `tracecite page`, then inspect neighbouring pages when the claim depends on a table, figure, footnote, or continuation. When layout matters, open the original PDF rather than relying only on extracted text. Distinguish a source-derived claim from an inference, assumption, or unsupported claim before writing it.
+   For each candidate, retrieve the complete physical page with `tracecite page`. Omission selects physical page 1. Selectors accept positive pages, closed ranges (`63-66`), open ranges (`63-` or `-66`), and comma-separated combinations; overlapping terms are deduplicated in ascending physical-page order. The standalone selector `all` explicitly selects every indexed page and cannot be combined with another term.
+
+   Inspect neighbouring pages when the claim depends on a table, figure, footnote, or continuation. When layout matters, use `tracecite page ... --format json` to locate the validated indexed page render and figure crops. If a PDF derivative is required by the inspection tool, use `tracecite extract-pages` with the same selector and an existing caller-owned output directory outside the source root. Do not open the complete source PDF for a page-local question; use `all` only when complete-source inspection is intentional.
 
    If a quotation is used, run `tracecite verify quote` against the physical page. `exact` means the quotation matches retained text; `normalised` is acceptable only when the quoted wording is exact after the tool's documented normalisation; `not-found` is not verification and must not be silently paraphrased as verified. Resolve conflicts by retaining the competing source/page evidence and stating the limitation.
 
@@ -74,6 +79,7 @@ Ordinary prose containing punctuation that FTS5 rejects, such as `10%, 50%, and 
 - PDFs and Markdown are the supported source formats.
 - Do not add old command/package compatibility aliases.
 - Never mutate authoritative source files, and never let verification rewrite maintained Markdown.
+- Keep selected-page derivatives outside the source root. They are disposable caller-owned runtime outputs and must not be synchronised automatically.
 - Do not commit generated databases, embedding-model caches, SQLite sidecars, PDF renders/crops, or other runtime derivatives.
 - Help commands must remain lightweight: they must not import or touch parsers, PDF/OCR, embeddings, sqlite-vec, manifests, databases, projects, caches, or network resources.
 

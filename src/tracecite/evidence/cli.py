@@ -39,10 +39,17 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
     search_parser.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
 
-    page_parser = subparsers.add_parser("page", help="Retrieve one physical page's retained text.")
+    page_parser = subparsers.add_parser("page", help="Retrieve retained text for one physical page or selector.")
     _add_common_args(page_parser)
     page_parser.add_argument("source_path")
-    page_parser.add_argument("page", type=int)
+    page_parser.add_argument("page", nargs="?", default=None)
+    page_parser.add_argument("--format", choices=["text", "json"], default="text")
+
+    extract_parser = subparsers.add_parser("extract-pages", help="Extract selected pages into a derivative PDF.")
+    _add_common_args(extract_parser)
+    extract_parser.add_argument("source_path")
+    extract_parser.add_argument("page", nargs="?", default=None)
+    extract_parser.add_argument("--output-dir", type=Path, required=True)
 
     verify_parser = subparsers.add_parser("verify", help="Verify quotes or Markdown reports.")
     verify_subparsers = verify_parser.add_subparsers(dest="verify_command", required=True)

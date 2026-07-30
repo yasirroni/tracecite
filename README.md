@@ -67,6 +67,31 @@ tracecite document normalise report.md --to jsonl
 tracecite document normalise report.md --to embedding-markdown --output report.embedding.md
 ```
 
+### Retrieve retained pages and visual evidence
+
+`tracecite page` reads retained page text from the SQLite evidence database. Omitting the selector returns physical page 1. A selector can combine individual pages, closed ranges, and open ranges; overlapping terms are deduplicated and returned in ascending physical-page order.
+
+```sh
+tracecite page reports/example.pdf --database evidence.sqlite
+tracecite page reports/example.pdf 5,12-15,20 --database evidence.sqlite
+tracecite page reports/example.pdf 97- --database evidence.sqlite
+tracecite page reports/example.pdf -20 --database evidence.sqlite
+tracecite page reports/example.pdf all --database evidence.sqlite
+```
+
+The standalone selector `all` is the only implicit complete-source form; it cannot be combined with another term. Multi-page text output marks each physical page. `--format json` returns an ordered array containing retained text, extraction metadata, a citation link, and validated paths for the indexed page render and figure crops. Search results expose the same page-render and figure-crop fields for page-local PDF matches.
+
+`extract-pages` uses the same selector grammar but reads the indexed source PDF to create a derivative PDF and provenance manifest. The output directory must already exist outside the source root. TraceCite refuses stale source content, symlink output directories, overlap, and overwrite.
+
+```sh
+mkdir -p ../tracecite-exports
+tracecite extract-pages reports/example.pdf 5,12-15,20 \
+  --database evidence.sqlite \
+  --output-dir ../tracecite-exports
+```
+
+Use database-backed text or indexed page assets for page-local questions. Select `all` only when the complete source is intentionally required.
+
 ### Build the documentation
 
 ```sh
