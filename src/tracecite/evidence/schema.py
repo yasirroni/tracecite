@@ -34,9 +34,11 @@ PARSER_NAME_PDF = "pdf-pymupdf"
 PARSER_VERSION_PDF = "1"
 PARSER_NAME_MARKDOWN = "markdown-heading"
 PARSER_VERSION_MARKDOWN = "1"
+PARSER_NAME_WORKBOOK = "workbook-ooxml"
+PARSER_VERSION_WORKBOOK = "1"
 
 CHUNKER_NAME = "greedy-char-budget"
-CHUNKER_VERSION = "1"
+CHUNKER_VERSION = "2"
 DEFAULT_MAX_CHUNK_CHARS = 1200
 
 NORMALISATION_VERSION = "1"
@@ -251,6 +253,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
     parser_versions = {
         "pdf": f"{PARSER_NAME_PDF}@{PARSER_VERSION_PDF}",
         "markdown": f"{PARSER_NAME_MARKDOWN}@{PARSER_VERSION_MARKDOWN}",
+        "workbook": f"{PARSER_NAME_WORKBOOK}@{PARSER_VERSION_WORKBOOK}",
     }
 
     conn.execute("BEGIN IMMEDIATE")

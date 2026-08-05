@@ -177,17 +177,24 @@ def _search(conn, sources_dir, query, limit, fts_limit, vector_limit, model_cach
         entry = {
             "rank": position,
             "source_path": source_row["path"] if source_row else None,
+            "source_type": source_row["source_type"] if source_row else None,
+            "source_sha256": source_row["sha256"] if source_row else None,
             "heading_path": json.loads(chunk["heading_path"]) if chunk["heading_path"] else [],
             "passage": chunk["body"],
             "physical_page": chunk["physical_page"],
             "page_offsets": {"start": chunk["page_start_offset"], "end": chunk["page_end_offset"]},
             "page_range": {"start": chunk["page_range_start"], "end": chunk["page_range_end"]},
             "line_range": {"start": chunk["line_start"], "end": chunk["line_end"]},
+            "locator": json.loads(chunk["locator_json"]) if chunk["locator_json"] else {},
             "content_type": chunk["content_type"],
             "provenance": sorted(provenance[chunk_id]),
             "fused_score": fused_scores[chunk_id],
         }
-        if source_row is not None and chunk["physical_page"] is not None:
+        if (
+            source_row is not None
+            and source_row["source_type"] == "pdf"
+            and chunk["physical_page"] is not None
+        ):
             entry["pdf_link"] = _relative_pdf_link(
                 database_path, sources_dir, source_row, chunk["physical_page"]
             )
@@ -283,6 +290,9 @@ def cmd_page(args: argparse.Namespace) -> int:
         if source_row is None:
             print(f"not-found: {source_path} page 1", file=sys.stderr)
             return 1
+        if source_row["source_type"] == "workbook":
+            print(f"source is not a pdf: {source_path}", file=sys.stderr)
+            return 2
         rows = conn.execute(
             "SELECT * FROM pages WHERE source_pk = ? ORDER BY physical_page",
             (source_row["source_pk"],),

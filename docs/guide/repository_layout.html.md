@@ -8,6 +8,8 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 ```text
 .
 ├── docs/
+│   ├── assets/
+│   │   └── workbooks/
 │   ├── examples/
 │   │   ├── julia/
 │   │   ├── literate_documenter/
@@ -29,7 +31,9 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── repository_layout.html.md
 │   │   ├── repository_layout.py
 │   │   ├── searchable-evidence.html.md
-│   │   └── searchable-evidence.md
+│   │   ├── searchable-evidence.md
+│   │   ├── workbook-vector-search.html.md
+│   │   └── workbook-vector-search.md
 │   ├── _quarto-julia.yml
 │   ├── _quarto-python.yml
 │   ├── _quarto.yml
@@ -134,17 +138,25 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── test_cli.py
 │   │   ├── test_config.py
 │   │   ├── test_database_maintenance.py
+│   │   ├── test_extract_pages.py
 │   │   ├── test_help.py
 │   │   ├── test_installation.py
 │   │   ├── test_manifest.py
+│   │   ├── test_page_cli.py
+│   │   ├── test_page_json.py
+│   │   ├── test_page_selection.py
+│   │   ├── test_page_selection_surfaces.py
 │   │   ├── test_parsers.py
 │   │   ├── test_paths.py
 │   │   ├── test_profile_cli.py
 │   │   ├── test_schema_v3_contract.py
 │   │   ├── test_search.py
+│   │   ├── test_search_assets.py
+│   │   ├── test_source_links.py
 │   │   ├── test_sync.py
 │   │   ├── test_vector_backend.py
-│   │   └── test_verify.py
+│   │   ├── test_verify.py
+│   │   └── test_workbook.py
 │   ├── fixtures/
 │   │   ├── docs-vector/
 │   │   └── publish-only/
@@ -155,6 +167,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── test_repository_tree.py
 │   ├── test_tables.py
 │   └── test_version.py
+├── kanban-card-tracecite-workbook-evidence.md
 ├── LICENSE
 ├── Project.toml
 ├── pyproject.toml

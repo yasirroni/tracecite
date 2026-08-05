@@ -1,8 +1,8 @@
-# TraceCite table normalisation
+# TraceCite
 
-This repository is a single Python/Julia implementation and a multi-page Quarto showcase for source-linked table retrieval.
+TraceCite provides source-linked table normalisation and hybrid evidence retrieval for Markdown, PDF, `.xlsx`, and `.xlsm` sources.
 
-TraceCite preserves the original table as evidence and derives deterministic, self-describing text for FTS and vector indexing. Analytical results do not need to be copied into separate prose.
+For executable documentation, TraceCite preserves the original table as evidence and derives deterministic, self-describing text for indexing. For source collections, it stores retained extraction, source hashes, full-text search records, semantic vectors, and source-specific locators such as PDF pages, Markdown lines, and workbook worksheet ranges.
 
 ## Core architecture
 
@@ -24,6 +24,16 @@ The normal site remains pure Quarto output. The generated inspection copy double
 
 `tracecite docs build docs` is the public automatic documentation builder. It discovers configured executable inputs, selects the complete site when runtimes are available, safely falls back with exact skipped-file warnings, stages retained Markdown, and optionally renders the inspection site. Table normalisation remains in the public `tracecite prepare` command.
 
+The searchable-evidence path is separate from the documentation renderer:
+
+```text
+declared PDF, Markdown, or workbook sources
+    -> retained source extraction
+    -> locator-aware chunks
+    -> SQLite FTS5 and sqlite-vec
+    -> ranked JSON results with source identity and evidence locators
+```
+
 ## Prerequisites
 
 - Python 3.11 or newer;
@@ -33,15 +43,23 @@ The normal site remains pure Quarto output. The generated inspection copy double
 
 The Python normaliser and CLI work without Julia. Automatic documentation builds fall back to the Python-only overlay when configured Julia inputs cannot run; explicit Julia-only builds require Julia.
 
+Evidence synchronisation and hybrid search use the optional `evidence` dependencies:
+
+```sh
+uv pip install -e ".[evidence]"
+```
+
+Workbook parsing reads OOXML packages directly with the Python standard library and runs independently of Excel, Julia, Quarto, and third-party workbook readers.
+
 ## Usage
 
-The public `tracecite` CLI provides table and document normalisation directly; the `prepare` command consumes retained Markdown after a Quarto render and creates the optional inspection-site copy.
+The public `tracecite` CLI provides table and document normalisation, documentation builds, and source-evidence synchronisation and search. The `prepare` command consumes retained Markdown after a Quarto render and creates the optional inspection-site copy.
 
 ### Public API
 
 ```python
 from tracecite.tables import (
-    normalise_panTraceCiteTables,
+    normalise_pandoc_table,
     normalise_html_table,
     normalise_document_tables,
 )
@@ -52,6 +70,66 @@ from tracecite.tables import (
 Each row also receives a deterministic `row_id`. When `row_identity` metadata is supplied, the identifier follows the logical row rather than its current rank or position.
 
 `normalise_html_table()` supports Literate.jl, Documenter.jl, PrettyTables, notebook HTML MIME, row spans, and column spans through an HTML-to-canonical-Markdown adapter.
+
+### Index and search source evidence
+
+Declare the source collection in a manifest. Explicit sources and include/exclude globs may select `.pdf`, `.md`, `.xlsx`, and `.xlsm` files.
+
+```toml
+schema_version = 1
+
+[[source]]
+path = "2023-iasr-ev-workbook.xlsx"
+```
+
+Synchronise the selected sources into a database, search the resulting lexical and semantic index, then run the integrity checks:
+
+```sh
+tracecite sync \
+  --root sources \
+  --manifest tracecite-sources.toml \
+  --database .tracecite/evidence.sqlite \
+  --model-cache-dir .tracecite/model-cache
+
+tracecite search \
+  "weekday versus weekend electric vehicle charging behaviour" \
+  --database .tracecite/evidence.sqlite \
+  --model-cache-dir .tracecite/model-cache
+
+tracecite doctor --database .tracecite/evidence.sqlite
+```
+
+`sync` is incremental and non-pruning. Unavailable or no-longer-selected sources remain in the database until an explicit `tracecite prune` operation is previewed and applied.
+
+Search results include retrieval provenance and a source-specific locator. The abbreviated JSON below shows the stable workbook evidence fields; the actual worksheet and ranges depend on the indexed workbook and chunk configuration.
+
+```json
+{
+  "source_path": "inputs-and-assumptions.xlsx",
+  "source_type": "workbook",
+  "source_sha256": "<64-character SHA-256>",
+  "locator": {
+    "kind": "excel-range",
+    "sheet": "<worksheet name>",
+    "range": "<bounding A1 range>",
+    "range_kind": "bounding",
+    "exact_ranges": ["<exact A1 range>"]
+  },
+  "provenance": ["lexical", "vector"]
+}
+```
+
+The source path and SHA-256 identify the workbook version. The worksheet and `exact_ranges` identify the cells represented in the indexed passage. `range` is only the convenient bounding rectangle and can include cells that did not contribute to the passage. Search rank identifies candidate evidence; inspect the returned cells before using the result to support a claim.
+
+The portable workbook citation is the source path and SHA-256 together with the worksheet and A1 ranges. Exact-range opening is handled by the workbook viewer or by a provider-specific link supplied separately.
+
+#### Workbook boundaries
+
+- `.xlsx` and `.xlsm` OOXML packages are supported. Legacy binary `.xls` files are outside the supported source set.
+- Stored text, numeric, Boolean, error, formula, and cached formula values are retained. Cached values describe the workbook's stored state; TraceCite does not recalculate formulae.
+- The parser reads stored package content only. It does not execute VBA or refresh external links, Power Query, pivot caches, or data connections.
+- Style-only empty cells are ignored. Excel display formatting is not reconstructed, so styled date or time serials can remain numeric.
+- Workbook chunks are row-oriented. The parser does not yet infer formal Excel tables or propagate complex multi-row headers into every row.
 
 ### Normalise one table
 
@@ -69,7 +147,7 @@ tracecite document normalise report.md --to embedding-markdown --output report.e
 
 ### Retrieve retained pages and visual evidence
 
-`tracecite page` reads retained page text from the SQLite evidence database. Omitting the selector returns physical page 1. A selector can combine individual pages, closed ranges, and open ranges; overlapping terms are deduplicated and returned in ascending physical-page order.
+`tracecite page` reads retained PDF page text from the SQLite evidence database. Omitting the selector returns physical page 1. A selector can combine individual pages, closed ranges, and open ranges; overlapping terms are deduplicated and returned in ascending physical-page order.
 
 ```sh
 tracecite page reports/example.pdf --database evidence.sqlite
@@ -110,13 +188,7 @@ External projects can invoke `tracecite prepare` directly after their Quarto ren
 
 See `examples/report-adoption/aemo-isp-comparison/` for a complete, real example of the author -> check -> index -> search -> doctor -> publish-only workflow using two AEMO Integrated System Plan reports.
 
-Repository integrations may validate the docs evidence contract before building:
-
-```sh
-tracecite docs build docs --docs-config docs/tracecite.toml --repo-root .
-```
-
-Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`,
+`examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`,
 `source_links`, `index_output`, `publication_exclude`, and optional
 `host_render_command` under `[docs]`. Contract paths are repository-relative and
 must remain contained within the repository.
@@ -153,8 +225,7 @@ The core package is fully operated under Python.
 ```sh
 uv venv
 source .venv/bin/activate
-uv pip install pip
-uv pip install -e .
+uv pip install -e ".[evidence,test]"
 ```
 
 To build the whole `docs/`, Julia environment is needed.
@@ -168,7 +239,7 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 Python tests and build:
 
 ```sh
-uv unittest discover -s tests -v
+python -m pytest
 uv build
 ```
 

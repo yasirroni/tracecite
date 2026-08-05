@@ -10,7 +10,7 @@ from types import MappingProxyType
 from .paths import PathAuthorityError, normalise_relative_glob_declaration, normalise_relative_source_declaration
 
 
-SUPPORTED_EXTENSIONS = {".pdf", ".md"}
+SUPPORTED_EXTENSIONS = {".pdf", ".md", ".xlsx", ".xlsm"}
 _TOP_LEVEL_KEYS = {"schema_version", "root", "database", "model_cache_dir", "source", "include", "exclude"}
 _TABLE_KEYS = {
     "source": {"path", "origin"},

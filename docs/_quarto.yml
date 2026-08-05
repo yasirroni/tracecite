@@ -1,6 +1,8 @@
 project:
   type: website
   output-dir: build
+  resources:
+    - assets/workbooks/*.xlsx
   render:
     - index.md
     - guide/*.md
@@ -46,6 +48,8 @@ website:
             text: Architecture
           - href: guide/searchable-evidence.md
             text: From documents to searchable evidence
+          - href: guide/workbook-vector-search.md
+            text: Workbook vector search
           - href: guide/repository_layout.py
             text: Repository layout
           - href: guide/api.md

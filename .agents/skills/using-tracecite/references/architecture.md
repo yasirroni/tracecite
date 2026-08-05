@@ -7,16 +7,23 @@ tracecite/
   pyproject.toml, uv.lock              # locked dependency truth
   src/tracecite/
     __init__.py
-    cli.py                # console entry point: sync, search, page, verify, prune, doctor
-    parsers/
-      base.py              # ParsedPage / ParsedChunkUnit / ParsedAsset / Parser protocol
-      pdf.py                # PyMuPDF-backed extraction, page render, figure crops
-      markdown.py
-    chunking.py            # greedy char-budget grouping, normalisation, hashing
-    schema.py               # versioned schema + path-keyed sources + connect/ensure_schema
-    sync.py                 # the whole incremental synchronisation lifecycle
-    vector_backend.py        # SqliteVecBackend behind a narrow VectorBackend interface
-    verify.py                 # verify quote / verify report
+    cli.py                  # public command router
+    evidence/
+      cli.py                # evidence subcommand parser
+      commands.py           # sync, search, page, extract-pages, verify, prune, doctor
+      parsers/
+        base.py             # ParsedPage / ParsedChunkUnit / ParsedAsset / Parser protocol
+        pdf.py              # PyMuPDF-backed extraction, page render, figure crops
+        markdown.py
+        workbook.py         # OOXML worksheet and A1-range extraction
+      chunking.py           # greedy char-budget grouping, normalisation, hashing
+      schema.py             # versioned schema + path-keyed sources + connect/ensure_schema
+      sync.py               # the whole incremental synchronisation lifecycle
+      vector_backend.py     # SqliteVecBackend behind a narrow VectorBackend interface
+      page_selection.py     # physical PDF page selector grammar
+      page_output.py        # validated PDF page/crop result payloads
+      page_extraction.py    # selected-page derivative PDFs and manifests
+      verify.py             # verify quote / verify report
   tests/                   # pytest coverage for package and CLI behaviour
   fixtures/                # stable test fixtures
 ```
@@ -26,7 +33,7 @@ Install the package and use the `tracecite` console script. There is no supporte
 ## Layering
 
 ```text
-parsers/{pdf,markdown}.py   -- format-specific extraction only, no SQL
+parsers/{pdf,markdown,workbook}.py -- format-specific extraction only, no SQL
         |
 chunking.py                 -- format-agnostic grouping + identity hashing, no SQL
         |
@@ -42,7 +49,7 @@ schema.py + vector_backend.py -- the only places that know SQL/vec0 syntax
   touching parsers, chunking, sync, verification, or the CLI.
 - `pages` rows (see `references/schema-and-migrations.md`) are the retained parser output. A
   chunker- or normalisation-only change rebuilds chunk-input units straight from `pages.layout_json`
-  (via `pdf.units_from_page_layout` / `markdown.units_from_page_layout`) without reopening the
+  (via the matching parser's `units_from_page_layout`) without reopening the
   source file — see `references/synchronisation.md`.
 
 ## Explicit-input contract

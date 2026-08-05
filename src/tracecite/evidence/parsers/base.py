@@ -12,7 +12,7 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class ParsedPage:
-    """One physical page of retained extraction (PDF only)."""
+    """One retained extraction container, such as a page or worksheet."""
 
     physical_page: int
     printed_label: str | None

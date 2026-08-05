@@ -1,19 +1,20 @@
 ---
 name: using-tracecite
-description: Use when local PDF or Markdown sources must be synchronised into a TraceCite SQLite evidence database, searched, retrieved by selected physical pages, inspected through indexed page assets or selected-page derivative PDFs, quote-checked, report-verified, pruned explicitly, or diagnosed with doctor. Requires explicit roots, manifests, database, and model-cache paths or a named profile. Do not use for source capture, report prose, or public-link routing.
+description: Use when local PDF, Markdown, or OOXML workbook sources must be synchronised into a TraceCite SQLite evidence database, searched lexically and semantically, inspected through source-specific locators, pruned, or diagnosed. PDF-only operations also support selected pages, assets, derivative PDFs, quotation checks, and report verification. Requires explicit runtime paths or a profile. Do not use for source capture, report prose, or public-link routing.
 ---
 
 # Using TraceCite
 
-Synchronise an explicit local corpus into a TraceCite database with FTS5 lexical search, sqlite-vec semantic search, retained page/line locators, generated PDF assets, quotation verification, report verification, explicit pruning, and `doctor` diagnostics.
+Synchronise an explicit local corpus into a TraceCite database with FTS5 lexical search, sqlite-vec semantic search, retained PDF-page, Markdown-line, and workbook sheet/A1 locators, generated PDF assets, quotation verification, report verification, explicit pruning, and `doctor` diagnostics.
 
 ## When to use
 
 Use this skill once source files already exist on disk and an agent needs to:
 
-- sync configured `.pdf` and `.md` sources without auto-pruning unavailable content;
+- sync configured `.pdf`, `.md`, `.xlsx`, and `.xlsm` sources without auto-pruning unavailable content;
 - search by wording and semantic similarity;
-- retrieve a source by normalised root-relative path plus physical PDF page;
+- retrieve PDF evidence by normalised root-relative path plus selected physical pages;
+- inspect workbook evidence through its source SHA-256, worksheet, bounding range, and exact A1 ranges;
 - verify a quotation or a Markdown report against retained source text;
 - inspect database/assets with `doctor` or run an explicit prune preview/apply.
 
@@ -22,7 +23,7 @@ Do not use this skill for discovering or downloading sources, writing report nar
 ## Prerequisites
 
 - A TraceCite package and a Python environment that installs the `tracecite` console script. Installing this skill alone does not install the executable package.
-- A source root containing `.pdf` and/or `.md` files.
+- A source root containing one or more supported `.pdf`, `.md`, `.xlsx`, or `.xlsm` files.
 - A combined TraceCite config with explicit inline `[[source]] path = ...`, `[[include]] glob = ...`, and optional `[[exclude]] glob = ...` rules. Separate `--manifest` inputs may augment those inline rules.
 - A database path and model-cache path owned by the caller. Repository-neutral callers may choose any paths.
 
@@ -38,7 +39,7 @@ When the package checkout and runtime environment differ, resolve them separatel
 
 ## Procedure
 
-1. **Confirm runtime and inputs.** Verify `tracecite --help`, source root, manifests/profile, database path, and model-cache path. Do not invent separate public IDs; public evidence identity is the normalised root-relative path plus physical page or Markdown line locator.
+1. **Confirm runtime and inputs.** Verify `tracecite --help`, source root, manifests/profile, database path, and model-cache path. Do not invent separate public IDs. PDF and Markdown evidence use the normalised root-relative path plus their page or line locator. Workbook evidence additionally uses the indexed source SHA-256, worksheet, and exact A1 ranges.
 2. **Sync the corpus:**
    ```bash
    tracecite sync --config <config-path>
@@ -56,7 +57,9 @@ When the package checkout and runtime environment differ, resolve them separatel
    tracecite verify report docs/reports/<report>.md --root <dir> --database <db> [--source-links docs/source-links.toml --source-links-root <dir>]
     tracecite doctor --database <db>
     ```
-4. **Build evidence from retrieval results.** Treat search rank and fused score as candidate-discovery signals, not proof. Narrow a mixed corpus with more specific wording and by inspecting the returned `source_path`; do not infer that a result is from the intended year or source merely because it ranked first. Markdown results can help locate a claim but are not external-source proof.
+4. **Build evidence from retrieval results.** Treat search rank and fused score as candidate-discovery signals, not proof. Narrow a mixed corpus with more specific wording and by inspecting the returned `source_path`, `source_type`, and `source_sha256`; do not infer that a result is from the intended year or source merely because it ranked first. Markdown results can help locate a claim but are not external-source proof.
+
+   For workbook results, inspect `locator.sheet` and `locator.exact_ranges` against the indexed workbook. `locator.range` is a bounding rectangle and may include cells that did not contribute to the passage. Use a workbook viewer for cell inspection; `tracecite page`, `extract-pages`, quotation verification, and PDF assets do not apply to workbook sources.
 
    For each candidate, retrieve the complete physical page with `tracecite page`. Omission selects physical page 1. Selectors accept positive pages, closed ranges (`63-66`), open ranges (`63-` or `-66`), and comma-separated combinations; overlapping terms are deduplicated in ascending physical-page order. The standalone selector `all` explicitly selects every indexed page and cannot be combined with another term.
 
@@ -76,7 +79,8 @@ Ordinary prose containing punctuation that FTS5 rejects, such as `10%, 50%, and 
 
 ## Boundaries
 
-- PDFs and Markdown are the supported source formats.
+- PDF, Markdown, `.xlsx`, and `.xlsm` OOXML workbooks are supported source formats. Legacy binary `.xls` is not supported.
+- Workbook ingestion reads stored package content only. It does not execute VBA, recalculate formulae, refresh external data, or reproduce all Excel display formatting.
 - Do not add old command/package compatibility aliases.
 - Never mutate authoritative source files, and never let verification rewrite maintained Markdown.
 - Keep selected-page derivatives outside the source root. They are disposable caller-owned runtime outputs and must not be synchronised automatically.

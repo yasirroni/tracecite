@@ -44,7 +44,7 @@ are queued for embedding, without reparsing or rechunking the source at all.
 ## Three-pass chunk matching
 
 1. **Same source + same logical key.** The common case: a chunk's positional key (page/block index,
-   or heading-path+paragraph-index) is unchanged, so its `chunk_id` is reused directly. If its
+   heading-path+paragraph-index, or worksheet+row+part) is unchanged, so its `chunk_id` is reused directly. If its
    `semantic_input_hash` also changed, only that one chunk gets re-embedded.
 2. **Unique, unambiguous semantic-hash pairing among what's left.** If content moved to a new
    logical key (e.g. a section reordered), and exactly one remaining old chunk and one remaining

@@ -43,9 +43,15 @@ from . import chunking, manifest as manifest_module, schema, vector_backend
 from .embedding import Embedder, EmbeddingModel
 from .parsers import markdown as markdown_parser
 from .parsers import pdf as pdf_parser
+from .parsers import workbook as workbook_parser
 from .parsers.base import ParsedChunkUnit
 
-SUPPORTED_EXTENSIONS = {".pdf": "pdf", ".md": "markdown"}
+SUPPORTED_EXTENSIONS = {
+    ".pdf": "pdf",
+    ".md": "markdown",
+    ".xlsx": "workbook",
+    ".xlsm": "workbook",
+}
 ASSET_EVENT_HOOK = None
 
 
@@ -67,6 +73,7 @@ class SyncOptions:
     max_chunk_chars: int = chunking.DEFAULT_MAX_CHUNK_CHARS
     parser_version_pdf: str = schema.PARSER_VERSION_PDF
     parser_version_markdown: str = schema.PARSER_VERSION_MARKDOWN
+    parser_version_workbook: str = schema.PARSER_VERSION_WORKBOOK
     chunker_version: str = schema.CHUNKER_VERSION
     normalisation_version: str = schema.NORMALISATION_VERSION
     embedding_model: str = schema.EMBEDDING_MODEL
@@ -83,10 +90,22 @@ class SyncOptions:
         return schema.embedding_model_id(self.embedding_model, self.embedding_revision)
 
     def parser_version(self, source_type: str) -> str:
-        return self.parser_version_pdf if source_type == "pdf" else self.parser_version_markdown
+        if source_type == "pdf":
+            return self.parser_version_pdf
+        if source_type == "markdown":
+            return self.parser_version_markdown
+        if source_type == "workbook":
+            return self.parser_version_workbook
+        raise SyncError(f"unsupported source type: {source_type}")
 
     def parser_name(self, source_type: str) -> str:
-        return schema.PARSER_NAME_PDF if source_type == "pdf" else schema.PARSER_NAME_MARKDOWN
+        if source_type == "pdf":
+            return schema.PARSER_NAME_PDF
+        if source_type == "markdown":
+            return schema.PARSER_NAME_MARKDOWN
+        if source_type == "workbook":
+            return schema.PARSER_NAME_WORKBOOK
+        raise SyncError(f"unsupported source type: {source_type}")
 
 
 @dataclass
@@ -634,7 +653,11 @@ def sync(
         # ---- parse or rechunk each plan ----
         for plan in plans:
             if plan.action in ("add", "reparse"):
-                parser_module = pdf_parser if plan.source_type == "pdf" else markdown_parser
+                parser_module = {
+                    "pdf": pdf_parser,
+                    "markdown": markdown_parser,
+                    "workbook": workbook_parser,
+                }[plan.source_type]
                 result = parser_module.parse(plan.content_path, plan.parser_config)
                 plan.units = result.units
                 plan.pages = result.pages
@@ -657,8 +680,10 @@ def sync(
                                 plan.source_path, page_row["physical_page"], page_row["layout_json"]
                             )
                         )
-                    else:
+                    elif plan.source_type == "markdown":
                         units.extend(markdown_parser.units_from_page_layout(page_row["layout_json"]))
+                    else:
+                        units.extend(workbook_parser.units_from_page_layout(page_row["layout_json"]))
                 plan.units = units
                 plan.pages = []
                 report.sources_rechunked.append(plan.source_path)

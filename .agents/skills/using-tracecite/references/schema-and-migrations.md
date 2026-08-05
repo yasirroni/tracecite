@@ -1,4 +1,4 @@
-# Schema, Configuration, and Path/Page Evidence Identity
+# Schema, Configuration, and Source-Locator Evidence Identity
 
 ## Database-path model
 
@@ -8,7 +8,8 @@ TraceCite uses a fresh schema. It does not migrate or accept old bootstrap/index
 
 ## Evidence identity
 
-- Public evidence identity is the normalised root-relative POSIX source path plus a physical PDF page or Markdown line locator.
+- PDF and Markdown evidence identity is the normalised root-relative POSIX source path plus a physical page or line locator.
+- Workbook evidence identity is the normalised source path and indexed SHA-256 plus the worksheet and exact A1 ranges returned in `locator_json`.
 - Internal keys such as `source_pk`, page row IDs, chunk IDs, and asset IDs are private implementation details.
 - Markdown reference labels are opaque. A report citation is authoritative because its reference definition points to a local path and positive `#page=N` fragment, not because the label encodes an ID.
 - Source-link registries use schema version 3 and match by `local_path`.
@@ -26,6 +27,12 @@ path = "reports/overview.md"
 [[include]]
 glob = "reports/**/*.pdf"
 
+[[include]]
+glob = "workbooks/**/*.xlsx"
+
+[[include]]
+glob = "workbooks/**/*.xlsm"
+
 [[exclude]]
 glob = "reports/drafts/**"
 ```
@@ -38,7 +45,7 @@ At a high level the schema stores:
 
 - configuration metadata, parser/chunker/model versions, and update timestamps;
 - `sources`, keyed internally by `source_pk` with unique normalised `path`;
-- retained `pages` text and PDF/Markdown locators;
+- retained `pages` text and PDF, Markdown, or workbook extraction layout;
 - `chunks`, FTS5 content, embeddings, sqlite-vec vectors, and chunk-to-embedding links;
 - generated PDF assets with stored SHA-256 hashes.
 

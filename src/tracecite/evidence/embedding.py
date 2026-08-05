@@ -35,6 +35,13 @@ class EmbeddingModel:
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(self.cache_dir))
+        unpacked_model = self.cache_dir / self.model_name
+        if (unpacked_model / "modules.json").is_file():
+            self._model = SentenceTransformer(
+                str(unpacked_model),
+                local_files_only=True,
+            )
+            return self._model
         kwargs = {"revision": self.revision, "cache_folder": str(self.cache_dir)}
         try:
             self._model = SentenceTransformer(self.model_name, local_files_only=True, **kwargs)
