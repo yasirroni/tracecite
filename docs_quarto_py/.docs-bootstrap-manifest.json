@@ -37,7 +37,7 @@
       "source": "docs/examples/report-adoption/aemo-isp-comparison/public/report.md"
     },
     "examples/workbook-vector-search/index.md": {
-      "sha256": "52b9516b336aa5797fcab1fab446b4edc62232c7eef15e2b13942463241f2a1b",
+      "sha256": "b9ae3c8f5b4602267c4c7371671c8ac5348adc1c69fc8673b57881e3112e53fa",
       "source": "docs/examples/workbook-vector-search/index.md"
     },
     "examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx": {
@@ -73,7 +73,7 @@
       "source": "docs/guide/repository_layout.py"
     },
     "guide/searchable-evidence.md": {
-      "sha256": "d2e6e0e4e64e79cf3e031036582369527f5d228646944c6ed0c75c9b020fc83e",
+      "sha256": "c5ec8dc4fcbb82000dd9eac4c8518a764c235d68263479687fcd30307420c5aa",
       "source": "docs/guide/searchable-evidence.md"
     },
     "index.md": {

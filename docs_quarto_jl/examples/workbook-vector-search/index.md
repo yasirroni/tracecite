@@ -65,6 +65,53 @@ The two highest-ranked results were retrieved through the vector index:
 `vector` provenance means that semantic retrieval contributed the result while lexical FTS did not contribute it to this ranking.
 The bounding range is a convenient envelope; only the listed exact ranges contributed to the indexed passage.
 
+## Run a literal query
+
+A query that copies exact workbook wording is retrieved through lexical search rather than semantic search:
+
+```sh
+tracecite search "Articulated Truck" \
+  --database .tracecite/workbook-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --limit 1
+```
+
+The top result is retrieved through both indexes at once:
+
+| Rank | Worksheet | Bounding range | Retrieval |
+|---:|---|---|---|
+| 1 | `BEV_Numbers` | `B132:AH135` | lexical, vector |
+
+The matched cell is `B132 = "Articulated Truck"`; the returned bounding range also includes three adjacent rows the chunk grouped it with. "Articulated Truck" is a literal fleet-category label copied from the workbook, unlike the reworded semantic query above, so the FTS5 index also contributes to this result's provenance.
+
+## Confirm re-synchronisation is idempotent
+
+Running the same synchronisation command again without changing the workbook does not reparse it or regenerate embeddings:
+
+```sh
+tracecite sync \
+  --root docs/examples/workbook-vector-search/sources/aemo \
+  --manifest .tracecite/workbook-example.toml \
+  --database .tracecite/workbook-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --max-chunk-chars 2400
+```
+
+```text
+status: ok
+added: []
+reparsed: []
+rechunked: []
+renamed: []
+selected-missing: []
+unmatched-globs: []
+indexed-but-unselected: []
+cleanup-warnings: []
+unchanged: 1 source(s)
+chunks added=0 updated=0 deleted=0
+embeddings generated: 0
+```
+
 ## Cite the workbook evidence
 
 A defensible citation keeps the workbook identity and the evidence locator together:

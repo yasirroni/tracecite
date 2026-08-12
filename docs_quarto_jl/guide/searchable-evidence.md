@@ -177,6 +177,31 @@ tracecite search "electric vehicle charging" --database evidence.sqlite --source
 3  workbook  2023-iasr-ev-workbook.xlsx  sheet "BEV_PHEV_Profile_kW (Weekday)"  lexical, vector
 ```
 
+## PDF page selection does not apply to workbooks
+
+`tracecite page` and `tracecite extract-pages` retrieve physical PDF pages; they reject a workbook path with a clear error rather than misinterpreting a worksheet index as a page number:
+
+```sh
+tracecite page 2024-integrated-system-plan.pdf 10 --database evidence.sqlite
+```
+
+```text
+Executive summary
+
+However, to meet government policy objectives, the ISP forecasts that the remaining coal fleet will
+close two to three times faster than those announcements. In Step Change, the most likely
+```
+
+```sh
+tracecite page 2023-iasr-ev-workbook.xlsx 1 --database evidence.sqlite
+```
+
+```text
+source is not a pdf: 2023-iasr-ev-workbook.xlsx
+```
+
+(exit code 2)
+
 ## Written and retained representations
 
 The same page may exist as written Markdown and retained Markdown:
