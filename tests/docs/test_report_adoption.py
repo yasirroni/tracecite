@@ -1,6 +1,6 @@
 """Tests for the real AEMO ISP report adoption example.
 
-These tests exercise ``examples/report-adoption/aemo-isp-comparison`` end to
+These tests exercise ``docs/examples/report-adoption/aemo-isp-comparison`` end to
 end (structure, author, staging, index/search/doctor/check, publish-only
 isolation, and rendered HTML) by copying the committed example into a
 ``tmp_path`` fixture, so the committed example and any generated staging or
@@ -29,13 +29,14 @@ from tracecite.evidence import schema
 
 EXAMPLE_ROOT = (
     Path(__file__).resolve().parents[2]
+    / "docs"
     / "examples"
     / "report-adoption"
     / "aemo-isp-comparison"
 )
 
-CALLOUT_SENTENCE = (
-    "This is an illustrative TraceCite adoption example, not production analysis."
+CALLOUT_PHRASE = (
+    "authoring, page-citation, indexing, search, diagnostics, and publish-only workflow"
 )
 WEBSITE_CITATION = (
     "https://www.aemo.com.au/energy-systems/major-publications/integrated-system-plan-isp"
@@ -135,6 +136,7 @@ def test_report_structure_callout_and_real_pdfs(tmp_path: Path) -> None:
 
     expected_files = (
         "README.md",
+        "index.md",
         "_quarto.yml",
         "docs/tracecite.toml",
         "docs/source-links.toml",
@@ -155,9 +157,9 @@ def test_report_structure_callout_and_real_pdfs(tmp_path: Path) -> None:
     authored_text = (root / "docs/authored/report.qmd").read_text(encoding="utf-8")
     retained_text = (root / "docs/retained/report.md").read_text(encoding="utf-8")
     assert "callout-note" in authored_text
-    assert CALLOUT_SENTENCE in authored_text
+    assert CALLOUT_PHRASE in authored_text
     assert "[!NOTE]" in retained_text
-    assert CALLOUT_SENTENCE in retained_text
+    assert CALLOUT_PHRASE in retained_text
 
     lfs_pointer_prefix = b"version https://git-lfs.github.com/spec/v1"
     for relative in (
@@ -205,10 +207,13 @@ def test_author_renders_retained_with_callout_and_verified_page_citations(tmp_pa
     assert retained.is_file()
     text = retained.read_text(encoding="utf-8")
     assert "[!NOTE]" in text
-    assert CALLOUT_SENTENCE in text
+    assert CALLOUT_PHRASE in text
     assert "sources/aemo/2024-integrated-system-plan.pdf#page=10" in text
     assert "sources/aemo/2026-integrated-system-plan.pdf#page=76" in text
+    assert "sources/aemo/2026-integrated-system-plan.pdf#page=77" in text
     assert WEBSITE_CITATION in text
+    assert "large share of the original coal fleet already retired" not in text
+    assert "policy-driven retirement" not in text
 
     assert (root / "docs/authored/report.qmd").read_bytes() == authored_before
 
@@ -227,6 +232,7 @@ def test_local_and_public_staging_resolve_correctly_and_preserve_website_citatio
     for pdf_name, page in (
         ("2024-integrated-system-plan.pdf", 10),
         ("2026-integrated-system-plan.pdf", 76),
+        ("2026-integrated-system-plan.pdf", 77),
     ):
         destination = _extract_local_destination(local_text, pdf_name, page)
         resolved = (local_path.parent / destination.split("#", 1)[0]).resolve()
@@ -373,7 +379,7 @@ def test_quarto_rendered_html_contains_callout_and_citation_links(tmp_path: Path
     html = (root / "report.html").read_text(encoding="utf-8")
 
     assert "callout-note" in html
-    assert "Example report" in html
+    assert "Example scope" in html
     assert 'href="../../sources/aemo/2024-integrated-system-plan.pdf#page=10"' in html
     assert 'href="../../sources/aemo/2026-integrated-system-plan.pdf#page=76"' in html
     assert f'href="{WEBSITE_CITATION}"' in html

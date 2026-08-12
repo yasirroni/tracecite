@@ -1,7 +1,7 @@
 {
   "files": {
     "src/examples/julia/dirty_dataframe.jl": {
-      "sha256": "fcdadad6771f1e8c01f9ae9f2509c0dcee7c49a311904ab3b239ee9ab935bba0",
+      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "src/formats/diagnostics.md": {
@@ -13,7 +13,7 @@
       "source": "docs/formats/html-documenter.md"
     },
     "src/formats/pandoc-tables.md": {
-      "sha256": "e6ec910f07a142f9c5f93a1a4620bef2160de1d4b66f0ef1a3ec095db2513fa8",
+      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
       "source": "docs/formats/pandoc-tables.md"
     },
     "src/guide/api.md": {
@@ -29,11 +29,11 @@
       "source": "docs/guide/embedding-site.md"
     },
     "src/guide/searchable-evidence.md": {
-      "sha256": "12f008ee3f011d87b93b66a4a2ef50ae076d80e9ea01791e1e67dbd2a2bc39c0",
+      "sha256": "cd101dad58d8b49729dbee060d57f7e73a6e5b40cc15cb52797aed757528a739",
       "source": "docs/guide/searchable-evidence.md"
     },
     "src/index.md": {
-      "sha256": "f3f3b00f10bd6f280942ff998dce5d21b29a9535c6b525c5b6e67e79ea2f30ad",
+      "sha256": "e94a0fc4d7c9fc634c09d3124bf8c29f62a5524b9ea942867de3e3e1670b365b",
       "source": "docs/index.md"
     }
   },

@@ -2,18 +2,18 @@
 title: "Repository layout"
 ---
 
-TraceCite keeps its Python and Julia implementations, tests, documentation, examples, and build tools in separate top-level areas.
+TraceCite keeps implementation, tests, build tools, and published documentation separate. User-facing examples live with the documentation under `docs/examples/` rather than in a parallel top-level example tree.
 
 ::: {#repository-layout-tree .cell execution_count=1}
 ```text
 .
 ├── docs/
-│   ├── assets/
-│   │   └── workbooks/
 │   ├── examples/
 │   │   ├── julia/
 │   │   ├── literate_documenter/
-│   │   └── python/
+│   │   ├── python/
+│   │   ├── report-adoption/
+│   │   └── workbook-vector-search/
 │   ├── formats/
 │   │   ├── diagnostics.html.md
 │   │   ├── diagnostics.md
@@ -31,9 +31,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   │   ├── repository_layout.html.md
 │   │   ├── repository_layout.py
 │   │   ├── searchable-evidence.html.md
-│   │   ├── searchable-evidence.md
-│   │   ├── workbook-vector-search.html.md
-│   │   └── workbook-vector-search.md
+│   │   └── searchable-evidence.md
 │   ├── _quarto-julia.yml
 │   ├── _quarto-python.yml
 │   ├── _quarto.yml
@@ -53,7 +51,9 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── examples/
 │   │   ├── julia/
 │   │   ├── literate_documenter/
-│   │   └── python/
+│   │   ├── python/
+│   │   ├── report-adoption/
+│   │   └── workbook-vector-search/
 │   ├── formats/
 │   │   ├── diagnostics.html.md
 │   │   ├── diagnostics.md
@@ -78,7 +78,9 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── examples/
 │   │   ├── julia/
 │   │   ├── literate_documenter/
-│   │   └── python/
+│   │   ├── python/
+│   │   ├── report-adoption/
+│   │   └── workbook-vector-search/
 │   ├── formats/
 │   │   ├── diagnostics.html.md
 │   │   ├── diagnostics.md
@@ -100,9 +102,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── _quarto.yml
 │   ├── index.html.md
 │   └── index.md
-├── examples/
-│   └── report-adoption/
-│       └── aemo-isp-comparison/
 ├── fixtures/
 │   └── sample-report.md
 ├── scripts/
@@ -167,7 +166,6 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 │   ├── test_repository_tree.py
 │   ├── test_tables.py
 │   └── test_version.py
-├── kanban-card-tracecite-workbook-evidence.md
 ├── LICENSE
 ├── Project.toml
 ├── pyproject.toml
@@ -177,7 +175,7 @@ TraceCite keeps its Python and Julia implementations, tests, documentation, exam
 :::
 
 
-Executable documentation examples are grouped by language under `docs/examples/`. The standalone Literate/Documenter fixture is also kept under `docs/examples/literate_documenter/`, with its own Julia project and nested Documenter site. Written guides and format references remain under `docs/guide/` and `docs/formats/`.
+Executable tutorials are grouped by language under `docs/examples/`. Source-backed examples own their pages and source files in the same workspace: the workbook example lives under `docs/examples/workbook-vector-search/`, while the AEMO report-adoption workflow remains self-contained under `docs/examples/report-adoption/`. The standalone Literate/Documenter fixture remains under `docs/examples/literate_documenter/`. Written guides and format references remain under `docs/guide/` and `docs/formats/`.
 
-The project contains no `.qmd` files. Executable pages use percent-format `.py` and `.jl`; written pages use `.md`.
+Most executable pages use percent-format `.py` and `.jl`, while written pages use `.md`. The report-adoption example intentionally uses one authored `.qmd` file because it demonstrates how an external Quarto project produces retained Markdown for TraceCite.
 

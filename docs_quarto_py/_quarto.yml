@@ -1,6 +1,8 @@
 project:
   type: website
   output-dir: build
+  resources:
+  - examples/workbook-vector-search/sources/aemo/*.xlsx
   render:
   - '!examples/julia/*.jl'
   - index.md
@@ -9,6 +11,10 @@ project:
   - formats/*.md
   - '!formats/*.html.md'
   - guide/repository_layout.py
+  - examples/workbook-vector-search/index.md
+  - '!examples/workbook-vector-search/index.html.md'
+  - examples/report-adoption/aemo-isp-comparison/index.md
+  - examples/report-adoption/aemo-isp-comparison/public/report.md
   - examples/python/*.py
   - examples/literate_documenter/index.md
 format:
@@ -53,6 +59,14 @@ website:
       - href: formats/diagnostics.md
         text: Structural diagnostics
       section: Formats
+    - contents:
+      - href: examples/workbook-vector-search/index.md
+        text: Workbook vector search
+      - href: examples/report-adoption/aemo-isp-comparison/index.md
+        text: Evidence-backed report workflow
+      - href: examples/report-adoption/aemo-isp-comparison/public/report.md
+        text: AEMO ISP comparison
+      section: Examples
     - contents:
       - href: examples/python/dirty_dataframe.py
         text: What TraceCite does

@@ -21,6 +21,25 @@ destinations = ["docs_quarto_py/guide/embedding-site.md", "docs_quarto_jl/guide/
 source = "docs/guide/searchable-evidence.md"
 destinations = ["docs_quarto_py/guide/searchable-evidence.md", "docs_quarto_jl/guide/searchable-evidence.md", "docs_jl/src/guide/searchable-evidence.md"]
 
+# Source-backed static examples -> both Quarto language projects. These pages
+# do not execute Python or Julia; the workbook remains example-owned so its
+# local link resolves in each Quarto project.
+[[mapping]]
+source = "docs/examples/workbook-vector-search/index.md"
+destinations = ["docs_quarto_py/examples/workbook-vector-search/index.md", "docs_quarto_jl/examples/workbook-vector-search/index.md"]
+
+[[mapping]]
+source = "docs/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"
+destinations = ["docs_quarto_py/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx", "docs_quarto_jl/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"]
+
+[[mapping]]
+source = "docs/examples/report-adoption/aemo-isp-comparison/index.md"
+destinations = ["docs_quarto_py/examples/report-adoption/aemo-isp-comparison/index.md", "docs_quarto_jl/examples/report-adoption/aemo-isp-comparison/index.md"]
+
+[[mapping]]
+source = "docs/examples/report-adoption/aemo-isp-comparison/public/report.md"
+destinations = ["docs_quarto_py/examples/report-adoption/aemo-isp-comparison/public/report.md", "docs_quarto_jl/examples/report-adoption/aemo-isp-comparison/public/report.md"]
+
 [[mapping]]
 source = "docs/formats/diagnostics.md"
 destinations = ["docs_quarto_py/formats/diagnostics.md", "docs_quarto_jl/formats/diagnostics.md", "docs_jl/src/formats/diagnostics.md"]
@@ -97,3 +116,18 @@ destinations = ["docs_quarto_jl/examples/literate_documenter/docs/make.jl"]
 [[mapping]]
 source = "docs/examples/literate_documenter/src/temperature_eda.jl"
 destinations = ["docs_quarto_jl/examples/literate_documenter/src/temperature_eda.jl"]
+
+# Files owned directly by each derived documentation project rather than copied
+# from canonical docs/. Explicit ownership keeps bootstrap drift checks focused
+# on managed source copies.
+[[project]]
+name = "docs_quarto_py"
+owned = [".gitignore", "_quarto.yml"]
+
+[[project]]
+name = "docs_quarto_jl"
+owned = [".gitignore", "_quarto.yml"]
+
+[[project]]
+name = "docs_jl"
+owned = [".gitignore", "Project.toml", "make.jl", "src/dirty_dataframe.md"]

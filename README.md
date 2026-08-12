@@ -173,9 +173,9 @@ Use database-backed text or indexed page assets for page-local questions. Select
 ### Build the documentation
 
 ```sh
-tracecite docs build docs
-tracecite docs build docs_quarto_py --only python
-tracecite docs build docs_quarto_jl --only julia
+uv run tracecite docs build docs
+uv run tracecite docs build docs_quarto_py --only python
+uv run tracecite docs build docs_quarto_jl --only julia
 ```
 
 <!-- TODO:
@@ -186,9 +186,9 @@ The public builder discovers configured render inputs, automatically selects the
 Use `--only python` or `--only julia` for explicit reduced builds.
 External projects can invoke `tracecite prepare` directly after their Quarto render when they already have rendered and staged retained Markdown.
 
-See `examples/report-adoption/aemo-isp-comparison/` for a complete, real example of the author -> check -> index -> search -> doctor -> publish-only workflow using two AEMO Integrated System Plan reports.
+See `docs/examples/report-adoption/aemo-isp-comparison/` for a complete, real example of the author -> check -> index -> search -> doctor -> publish-only workflow using two AEMO Integrated System Plan reports.
 
-`examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`,
+`docs/examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`,
 `source_links`, `index_output`, `publication_exclude`, and optional
 `host_render_command` under `[docs]`. Contract paths are repository-relative and
 must remain contained within the repository.

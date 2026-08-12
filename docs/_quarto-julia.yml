@@ -7,6 +7,10 @@ project:
     - "!guide/*.html.md"
     - formats/*.md
     - "!formats/*.html.md"
+    - examples/workbook-vector-search/index.md
+    - "!examples/workbook-vector-search/index.html.md"
+    - examples/report-adoption/aemo-isp-comparison/index.md
+    - examples/report-adoption/aemo-isp-comparison/public/report.md
     - examples/julia/*.jl
     - examples/literate_documenter/index.md
 
@@ -38,6 +42,14 @@ website:
             text: Literate and Documenter HTML
           - href: formats/diagnostics.md
             text: Structural diagnostics
+      - section: Examples
+        contents:
+          - href: examples/workbook-vector-search/index.md
+            text: Workbook vector search
+          - href: examples/report-adoption/aemo-isp-comparison/index.md
+            text: Evidence-backed report workflow
+          - href: examples/report-adoption/aemo-isp-comparison/public/report.md
+            text: AEMO ISP comparison
       - section: Tutorials
         contents:
           - href: examples/julia/dirty_dataframe.jl

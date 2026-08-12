@@ -5,6 +5,31 @@ import unittest
 
 
 class RepositoryTreeTests(unittest.TestCase):
+    def test_all_examples_live_under_docs(self) -> None:
+        project = Path(__file__).resolve().parents[1]
+        self.assertFalse((project / "examples").exists())
+        report_example = (
+            project
+            / "docs"
+            / "examples"
+            / "report-adoption"
+            / "aemo-isp-comparison"
+        )
+        self.assertTrue((report_example / "index.md").is_file())
+        self.assertTrue((report_example / "docs" / "authored" / "report.qmd").is_file())
+        workbook_example = project / "docs" / "examples" / "workbook-vector-search"
+        self.assertTrue((workbook_example / "index.md").is_file())
+        self.assertTrue(
+            (
+                workbook_example
+                / "sources"
+                / "aemo"
+                / "2023-iasr-ev-workbook.xlsx"
+            ).is_file()
+        )
+        self.assertFalse((project / "docs" / "assets" / "workbooks").exists())
+        self.assertFalse((project / "docs" / "guide" / "workbook-vector-search.md").exists())
+
     def test_literate_documenter_fixture_uses_canonical_docs_path(self) -> None:
         project = Path(__file__).resolve().parents[1]
         canonical = project / "docs" / "examples" / "literate_documenter"

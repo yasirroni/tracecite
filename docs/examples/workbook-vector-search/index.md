@@ -7,7 +7,7 @@ This example uses AEMO's 2023 Electric Vehicle workbook because its separate wee
 
 ## Source workbook
 
-**Workbook:** [local copy](../assets/workbooks/2023-iasr-ev-workbook.xlsx) · [AEMO online copy](https://www.aemo.com.au/-/media/files/major-publications/isp/2023/2023-iasr-ev-workbook.xlsx?rev=d600796546d4448ba2d647643e248d8c&sc_lang=en)
+**Workbook:** [local copy](sources/aemo/2023-iasr-ev-workbook.xlsx) · [AEMO online copy](https://www.aemo.com.au/-/media/files/major-publications/isp/2023/2023-iasr-ev-workbook.xlsx)
 
 **Indexed local file SHA-256:** `5fb01b7eb8861d20a50d02628fdb686bae83f7f046a5288f2f62cb27126eb246`
 
@@ -31,7 +31,7 @@ path = "2023-iasr-ev-workbook.xlsx"
 TOML
 
 tracecite sync \
-  --root docs/assets/workbooks \
+  --root docs/examples/workbook-vector-search/sources/aemo \
   --manifest .tracecite/workbook-example.toml \
   --database .tracecite/workbook-example.sqlite \
   --model-cache-dir .tracecite/model-cache \
@@ -69,7 +69,7 @@ The bounding range is a convenient envelope; only the listed exact ranges contri
 
 A defensible citation keeps the workbook identity and the evidence locator together:
 
-> AEMO, *2023 Electric Vehicle workbook*, sheets `BEV_PHEV_Profile_kW (Weekend)` and `BEV_PHEV_Profile_kW (Weekday)`, exact ranges `B2`, `B3`, `B4`, `B5`, `B8`, `C9:AT9` and `B2`, `B3`, `B4`, `B5`, `B7`, `C8:AT8` ([local workbook](../assets/workbooks/2023-iasr-ev-workbook.xlsx); [online workbook](https://www.aemo.com.au/-/media/files/major-publications/isp/2023/2023-iasr-ev-workbook.xlsx?rev=d600796546d4448ba2d647643e248d8c&sc_lang=en)).
+> AEMO, *2023 Electric Vehicle workbook*, sheets `BEV_PHEV_Profile_kW (Weekend)` and `BEV_PHEV_Profile_kW (Weekday)`, exact ranges `B2`, `B3`, `B4`, `B5`, `B8`, `C9:AT9` and `B2`, `B3`, `B4`, `B5`, `B7`, `C8:AT8` ([local workbook](sources/aemo/2023-iasr-ev-workbook.xlsx); [online workbook](https://www.aemo.com.au/-/media/files/major-publications/isp/2023/2023-iasr-ev-workbook.xlsx)).
 
 The links provide local and official online access to the source workbook.
 The worksheet names, exact A1 ranges, and local file hash provide the evidence identity that the workbook links themselves cannot express portably.

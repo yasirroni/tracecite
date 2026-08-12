@@ -1,7 +1,7 @@
 {
   "files": {
     "examples/julia/dirty_dataframe.jl": {
-      "sha256": "fcdadad6771f1e8c01f9ae9f2509c0dcee7c49a311904ab3b239ee9ab935bba0",
+      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "examples/literate_documenter/Project.toml": {
@@ -36,6 +36,22 @@
       "sha256": "086f4f1030b8483d6acb8cfac9635f55f4c4c10f62a9835b1b3cef491e1f9715",
       "source": "docs/examples/python/quarto_code_visibility.html.md"
     },
+    "examples/report-adoption/aemo-isp-comparison/index.md": {
+      "sha256": "05cc3fda2199428296fd86973dab7cb050ee5554b08847d5c12a5b980d388ce7",
+      "source": "docs/examples/report-adoption/aemo-isp-comparison/index.md"
+    },
+    "examples/report-adoption/aemo-isp-comparison/public/report.md": {
+      "sha256": "452c111a744767a4a83d1563c8d297e973a801fc379432b53f091aee2afd2120",
+      "source": "docs/examples/report-adoption/aemo-isp-comparison/public/report.md"
+    },
+    "examples/workbook-vector-search/index.md": {
+      "sha256": "52b9516b336aa5797fcab1fab446b4edc62232c7eef15e2b13942463241f2a1b",
+      "source": "docs/examples/workbook-vector-search/index.md"
+    },
+    "examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx": {
+      "sha256": "5fb01b7eb8861d20a50d02628fdb686bae83f7f046a5288f2f62cb27126eb246",
+      "source": "docs/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"
+    },
     "formats/diagnostics.md": {
       "sha256": "1d17977d4a986aae261489e75bb20f49030b1e4ae0f239be9949d190adf076f8",
       "source": "docs/formats/diagnostics.md"
@@ -45,7 +61,7 @@
       "source": "docs/formats/html-documenter.md"
     },
     "formats/pandoc-tables.md": {
-      "sha256": "e6ec910f07a142f9c5f93a1a4620bef2160de1d4b66f0ef1a3ec095db2513fa8",
+      "sha256": "82179fd532f012a907d23020c54b9b06040c1f112df31c5ea7a06dcd3f24d4f1",
       "source": "docs/formats/pandoc-tables.md"
     },
     "guide/api.md": {
@@ -61,15 +77,15 @@
       "source": "docs/guide/embedding-site.md"
     },
     "guide/repository_layout.html.md": {
-      "sha256": "c4fa35feb89dec3f70f1c3166c6f255ab63fb3180bc06b0a9fcaefa6545bfb5a",
+      "sha256": "9128b3bb96dcea76a7233327836234e1e322f7c646a6c8b88157017aead878d1",
       "source": "docs/guide/repository_layout.html.md"
     },
     "guide/searchable-evidence.md": {
-      "sha256": "12f008ee3f011d87b93b66a4a2ef50ae076d80e9ea01791e1e67dbd2a2bc39c0",
+      "sha256": "cd101dad58d8b49729dbee060d57f7e73a6e5b40cc15cb52797aed757528a739",
       "source": "docs/guide/searchable-evidence.md"
     },
     "index.md": {
-      "sha256": "f3f3b00f10bd6f280942ff998dce5d21b29a9535c6b525c5b6e67e79ea2f30ad",
+      "sha256": "e94a0fc4d7c9fc634c09d3124bf8c29f62a5524b9ea942867de3e3e1670b365b",
       "source": "docs/index.md"
     }
   },

@@ -42,8 +42,11 @@ The documentation layout is:
 docs/
     index.md                       written documentation
     guide/                         written documentation
+    examples/                      published tutorials and complete workflows
     examples/python/               executable Python pages
     examples/julia/                executable Julia pages
+    examples/workbook-vector-search/  workbook page and its local source workbook
+    examples/report-adoption/      self-contained evidence-backed report example
     guide/architecture.md          written documentation
     guide/architecture.html.md     committed generated evidence
     examples/python/hottest_temperature.html.md  Tutorial 3 inspection output
@@ -62,9 +65,13 @@ freshness checks. Use `--only python` or `--only julia` for explicit reduced
 builds. An external project can run `tracecite prepare` directly after its
 Quarto render.
 
-See `examples/report-adoption/aemo-isp-comparison/` for a complete, real
+See `docs/examples/report-adoption/aemo-isp-comparison/` for a complete, real
 adoption example covering author, check, index, search, doctor, and
 publish-only modes together.
+
+See `docs/examples/workbook-vector-search/` for a semantic workbook-search
+example whose page and local `.xlsx` source are owned by the same example
+workspace.
 
 ## Three separate operations
 

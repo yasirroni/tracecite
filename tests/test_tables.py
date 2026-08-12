@@ -507,12 +507,12 @@ class SiteExportTests(unittest.TestCase):
 
 
 class RepositoryTests(unittest.TestCase):
-    def test_repository_uses_no_qmd_files_outside_examples(self) -> None:
+    def test_repository_uses_qmd_only_for_the_report_adoption_example(self) -> None:
         project = Path(__file__).resolve().parents[1]
         qmd_files = [
             path
             for path in project.rglob("*.qmd")
-            if "examples/report-adoption/" not in path.as_posix()
+            if "docs/examples/report-adoption/" not in path.as_posix()
         ]
         self.assertEqual(qmd_files, [])
 
