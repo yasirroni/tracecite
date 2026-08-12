@@ -45,6 +45,7 @@ docs/
     examples/                      published tutorials and complete workflows
     examples/python/               executable Python pages
     examples/julia/                executable Julia pages
+    examples/workbook-vector-search/  workbook page and its local source workbook
     examples/report-adoption/      self-contained evidence-backed report example
     guide/architecture.md          written documentation
     guide/architecture.html.md     committed generated evidence
@@ -67,6 +68,10 @@ Quarto render.
 See `docs/examples/report-adoption/aemo-isp-comparison/` for a complete, real
 adoption example covering author, check, index, search, doctor, and
 publish-only modes together.
+
+See `docs/examples/workbook-vector-search/` for a semantic workbook-search
+example whose page and local `.xlsx` source are owned by the same example
+workspace.
 
 ## Three separate operations
 
