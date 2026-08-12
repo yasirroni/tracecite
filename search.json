@@ -1,0 +1,832 @@
+[
+  {
+    "objectID": "examples/literate_documenter/index.html",
+    "href": "examples/literate_documenter/index.html",
+    "title": "Literate and Documenter fixture",
+    "section": "",
+    "text": "This standalone Julia fixture demonstrates a Literate.jl source rendered into a Documenter.jl landing page containing HTML tables. It is kept as a nested project so it can be instantiated and built independently from the Quarto showcase.\nKey files:\n\nProject.toml — the fixture’s Julia environment;\nsrc/temperature_eda.jl — the Literate source;\ndocs/make.jl — the Documenter build script; and\ndocs/src/index.md — the nested Documenter landing page.\n\nThe nested landing page remains the fixture’s own documentation entry point; this page is the Quarto-facing overview and does not replace it.",
+    "crumbs": [
+      "Literate and Documenter fixture"
+    ]
+  },
+  {
+    "objectID": "examples/python/quarto_code_visibility.html",
+    "href": "examples/python/quarto_code_visibility.html",
+    "title": "Control code visibility in Quarto",
+    "section": "",
+    "text": "This Python-only tutorial demonstrates Quarto presentation controls, not a new TraceCite transformation. The page locally disables the project-wide folding default so the first executable cell is visibly shown. Each cell still emits ordinary TraceCite-compatible Markdown with a stable table identifier.\n\nimport pandas as pd\n\nfrom tracecite.tables import knowledge_table\n\n\nexample = pd.DataFrame(\n    {\"method\": [\"visible\", \"hidden\", \"folded\"], \"count\": [1, 2, 3]}\n)",
+    "crumbs": [
+      "Tutorials",
+      "Control code visibility in Quarto"
+    ]
+  },
+  {
+    "objectID": "examples/python/quarto_code_visibility.html#presentation-only-controls",
+    "href": "examples/python/quarto_code_visibility.html#presentation-only-controls",
+    "title": "Control code visibility in Quarto",
+    "section": "",
+    "text": "This Python-only tutorial demonstrates Quarto presentation controls, not a new TraceCite transformation. The page locally disables the project-wide folding default so the first executable cell is visibly shown. Each cell still emits ordinary TraceCite-compatible Markdown with a stable table identifier.\n\nimport pandas as pd\n\nfrom tracecite.tables import knowledge_table\n\n\nexample = pd.DataFrame(\n    {\"method\": [\"visible\", \"hidden\", \"folded\"], \"count\": [1, 2, 3]}\n)",
+    "crumbs": [
+      "Tutorials",
+      "Control code visibility in Quarto"
+    ]
+  },
+  {
+    "objectID": "examples/python/quarto_code_visibility.html#visible-source",
+    "href": "examples/python/quarto_code_visibility.html#visible-source",
+    "title": "Control code visibility in Quarto",
+    "section": "Visible source",
+    "text": "Visible source\nThis cell uses the normal default presentation. Because this page sets format.html.code-fold: false, its executable source is visible in the HTML.\n\nprint(knowledge_table(example, table_id=\"quarto-visible-table\"))\n\n\n\n\nmethod\ncount\n\n\n\n\nvisible\n1\n\n\nhidden\n2\n\n\nfolded\n3",
+    "crumbs": [
+      "Tutorials",
+      "Control code visibility in Quarto"
+    ]
+  },
+  {
+    "objectID": "examples/python/quarto_code_visibility.html#hidden-source",
+    "href": "examples/python/quarto_code_visibility.html#hidden-source",
+    "title": "Control code visibility in Quarto",
+    "section": "Hidden source",
+    "text": "Hidden source\nThe next cell uses #| echo: false to hide its source while retaining its executed table output. The option affects HTML presentation only.\n\n\n\n\n\nmethod\ncount\n\n\n\n\nvisible\n1\n\n\nhidden\n2\n\n\nfolded\n3",
+    "crumbs": [
+      "Tutorials",
+      "Control code visibility in Quarto"
+    ]
+  },
+  {
+    "objectID": "examples/python/quarto_code_visibility.html#folded-source",
+    "href": "examples/python/quarto_code_visibility.html#folded-source",
+    "title": "Control code visibility in Quarto",
+    "section": "Folded source",
+    "text": "Folded source\nThe final cell opts back into folding with #| code-fold: true and labels the closed control with #| code-summary: \"Show the table-generating code\".\n\n\nShow the table-generating code\nprint(knowledge_table(example, table_id=\"quarto-folded-table\"))\n\n\n\n\n\nmethod\ncount\n\n\n\n\nvisible\n1\n\n\nhidden\n2\n\n\nfolded\n3",
+    "crumbs": [
+      "Tutorials",
+      "Control code visibility in Quarto"
+    ]
+  },
+  {
+    "objectID": "examples/python/quarto_code_visibility.html#what-remains-unchanged",
+    "href": "examples/python/quarto_code_visibility.html#what-remains-unchanged",
+    "title": "Control code visibility in Quarto",
+    "section": "What remains unchanged",
+    "text": "What remains unchanged\nAll three calls emit equivalent TraceCite-compatible Markdown. Code visibility options do not change the emitted Markdown, TraceCite metadata, normalisation, or retrieval records.",
+    "crumbs": [
+      "Tutorials",
+      "Control code visibility in Quarto"
+    ]
+  },
+  {
+    "objectID": "examples/python/dirty_dataframe.html",
+    "href": "examples/python/dirty_dataframe.html",
+    "title": "What TraceCite does",
+    "section": "",
+    "text": "TraceCite accepts table evidence from ordinary Python displays and from its native Pandoc helper. Both routes preserve the raw source while deriving one canonical Markdown table, normalised retrieval text, row records, diagnostics, and stable identifiers for retrieval.\n\n\nShow source code\nimport pandas as pd\n\nfrom tracecite.tables import knowledge_table\n\n\ndirty_table = pd.DataFrame(\n    {\n        \"technology\": [\n            \"Solar PV\",\n            \"Battery | BESS\",\n            \"Gas *peaker*\",\n            \"Hydrogen &lt;draft&gt;\",\n            \"Demand response\",\n        ],\n        \"capital_cost_per_kw\": [1250.0, 890.5, 760.0, None, 140.0],\n        \"variable_cost_per_mwh\": [0.0, 12.4, 185.0, 240.0, -15.0],\n        \"status\": [\"firm\", \"provisional\", \"review\", \"missing\", \"credit\"],\n        \"notes\": [\n            \"Currency: A$1,250/kW\",\n            \"literal pipe: north | south\",\n            \"emphasis must remain literal\",\n            \"HTML-looking text must be escaped\",\n            \"negative value is intentional\",\n        ],\n    }\n)",
+    "crumbs": [
+      "Tutorials",
+      "What TraceCite does"
+    ]
+  },
+  {
+    "objectID": "examples/python/dirty_dataframe.html#purpose",
+    "href": "examples/python/dirty_dataframe.html#purpose",
+    "title": "What TraceCite does",
+    "section": "",
+    "text": "TraceCite accepts table evidence from ordinary Python displays and from its native Pandoc helper. Both routes preserve the raw source while deriving one canonical Markdown table, normalised retrieval text, row records, diagnostics, and stable identifiers for retrieval.\n\n\nShow source code\nimport pandas as pd\n\nfrom tracecite.tables import knowledge_table\n\n\ndirty_table = pd.DataFrame(\n    {\n        \"technology\": [\n            \"Solar PV\",\n            \"Battery | BESS\",\n            \"Gas *peaker*\",\n            \"Hydrogen &lt;draft&gt;\",\n            \"Demand response\",\n        ],\n        \"capital_cost_per_kw\": [1250.0, 890.5, 760.0, None, 140.0],\n        \"variable_cost_per_mwh\": [0.0, 12.4, 185.0, 240.0, -15.0],\n        \"status\": [\"firm\", \"provisional\", \"review\", \"missing\", \"credit\"],\n        \"notes\": [\n            \"Currency: A$1,250/kW\",\n            \"literal pipe: north | south\",\n            \"emphasis must remain literal\",\n            \"HTML-looking text must be escaped\",\n            \"negative value is intentional\",\n        ],\n    }\n)",
+    "crumbs": [
+      "Tutorials",
+      "What TraceCite does"
+    ]
+  },
+  {
+    "objectID": "examples/python/dirty_dataframe.html#evidence-route-1-html-mime",
+    "href": "examples/python/dirty_dataframe.html#evidence-route-1-html-mime",
+    "title": "What TraceCite does",
+    "section": "Evidence route 1: HTML MIME",
+    "text": "Evidence route 1: HTML MIME\nA bare DataFrame is a normal Python evidence route. Its retained HTML is preserved, and TraceCite can convert it to canonical Markdown and retrieval records without requiring the native helper.\n\n\nShow source code\ndirty_table\n\n\n\n\n\n\n\n\n\ntechnology\ncapital_cost_per_kw\nvariable_cost_per_mwh\nstatus\nnotes\n\n\n\n\n0\nSolar PV\n1250.0\n0.0\nfirm\nCurrency: A$1,250/kW\n\n\n1\nBattery | BESS\n890.5\n12.4\nprovisional\nliteral pipe: north | south\n\n\n2\nGas *peaker*\n760.0\n185.0\nreview\nemphasis must remain literal\n\n\n3\nHydrogen &lt;draft&gt;\nNaN\n240.0\nmissing\nHTML-looking text must be escaped\n\n\n4\nDemand response\n140.0\n-15.0\ncredit\nnegative value is intentional",
+    "crumbs": [
+      "Tutorials",
+      "What TraceCite does"
+    ]
+  },
+  {
+    "objectID": "examples/python/dirty_dataframe.html#evidence-route-2-native-pandoc-tables",
+    "href": "examples/python/dirty_dataframe.html#evidence-route-2-native-pandoc-tables",
+    "title": "What TraceCite does",
+    "section": "Evidence route 2: Native Pandoc tables",
+    "text": "Evidence route 2: Native Pandoc tables\nknowledge_table() needs a stable table identifier. A caption is optional, so the minimal form emits a bare pipe table without a numbered Quarto caption.\n\n\nShow source code\nprint(\n    knowledge_table(\n        dirty_table,\n        table_id=\"dirty-dataframe-python-minimal\",  # Required: stable TraceCite identity.\n    )\n)\n\n\n\n\n\n\n\n\n\n\n\n\ntechnology\ncapital cost per kw\nvariable cost per mwh\nstatus\nnotes\n\n\n\n\nSolar PV\n1250\n0\nfirm\nCurrency: A$1,250/kW\n\n\nBattery | BESS\n890.5\n12.4\nprovisional\nliteral pipe: north | south\n\n\nGas *peaker*\n760\n185\nreview\nemphasis must remain literal\n\n\nHydrogen &lt;draft&gt;\nnot available\n240\nmissing\nHTML-looking text must be escaped\n\n\nDemand response\n140\n-15\ncredit\nnegative value is intentional\n\n\n\n\nThe minimal call above and advanced call below show the optional caption, metadata, stable row identity, and data-derived finding. TraceCite can also normalise tables produced by other libraries; this helper is a convenient Pandoc output route.\n\n\nShow source code\nprint(\n    knowledge_table(\n        dirty_table,\n        table_id=\"tbl-dirty-python\",  # Required: stable identity and Quarto target.\n        caption=\"Technology costs.\",  # Optional: visible caption enabling Quarto references.\n        labels={  # Optional: reader-facing column headings.\n            \"technology\": \"Technology\",\n            \"capital_cost_per_kw\": \"Capital cost ($/kW)\",\n            \"variable_cost_per_mwh\": \"Variable cost ($/MWh)\",\n            \"status\": \"Status\",\n            \"notes\": \"Notes\",\n        },\n        formats={  # Optional: deterministic numeric display formats.\n            \"capital_cost_per_kw\": \".2f\",\n            \"variable_cost_per_mwh\": \".2f\",\n        },\n        units={  # Optional: units retained in retrieval metadata and findings.\n            \"capital_cost_per_kw\": \"$/kW\",\n            \"variable_cost_per_mwh\": \"$/MWh\",\n        },\n        row_identity=[\"technology\"],  # Optional: logical identity for stable row IDs.\n        summary=[  # Optional: first field is the subject of the generated finding.\n            \"technology\", \"capital_cost_per_kw\", \"status\"\n        ],\n    )\n)\n\n\n\n\n\nTable 1: Technology costs.\n\n\n\n\n\n\n\n\n\n\n\n\nTechnology\nCapital cost ($/kW)\nVariable cost ($/MWh)\nStatus\nNotes\n\n\n\n\nSolar PV\n1250.00\n0.00\nfirm\nCurrency: A$1,250/kW\n\n\nBattery | BESS\n890.50\n12.40\nprovisional\nliteral pipe: north | south\n\n\nGas *peaker*\n760.00\n185.00\nreview\nemphasis must remain literal\n\n\nHydrogen &lt;draft&gt;\nnot available\n240.00\nmissing\nHTML-looking text must be escaped\n\n\nDemand response\n140.00\n-15.00\ncredit\nnegative value is intentional\n\n\n\n\n\n\nFirst-row finding. For Solar PV, capital cost ($/kW) is 1250.00 $/kW and status is firm.",
+    "crumbs": [
+      "Tutorials",
+      "What TraceCite does"
+    ]
+  },
+  {
+    "objectID": "examples/python/dirty_dataframe.html#what-the-canonical-model-provides",
+    "href": "examples/python/dirty_dataframe.html#what-the-canonical-model-provides",
+    "title": "What TraceCite does",
+    "section": "What the canonical model provides",
+    "text": "What the canonical model provides\nFor either input route, TraceCite derives:\n\nraw source evidence;\ncanonical Markdown;\nnormalised retrieval text;\ntable-level and row-level records; and\ndiagnostics, identifiers, and source hashes.\n\nThese are retrieval representations, not embedding vectors. The public API and CLI inspection workflow is demonstrated in the ranked-results tutorial.",
+    "crumbs": [
+      "Tutorials",
+      "What TraceCite does"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/index.html",
+    "href": "examples/report-adoption/aemo-isp-comparison/index.html",
+    "title": "Evidence-backed AEMO report workflow",
+    "section": "",
+    "text": "This example shows how TraceCite supports a routine evidence-backed report from local authoring through a publish-only snapshot. It uses the 2024 and 2026 Australian Energy Market Operator Integrated System Plans to demonstrate physical-page citations, local-to-public link routing, searchable indexing, diagnostics, and publication without the source PDFs or database.\nRead the published AEMO comparison.",
+    "crumbs": [
+      "Examples",
+      "Evidence-backed report workflow"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/index.html#workflow",
+    "href": "examples/report-adoption/aemo-isp-comparison/index.html#workflow",
+    "title": "Evidence-backed AEMO report workflow",
+    "section": "Workflow",
+    "text": "Workflow\nRun the workflow from docs/examples/report-adoption/aemo-isp-comparison/:\npython3 scripts/render_docs.py\n\nuv run --project ../../../.. python -m tracecite docs author \\\n  --docs-config docs/tracecite.toml \\\n  --repo-root .\n\nuv run --project ../../../.. python -m tracecite docs index \\\n  --docs-config docs/tracecite.toml \\\n  --repo-root .\n\nuv run --project ../../../.. python -m tracecite docs search \\\n  \"coal retirement Step Change\" \\\n  --docs-config docs/tracecite.toml \\\n  --repo-root .\n\nuv run --project ../../../.. python -m tracecite docs doctor \\\n  --docs-config docs/tracecite.toml \\\n  --repo-root .\n\nuv run --project ../../../.. python -m tracecite docs check \\\n  --docs-config docs/tracecite.toml \\\n  --repo-root .\n\npython3 scripts/update_public_snapshot.py\npython3 -S scripts/publish_static.py /path/to/output\nThe sequence keeps each responsibility explicit:\n\ndocs/authored/report.qmd is the human-edited Quarto source.\ndocs/retained/report.md is generated evidence used for checking and indexing.\nLocal citations resolve to the PDFs under sources/aemo/ during authoring and review.\ndocs/source-links.toml routes recognised PDF citations to official AEMO URLs for the public target.\npublic/report.md is the committed publish-only snapshot.\n.tracecite/ and docs/.tracecite-stage/ remain disposable derived state.",
+    "crumbs": [
+      "Examples",
+      "Evidence-backed report workflow"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/index.html#evidence-used-in-the-comparison",
+    "href": "examples/report-adoption/aemo-isp-comparison/index.html#evidence-used-in-the-comparison",
+    "title": "Evidence-backed AEMO report workflow",
+    "section": "Evidence used in the comparison",
+    "text": "Evidence used in the comparison\nThe report cites physical page 10 of the 2024 ISP and physical pages 76-77 of the 2026 ISP. The headline percentages use different fleet baselines, so Figure 18 of the 2026 ISP provides the direct edition-to-edition comparison on common capacity and time axes.\nSearch rank is used to find candidate evidence, not to prove the final interpretation. The cited pages and Figure 18 must still be read in their source context before the report is published.",
+    "crumbs": [
+      "Examples",
+      "Evidence-backed report workflow"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/index.html#publication-boundary",
+    "href": "examples/report-adoption/aemo-isp-comparison/index.html#publication-boundary",
+    "title": "Evidence-backed AEMO report workflow",
+    "section": "Publication boundary",
+    "text": "Publication boundary\nThe publish-only script reads only public/ and static/. It does not require TraceCite, Quarto, the source PDFs, the vector database, the index-input mirror, or the embedding-model cache.",
+    "crumbs": [
+      "Examples",
+      "Evidence-backed report workflow"
+    ]
+  },
+  {
+    "objectID": "guide/repository_layout.html",
+    "href": "guide/repository_layout.html",
+    "title": "Repository layout",
+    "section": "",
+    "text": "TraceCite keeps implementation, tests, build tools, and published documentation separate. User-facing examples live with the documentation under docs/examples/ rather than in a parallel top-level example tree.\n\n.\n├── docs/\n│   ├── examples/\n│   │   ├── julia/\n│   │   ├── literate_documenter/\n│   │   ├── python/\n│   │   ├── report-adoption/\n│   │   └── workbook-vector-search/\n│   ├── formats/\n│   │   ├── diagnostics.html.md\n│   │   ├── diagnostics.md\n│   │   ├── html-documenter.html.md\n│   │   ├── html-documenter.md\n│   │   ├── pandoc-tables.html.md\n│   │   └── pandoc-tables.md\n│   ├── guide/\n│   │   ├── api.html.md\n│   │   ├── api.md\n│   │   ├── architecture.html.md\n│   │   ├── architecture.md\n│   │   ├── embedding-site.html.md\n│   │   ├── embedding-site.md\n│   │   ├── repository_layout.html.md\n│   │   ├── repository_layout.py\n│   │   ├── searchable-evidence.html.md\n│   │   └── searchable-evidence.md\n│   ├── _quarto-julia.yml\n│   ├── _quarto-python.yml\n│   ├── _quarto.yml\n│   ├── bootstrap.toml\n│   ├── index.html.md\n│   └── index.md\n├── docs_jl/\n│   ├── src/\n│   │   ├── examples/\n│   │   ├── formats/\n│   │   ├── guide/\n│   │   ├── dirty_dataframe.md\n│   │   └── index.md\n│   ├── make.jl\n│   └── Project.toml\n├── docs_quarto_jl/\n│   ├── examples/\n│   │   ├── julia/\n│   │   ├── literate_documenter/\n│   │   ├── python/\n│   │   ├── report-adoption/\n│   │   └── workbook-vector-search/\n│   ├── formats/\n│   │   ├── diagnostics.html.md\n│   │   ├── diagnostics.md\n│   │   ├── html-documenter.html.md\n│   │   ├── html-documenter.md\n│   │   ├── pandoc-tables.html.md\n│   │   └── pandoc-tables.md\n│   ├── guide/\n│   │   ├── api.html.md\n│   │   ├── api.md\n│   │   ├── architecture.html.md\n│   │   ├── architecture.md\n│   │   ├── embedding-site.html.md\n│   │   ├── embedding-site.md\n│   │   ├── repository_layout.html.md\n│   │   ├── searchable-evidence.html.md\n│   │   └── searchable-evidence.md\n│   ├── _quarto.yml\n│   ├── index.html.md\n│   └── index.md\n├── docs_quarto_py/\n│   ├── examples/\n│   │   ├── julia/\n│   │   ├── literate_documenter/\n│   │   ├── python/\n│   │   ├── report-adoption/\n│   │   └── workbook-vector-search/\n│   ├── formats/\n│   │   ├── diagnostics.html.md\n│   │   ├── diagnostics.md\n│   │   ├── html-documenter.html.md\n│   │   ├── html-documenter.md\n│   │   ├── pandoc-tables.html.md\n│   │   └── pandoc-tables.md\n│   ├── guide/\n│   │   ├── api.html.md\n│   │   ├── api.md\n│   │   ├── architecture.html.md\n│   │   ├── architecture.md\n│   │   ├── embedding-site.html.md\n│   │   ├── embedding-site.md\n│   │   ├── repository_layout.html.md\n│   │   ├── repository_layout.py\n│   │   ├── searchable-evidence.html.md\n│   │   └── searchable-evidence.md\n│   ├── _quarto.yml\n│   ├── index.html.md\n│   └── index.md\n├── fixtures/\n│   └── sample-report.md\n├── scripts/\n│   ├── bootstrap_docs.py\n│   ├── compact_database.py\n│   ├── diagnose_database.py\n│   └── render_repository_tree.py\n├── src/\n│   ├── tracecite/\n│   │   ├── docs/\n│   │   ├── evidence/\n│   │   ├── tables/\n│   │   ├── __init__.py\n│   │   ├── __main__.py\n│   │   └── cli.py\n│   └── TraceCite.jl\n├── test/\n│   └── runtests.jl\n├── tests/\n│   ├── docs/\n│   │   ├── __init__.py\n│   │   ├── test_config.py\n│   │   ├── test_contract.py\n│   │   ├── test_docs_cli.py\n│   │   ├── test_modes.py\n│   │   ├── test_report_adoption.py\n│   │   ├── test_stage.py\n│   │   └── test_vectorize.py\n│   ├── evidence/\n│   │   ├── conftest.py\n│   │   ├── measure_help.py\n│   │   ├── test_asset_generations.py\n│   │   ├── test_cli.py\n│   │   ├── test_config.py\n│   │   ├── test_database_maintenance.py\n│   │   ├── test_extract_pages.py\n│   │   ├── test_help.py\n│   │   ├── test_installation.py\n│   │   ├── test_manifest.py\n│   │   ├── test_page_cli.py\n│   │   ├── test_page_json.py\n│   │   ├── test_page_selection.py\n│   │   ├── test_page_selection_surfaces.py\n│   │   ├── test_parsers.py\n│   │   ├── test_paths.py\n│   │   ├── test_profile_cli.py\n│   │   ├── test_schema_v3_contract.py\n│   │   ├── test_search.py\n│   │   ├── test_search_assets.py\n│   │   ├── test_source_links.py\n│   │   ├── test_sync.py\n│   │   ├── test_vector_backend.py\n│   │   ├── test_verify.py\n│   │   └── test_workbook.py\n│   ├── fixtures/\n│   │   ├── docs-vector/\n│   │   └── publish-only/\n│   ├── test_bootstrap_docs.py\n│   ├── test_build_docs.py\n│   ├── test_docs.py\n│   ├── test_evidence_imports.py\n│   ├── test_repository_tree.py\n│   ├── test_tables.py\n│   └── test_version.py\n├── LICENSE\n├── Project.toml\n├── pyproject.toml\n├── README.md\n└── uv.lock\n\nExecutable tutorials are grouped by language under docs/examples/. Source-backed examples own their pages and source files in the same workspace: the workbook example lives under docs/examples/workbook-vector-search/, while the AEMO report-adoption workflow remains self-contained under docs/examples/report-adoption/. The standalone Literate/Documenter fixture remains under docs/examples/literate_documenter/. Written guides and format references remain under docs/guide/ and docs/formats/.\nMost executable pages use percent-format .py and .jl, while written pages use .md. The report-adoption example intentionally uses one authored .qmd file because it demonstrates how an external Quarto project produces retained Markdown for TraceCite.",
+    "crumbs": [
+      "Design",
+      "Repository layout"
+    ]
+  },
+  {
+    "objectID": "formats/html-documenter.html",
+    "href": "formats/html-documenter.html",
+    "title": "Literate and Documenter HTML tables",
+    "section": "",
+    "text": "Literate.jl and Documenter.jl can preserve a table as raw HTML MIME output. The HTML adapter keeps the original markup and creates a canonical Markdown table before normalisation.\nBoth ordinary raw HTML and Documenter/Pandoc raw blocks are recognised:\n```@raw html\n&lt;table&gt;...&lt;/table&gt;\n```\n\n```{=html}\n&lt;table&gt;...&lt;/table&gt;\n```\n\n\nDocumenter HTML MIME weather table.\n\n\n\n\nPlace\n\n\nObserved event\n\n\n\n\nDate\n\n\nTemperature (°C)\n\n\n\n\n\n\nOodnadatta Airport\n\n\n1960-01-02\n\n\n50.7\n\n\n\n\nMardie\n\n\n2022-01-13\n\n\n50.5\n\n\n\n\nThe row and column spans are expanded deterministically in the canonical model and recorded as table.span-expanded diagnostics. Nested tables are not silently flattened.\nA minimal Literate/Documenter project using this route is included under docs/examples/literate_documenter/.\nAfter Quarto produces retained Markdown, the public tracecite prepare command can create the optional inspection-site copy. The automatic tracecite docs build docs command coordinates that export for this repository; external projects can invoke tracecite prepare directly after their own Quarto render.",
+    "crumbs": [
+      "Formats",
+      "Literate and Documenter HTML"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html",
+    "href": "guide/searchable-evidence.html",
+    "title": "From documents to searchable evidence",
+    "section": "",
+    "text": "TraceCite turns documents and workbooks into searchable evidence without requiring a separate prose summary for every table. A table written directly in Markdown and a table produced by Python or Julia remain available for inspection, while TraceCite can derive retrieval text for full-text and vector search.\nTable normalisation, database synchronisation, semantic embedding, hybrid search, integrity diagnostics, and explicit pruning are available through the current package. PDF evidence also supports selected-page retrieval, indexed page assets, and selected-page derivative PDFs.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#source-material",
+    "href": "guide/searchable-evidence.html#source-material",
+    "title": "From documents to searchable evidence",
+    "section": "Source material",
+    "text": "Source material\nTraceCite can work with written documents as well as rendered output.\n\n\n\nTable 1: Inputs supported by the documentation and searchable-evidence workflows.\n\n\n\n\n\n\n\n\n\nInput\nRole\n\n\n\n\nPlain Markdown\nWritten prose and tables that can be normalised or indexed with heading and line context\n\n\nPDF\nPage-local text, page renders, figure crops, and physical-page evidence identity\n\n\n.xlsx or .xlsm workbook\nStored worksheet values indexed with source hashes and worksheet/A1-range locators\n\n\nExecutable Python or Julia\nAnalysis and narrative that produce tables during execution\n\n\nRetained Markdown\nExecuted document evidence preserved after rendering\n\n\nHTML\nTable-normalisation input from notebooks, Literate.jl, Documenter.jl, and other HTML-producing tools\n\n\n\n\n\n\nExecutable documentation is useful when a table depends on code or changing input data, but it is not a requirement. A written Markdown file is a first-class source for prose, tables, full-text search, and vector search.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#written-and-retained-markdown",
+    "href": "guide/searchable-evidence.html#written-and-retained-markdown",
+    "title": "From documents to searchable evidence",
+    "section": "Written and retained Markdown",
+    "text": "Written and retained Markdown\nWritten Markdown and retained Markdown serve different purposes even when both are committed to the repository.\n\nWritten Markdown contains explanations and tables maintained directly in the source document.\nRetained Markdown contains the result of executing and rendering a document. It is generated rather than edited by hand.\nHTML is the presentation layer for browser readers. It can be rebuilt from the source and retained evidence.\n\nCommitted retained Markdown makes executed evidence reviewable in ordinary diffs and available without rerunning every analysis. Source-adjacent *.html.md files stay beside their executable pages, while ordinary *.html files and build directories remain disposable.\nThe documentation layout is:\ndocs/\n    index.md                       written documentation\n    guide/                         written documentation\n    examples/                      published tutorials and complete workflows\n    examples/python/               executable Python pages\n    examples/julia/                executable Julia pages\n    examples/workbook-vector-search/  workbook page and its local source workbook\n    examples/report-adoption/      self-contained evidence-backed report example\n    guide/architecture.md          written documentation\n    guide/architecture.html.md     committed generated evidence\n    examples/python/hottest_temperature.html.md  Tutorial 3 inspection output\n    build/                         rebuildable HTML website\nQuarto writes retained Markdown beside each executable source. The public docs builder copies those files into docs/build/ for the inspection site. Retained Markdown is committed; ordinary HTML, docs/build/, Quarto caches, and .tracecite/ are disposable.\nIn this repository, tracecite docs build docs owns the generic build orchestration: configured-input discovery, automatic or explicit language selection, Quarto execution, retained-Markdown staging, inspection export, and freshness checks. Use --only python or --only julia for explicit reduced builds. An external project can run tracecite prepare directly after its Quarto render.\nSee docs/examples/report-adoption/aemo-isp-comparison/ for a complete, real adoption example covering author, check, index, search, doctor, and publish-only modes together.\nSee docs/examples/workbook-vector-search/ for a semantic workbook-search example whose page and local .xlsx source are owned by the same example workspace.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#three-separate-operations",
+    "href": "guide/searchable-evidence.html#three-separate-operations",
+    "title": "From documents to searchable evidence",
+    "section": "Three separate operations",
+    "text": "Three separate operations\nNormalising a document, synchronising a collection, and computing embeddings are related but distinct operations.\n\nNormalise\nNormalisation is a pure document transformation. It reads Markdown or HTML, discovers tables, and returns:\n\nthe original table source;\ncanonical Markdown with a predictable structure;\ntable-level retrieval text;\nindependently meaningful row records;\nstable table and row identifiers;\nstructural diagnostics and content hashes.\n\nNormalisation does not modify a database or call an embedding model.\nThe public debug-markdown output shows raw source, canonical Markdown, normalised retrieval text, and row records together. It is an inspection text representation, not a vector.\ntracecite document normalise report.md --to jsonl\n\n\nSynchronise\ntracecite sync resolves explicit and manifest-selected sources under a caller-owned root, hashes them, parses only invalidated content, rebuilds locator-aware chunks, and updates FTS5 and sqlite-vec state. Supported source files are .pdf, .md, .xlsx, and .xlsm.\nA synchronisation run:\n\nresolves explicit source paths and include/exclude globs;\nhashes selected files and snapshots sources that require parsing;\nparses changed sources or rebuilds chunks from retained extraction when only chunking metadata changed;\nreuses unchanged chunks and embeddings where their identities remain valid;\ncommits source, retained extraction, chunk, FTS, vector, and asset changes atomically;\nreports unavailable selected sources and indexed-but-unselected sources without deleting them.\n\nSynchronisation is incremental, idempotent, and non-pruning. Removing stored sources requires an explicit tracecite prune preview and apply operation.\ntracecite sync \\\n  --root sources \\\n  --manifest tracecite-sources.toml \\\n  --database .tracecite/evidence.sqlite \\\n  --model-cache-dir .tracecite/model-cache\n\n\nEmbed\nEmbedding is an internal synchronisation stage rather than a separate public command. TraceCite generates vectors only for semantic inputs that are missing from the active model’s cache. A model-only change can add the new model’s vector coverage without reparsing source files, and --reembed forces embedding regeneration when required.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#what-becomes-searchable",
+    "href": "guide/searchable-evidence.html#what-becomes-searchable",
+    "title": "From documents to searchable evidence",
+    "section": "What becomes searchable",
+    "text": "What becomes searchable\nSource formats produce different retrieval units and locators.\n\nPDF text blocks retain physical-page context and can be associated with validated page renders and figure crops.\nMarkdown headings and paragraphs retain heading paths and source line ranges.\nWorkbook rows retain worksheet identity and exact A1 ranges; a separate bounding range provides a convenient envelope without implying that every enclosed cell contributed.\nEvery indexed source retains its normalised path and SHA-256 so a result can be tied to the indexed file version.\n\nThe table-normalisation API separately produces table-level and row-level retrieval text while preserving the original table as evidence. Those records are useful when a caller needs individual rows to stand alone semantically rather than embedding one large raw table.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#restrict-search-to-one-source-type",
+    "href": "guide/searchable-evidence.html#restrict-search-to-one-source-type",
+    "title": "From documents to searchable evidence",
+    "section": "Restrict search to one source type",
+    "text": "Restrict search to one source type\ntracecite search accepts a repeatable --source-type option (pdf, markdown, workbook) that restricts results to the named type or types. The filter is applied before lexical and vector candidates are fused and truncated to --limit, not as a filter on the already-truncated result list, so a filtered query re-ranks within the matching type rather than merely hiding non-matching rows from an unfiltered ranking.\nThe following run indexes the two docs/examples/report-adoption/aemo-isp-comparison/ ISP PDFs together with the docs/examples/workbook-vector-search/ EV workbook in one database, then queries \"electric vehicle charging\". Unfiltered, the top five results mix both source types:\n\n\n\nRank\nSource type\nSource\nProvenance\n\n\n\n\n1\npdf\n2026-integrated-system-plan.pdf\nlexical, vector\n\n\n2\nworkbook\n2023-iasr-ev-workbook.xlsx\nlexical, vector\n\n\n3\nworkbook\n2023-iasr-ev-workbook.xlsx\nlexical, vector\n\n\n4\nworkbook\n2023-iasr-ev-workbook.xlsx\nlexical, vector\n\n\n5\npdf\n2024-integrated-system-plan.pdf\nvector\n\n\n\ntracecite search \"electric vehicle charging\" --database evidence.sqlite --source-type pdf --limit 3\n1  pdf  2026-integrated-system-plan.pdf  page 41  lexical, vector\n2  pdf  2024-integrated-system-plan.pdf  page 43  vector\n3  pdf  2024-integrated-system-plan.pdf  page 69  vector\nRank 2 and rank 3 were not in the unfiltered top five at all — restricting to pdf surfaced the next-best PDF matches instead of merely dropping the workbook rows from the same fixed-size list.\ntracecite search \"electric vehicle charging\" --database evidence.sqlite --source-type workbook --limit 3\n1  workbook  2023-iasr-ev-workbook.xlsx  sheet \"BEV_PHEV_Profile_kW (Weekend)\"  lexical, vector\n2  workbook  2023-iasr-ev-workbook.xlsx  sheet \"Context and Use\"                lexical, vector\n3  workbook  2023-iasr-ev-workbook.xlsx  sheet \"BEV_PHEV_Profile_kW (Weekday)\"  lexical, vector",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#pdf-page-selection-does-not-apply-to-workbooks",
+    "href": "guide/searchable-evidence.html#pdf-page-selection-does-not-apply-to-workbooks",
+    "title": "From documents to searchable evidence",
+    "section": "PDF page selection does not apply to workbooks",
+    "text": "PDF page selection does not apply to workbooks\ntracecite page and tracecite extract-pages retrieve physical PDF pages; they reject a workbook path with a clear error rather than misinterpreting a worksheet index as a page number:\ntracecite page 2024-integrated-system-plan.pdf 10 --database evidence.sqlite\nExecutive summary\n\nHowever, to meet government policy objectives, the ISP forecasts that the remaining coal fleet will\nclose two to three times faster than those announcements. In Step Change, the most likely\ntracecite page 2023-iasr-ev-workbook.xlsx 1 --database evidence.sqlite\nsource is not a pdf: 2023-iasr-ev-workbook.xlsx\n(exit code 2)",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#written-and-retained-representations",
+    "href": "guide/searchable-evidence.html#written-and-retained-representations",
+    "title": "From documents to searchable evidence",
+    "section": "Written and retained representations",
+    "text": "Written and retained representations\nThe same page may exist as written Markdown and retained Markdown:\ndocs/guide/architecture.md\ndocs/guide/architecture.html.md\nTraceCite treats these as separate source paths when both are selected. The manifest does not silently infer that a handwritten page and a retained render are one logical record. Select the authoritative representation for the intended corpus, or use an exclude rule to prevent duplicate full-text and vector results. A standalone Markdown file without a rendered counterpart uses the written file itself as evidence.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/searchable-evidence.html#end-to-end-flow",
+    "href": "guide/searchable-evidence.html#end-to-end-flow",
+    "title": "From documents to searchable evidence",
+    "section": "End-to-end flow",
+    "text": "End-to-end flow\nwritten or retained Markdown ------------------------+\nPDF -------------------------------------------------+\nOOXML workbook --------------------------------------+----&gt; source-specific parsing\nPython or Julia -&gt; committed retained Markdown ------+               |\n                                                                     v\n                                                        locator-aware chunks\n                                                                     |\n                                                        database synchronisation\n                                                                     |\n                                                        FTS5 + semantic vectors\n                                                                     |\n                                                            hybrid search results\nThe database is derived state. Documents and retained evidence remain inspectable without it, and a configured collection can be rebuilt when the schema, parser, normaliser, or embedding model changes.",
+    "crumbs": [
+      "Design",
+      "From documents to searchable evidence"
+    ]
+  },
+  {
+    "objectID": "guide/architecture.html",
+    "href": "guide/architecture.html",
+    "title": "Architecture",
+    "section": "",
+    "text": "Table 1: TraceCite file roles and authority.\n\n\n\n\n\n\n\n\n\n\n\nFile or artefact\nPrimary consumer\nRole\nEdited directly?\n\n\n\n\n.py / .jl\nReaders and execution tools\nExecutable analysis, narrative, and generation logic\nYes\n\n\nretained .md\nSearch and indexing tools\nExecuted evidence with original tables\nNo\n\n\n.ipynb\nNotebook users\nOptional interactive projection of Python source\nUsually synchronised\n\n\n.html\nWebsite readers\nPolished browsing interface\nNo\n\n\nembedding Markdown copy\nAuditors and developers\nRaw tables plus derived retrieval text\nNo\n\n\nfuture SQLite/vector index\nSearch clients and applications\nRebuildable retrieval cache\nNo",
+    "crumbs": [
+      "Design",
+      "Architecture"
+    ]
+  },
+  {
+    "objectID": "guide/architecture.html#file-roles",
+    "href": "guide/architecture.html#file-roles",
+    "title": "Architecture",
+    "section": "",
+    "text": "Table 1: TraceCite file roles and authority.\n\n\n\n\n\n\n\n\n\n\n\nFile or artefact\nPrimary consumer\nRole\nEdited directly?\n\n\n\n\n.py / .jl\nReaders and execution tools\nExecutable analysis, narrative, and generation logic\nYes\n\n\nretained .md\nSearch and indexing tools\nExecuted evidence with original tables\nNo\n\n\n.ipynb\nNotebook users\nOptional interactive projection of Python source\nUsually synchronised\n\n\n.html\nWebsite readers\nPolished browsing interface\nNo\n\n\nembedding Markdown copy\nAuditors and developers\nRaw tables plus derived retrieval text\nNo\n\n\nfuture SQLite/vector index\nSearch clients and applications\nRebuildable retrieval cache\nNo",
+    "crumbs": [
+      "Design",
+      "Architecture"
+    ]
+  },
+  {
+    "objectID": "guide/architecture.html#authority-chain",
+    "href": "guide/architecture.html#authority-chain",
+    "title": "Architecture",
+    "section": "Authority chain",
+    "text": "Authority chain\ninput data\n   -&gt; executable page (.py or .jl)\n   -&gt; retained Pandoc Markdown\n      -&gt; HTML website\n      -&gt; TraceCite canonical table model\n         -&gt; normalised retrieval text\n         -&gt; diagnostics\n         -&gt; optional inspection site\nTraceCite does not infer analytical meaning that the source does not state. It preserves captions, column labels, explicit units, rank, ordering metadata, and section context. It does not guess Celsius from a plausible temperature or infer that the first numeric row is a maximum.\nThe searchable evidence pipeline explains how written documents, retained Markdown, table normalisation, database synchronisation, and embeddings fit together.\nConfigured row identity is also separated from display order. An observation can move from rank 2 to rank 1 while keeping the same deterministic row identifier, allowing a future indexer to update the record rather than treating it as unrelated evidence.",
+    "crumbs": [
+      "Design",
+      "Architecture"
+    ]
+  },
+  {
+    "objectID": "guide/architecture.html#why-raw-tables-remain",
+    "href": "guide/architecture.html#why-raw-tables-remain",
+    "title": "Architecture",
+    "section": "Why raw tables remain",
+    "text": "Why raw tables remain\nThe raw table remains useful evidence. A reader can inspect column alignment, missing cells, duplicate ranks, inconsistent units, impossible values, and whether the normaliser itself introduced an error. The derived representation is easier to retrieve, but it is not treated as independent evidence.",
+    "crumbs": [
+      "Design",
+      "Architecture"
+    ]
+  },
+  {
+    "objectID": "guide/architecture.html#literate-and-documenter",
+    "href": "guide/architecture.html#literate-and-documenter",
+    "title": "Architecture",
+    "section": "Literate and Documenter",
+    "text": "Literate and Documenter\nLiterate-generated Markdown may contain an HTML MIME table rather than a native pipe table. TraceCite stores the HTML unchanged, converts it to canonical Markdown, and sends that canonical table through the same normaliser used by Quarto output.",
+    "crumbs": [
+      "Design",
+      "Architecture"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "TraceCite table normalisation",
+    "section": "",
+    "text": "TraceCite treats generated documentation as a reusable analytical knowledge layer. Executable .py and .jl pages remain the computational authority. Quarto retains their executed Pandoc Markdown and produces the documentation website. TraceCite then preserves each raw table and derives a deterministic retrieval representation without mutating the original site.",
+    "crumbs": [
+      "Overview"
+    ]
+  },
+  {
+    "objectID": "index.html#two-representations-one-result",
+    "href": "index.html#two-representations-one-result",
+    "title": "TraceCite table normalisation",
+    "section": "Two representations, one result",
+    "text": "Two representations, one result\n.py / .jl\n    -&gt; Quarto execution\n    -&gt; retained Pandoc Markdown with raw tables\n    -&gt; HTML website\n\nretained Markdown\n    -&gt; `tracecite prepare` CLI/package\n    -&gt; raw table evidence + normalised row text\n    -&gt; future FTS/vector/SQLite ingestion\nThe normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact normalised retrieval text prepared for a future embedding pipeline; it does not contain vectors.",
+    "crumbs": [
+      "Overview"
+    ]
+  },
+  {
+    "objectID": "index.html#build-boundary",
+    "href": "index.html#build-boundary",
+    "title": "TraceCite table normalisation",
+    "section": "Build boundary",
+    "text": "Build boundary\ntracecite docs build docs is the public automatic builder. It discovers configured executable inputs, selects the complete site or a safe reduced fallback, stages retained Markdown, and optionally renders the inspection site. Use its --only python and --only julia options for explicit reduced builds.\n\n\n\nTable 1: The four representations produced or consumed by the showcase.\n\n\n\n\n\n\n\n\n\n\n\nRepresentation\nPreserved content\nMain consumer\nDefault location\n\n\n\n\nRaw Pandoc or HTML table\nOriginal rows, columns, units, alignment, caption, and visible anomalies\nSearch tools and auditors\nQuarto retained Markdown\n\n\nNormalised retrieval text\nRepeated field labels, table and section context, row identities, and diagnostics\nFTS/vector ingestion\nNormalisedTable and _tracecite/tables.jsonl\n\n\nHTML table\nQuarto styling, navigation, captions, and browser presentation\nReaders\ndocs/build/\n\n\nEmbedding inspection copy\nRaw table followed by the exact derived representation\nDevelopers validating the transform\n.tracecite/embedding-site/",
+    "crumbs": [
+      "Overview"
+    ]
+  },
+  {
+    "objectID": "index.html#what-this-repository-demonstrates",
+    "href": "index.html#what-this-repository-demonstrates",
+    "title": "TraceCite table normalisation",
+    "section": "What this repository demonstrates",
+    "text": "What this repository demonstrates\n\nNative Pandoc pipe, grid, and multiline table parsing through Pandoc’s AST.\nHTML table conversion for Literate.jl, Documenter.jl, PrettyTables, and notebook HTML MIME output.\nExplicit diagnostics for spans, duplicate ranks, mixed units, declared ordering, empty headers, and malformed structures.\nFour executable tutorials: what TraceCite does, the optional Julia route, ranked-result normalisation and inspection, and Quarto code visibility.\nTwo source-backed examples under docs/examples/: semantic workbook retrieval and an end-to-end AEMO report-adoption workflow.\nThe Python-only build includes the ranked-results tutorial in examples/python/hottest_temperature.py.\nA complete --keep-embedding-markdown website copy that can be rendered by a second Quarto run.\nNo project-wide .qmd requirement: executable tutorials use percent-format .py and .jl, prose pages use .md, and the report-adoption example uses one .qmd source to demonstrate an external Quarto authoring workflow.",
+    "crumbs": [
+      "Overview"
+    ]
+  },
+  {
+    "objectID": "index.html#build-the-documentation-and-inspection-sites",
+    "href": "index.html#build-the-documentation-and-inspection-sites",
+    "title": "TraceCite table normalisation",
+    "section": "Build the documentation and inspection sites",
+    "text": "Build the documentation and inspection sites\npython -m pip install -e .\nuv run tracecite docs build docs\nuv run tracecite docs build docs --only python\njulia --version\nuv run tracecite docs build docs --only julia\nThe public builder uses the complete base Quarto configuration when both runtimes are available. If Julia is unavailable, it warns with every skipped configured Julia source and uses the Python-only overlay. Explicit reduced builds use the two --only commands above. Projects that already have rendered and staged retained Markdown can invoke tracecite prepare directly.\nAfter a Quarto render, another project can invoke tracecite prepare directly with its retained Markdown root and preparation options.",
+    "crumbs": [
+      "Overview"
+    ]
+  },
+  {
+    "objectID": "guide/api.html",
+    "href": "guide/api.html",
+    "title": "Python API and CLI",
+    "section": "",
+    "text": "from tracecite.tables import normalise_pandoc_table\n\ntable = normalise_pandoc_table(markdown_table)\nprint(table.normalised_text)\nThe ranked-results tutorial demonstrates this API end to end, including the public debug-markdown representation in the Python-only build: examples/python/hottest_temperature.py.\nThe result contains:\n\nraw_source — exact evidence supplied to the function;\ncanonical_markdown — deterministic flat Markdown;\nnormalised_text — table-level retrieval text;\nrow_ids — stable per-row identifiers, using configured logical keys where available;\nrow_records — independently interpretable row text;\ndiagnostics — structural and semantic warnings or errors;\nsource_hash and normaliser_version — incremental rebuild keys.",
+    "crumbs": [
+      "Design",
+      "Python API and CLI"
+    ]
+  },
+  {
+    "objectID": "guide/api.html#core-function",
+    "href": "guide/api.html#core-function",
+    "title": "Python API and CLI",
+    "section": "",
+    "text": "from tracecite.tables import normalise_pandoc_table\n\ntable = normalise_pandoc_table(markdown_table)\nprint(table.normalised_text)\nThe ranked-results tutorial demonstrates this API end to end, including the public debug-markdown representation in the Python-only build: examples/python/hottest_temperature.py.\nThe result contains:\n\nraw_source — exact evidence supplied to the function;\ncanonical_markdown — deterministic flat Markdown;\nnormalised_text — table-level retrieval text;\nrow_ids — stable per-row identifiers, using configured logical keys where available;\nrow_records — independently interpretable row text;\ndiagnostics — structural and semantic warnings or errors;\nsource_hash and normaliser_version — incremental rebuild keys.",
+    "crumbs": [
+      "Design",
+      "Python API and CLI"
+    ]
+  },
+  {
+    "objectID": "guide/api.html#html-adapter",
+    "href": "guide/api.html#html-adapter",
+    "title": "Python API and CLI",
+    "section": "HTML adapter",
+    "text": "HTML adapter\nfrom tracecite.tables import normalise_html_table\n\ntable = normalise_html_table(documenter_html)\nThe HTML adapter expands row and column spans, records diagnostics, preserves the original HTML, and then uses the same Pandoc-table normal form.",
+    "crumbs": [
+      "Design",
+      "Python API and CLI"
+    ]
+  },
+  {
+    "objectID": "guide/api.html#whole-document-extraction",
+    "href": "guide/api.html#whole-document-extraction",
+    "title": "Python API and CLI",
+    "section": "Whole-document extraction",
+    "text": "Whole-document extraction\nfrom tracecite.tables import normalise_document_tables\n\ntables = normalise_document_tables(\n    markdown,\n    document_path=\"docs/build/examples/python/weather.html.md\",\n    source_code_path=\"docs/examples/python/weather.py\",\n)",
+    "crumbs": [
+      "Design",
+      "Python API and CLI"
+    ]
+  },
+  {
+    "objectID": "guide/api.html#cli",
+    "href": "guide/api.html#cli",
+    "title": "Python API and CLI",
+    "section": "CLI",
+    "text": "CLI\ntracecite table normalise table.md --to text\ntracecite table normalise table.html --from html --to debug-markdown\ntracecite document normalise report.md --to jsonl\ntracecite check docs/build\nPandoc is authoritative. --allow-pipe-fallback is an explicit reduced mode for ordinary pipe tables when neither standalone Pandoc nor Quarto’s bundled Pandoc is available.",
+    "crumbs": [
+      "Design",
+      "Python API and CLI"
+    ]
+  },
+  {
+    "objectID": "guide/api.html#prepare-the-inspectable-copy",
+    "href": "guide/api.html#prepare-the-inspectable-copy",
+    "title": "Python API and CLI",
+    "section": "Prepare the inspectable copy",
+    "text": "Prepare the inspectable copy\nFor a repository with Quarto sources, the automatic builder is:\nuv run tracecite docs build docs\nuv run tracecite docs build docs --only python\nuv run tracecite docs build docs --only julia\nIt discovers configured render inputs and performs Quarto execution, retained Markdown staging, and optional inspection export. Use the direct prepare command below when a site has already been rendered and staged.\ntracecite prepare docs/build \\\n  --project-config docs/_quarto.yml \\\n  --project-profile python \\\n  --source-project docs \\\n  --keep-embedding-markdown .tracecite/embedding-site \\\n  --render-embedding-site\nThe selected profile is merged into the copied site’s configuration. Navigation, theme, brand, and ordinary website settings are retained. Execution engines and pre/post-render hooks are removed because the copied Markdown already contains executed results.\ndebug-markdown and the embedding inspection site expose normalised retrieval text, raw and canonical representations, and row records. They do not generate or display embedding vectors.",
+    "crumbs": [
+      "Design",
+      "Python API and CLI"
+    ]
+  },
+  {
+    "objectID": "guide/embedding-site.html",
+    "href": "guide/embedding-site.html",
+    "title": "Embedding inspection site",
+    "section": "",
+    "text": "The normal site must stay pure Quarto output. TraceCite therefore does not append retrieval records to docs/build.\n--keep-embedding-markdown creates a separate, reproducible website source tree:\ndocs/build/                         original Quarto output\n    index.html\n    examples/python/hottest_temperature.html\n    examples/python/hottest_temperature.html.md\n\n.tracecite/embedding-site/          generated inspection source\n    _quarto.yml\n    index.md\n    examples/python/hottest_temperature.md\n    _tracecite/tables.jsonl\n    _tracecite/manifest.json\n    _site/                           optional second Quarto render\nEach copied page contains the original table followed by a collapsible callout with the normalised retrieval text. This makes transformation errors visible without polluting the main documentation site or double-weighting the table in a normal indexing run. The inspection representation is text, not an embedding vector.\nThe copied _quarto.yml is produced by merging the original base configuration with the selected profile. TraceCite preserves the site’s theme, brand, navigation, and format settings, rewrites executable-page links from .py or .jl to copied .md pages, disables execution, and removes build hooks. The second Quarto run is therefore a presentation-only render of already executed knowledge.\nThe public tracecite docs build docs command runs Quarto, stages retained Markdown, calls the inspection export, and optionally renders the second site. Use the public CLI for automatic, Python-only, and Julia-only builds:\nuv run tracecite docs build docs\nuv run tracecite docs build docs --only python\njulia --version\nuv run tracecite docs build docs --only julia\nProjects using a different build system can run the public tracecite prepare command directly after Quarto has produced retained Markdown; that direct command remains available independently of the automatic builder.\nThe ranked-results tutorial in the Python-only build shows the public API and CLI mapping that produces this inspection source: ../examples/python/hottest_temperature.py.\ntracecite prepare docs/build \\\n  --project-config docs/_quarto.yml \\\n  --project-profile python \\\n  --source-project docs \\\n  --keep-embedding-markdown .tracecite/embedding-site \\\n  --render-embedding-site\nThe second site is diagnostic. It is marked as generated, protected against accidental deletion of unrelated directories, and safe to rebuild at any time.",
+    "crumbs": [
+      "Design",
+      "Embedding inspection site"
+    ]
+  },
+  {
+    "objectID": "formats/diagnostics.html",
+    "href": "formats/diagnostics.html",
+    "title": "Structural diagnostics",
+    "section": "",
+    "text": "TraceCite stores diagnostics separately from factual retrieval text. Warnings therefore remain searchable for audits without being presented as the primary answer.",
+    "crumbs": [
+      "Formats",
+      "Structural diagnostics"
+    ]
+  },
+  {
+    "objectID": "formats/diagnostics.html#mixed-unit-example",
+    "href": "formats/diagnostics.html#mixed-unit-example",
+    "title": "Structural diagnostics",
+    "section": "Mixed-unit example",
+    "text": "Mixed-unit example\n\n\n\nTable 1: A deliberately inconsistent unit example used to demonstrate diagnostics.\n\n\n\n\n\nRank\nPlace\nMaximum temperature (°C)\n\n\n\n\n1\nExample A\n323.85 K\n\n\n2\nExample B\n50.5 °C\n\n\n\n\n\n\nThe normaliser emits both table.unit-conflict and table.mixed-units. It does not convert either value automatically.",
+    "crumbs": [
+      "Formats",
+      "Structural diagnostics"
+    ]
+  },
+  {
+    "objectID": "formats/diagnostics.html#other-checks",
+    "href": "formats/diagnostics.html#other-checks",
+    "title": "Structural diagnostics",
+    "section": "Other checks",
+    "text": "Other checks\n\nduplicate and non-monotonic ordinal columns;\nduplicate rows and headers;\nmissing configured row identity columns;\nexplicit ordering inconsistent with row order;\nunsupported nested tables;\ncell spans and footer flattening;\nempty tables and generated fallback headers.",
+    "crumbs": [
+      "Formats",
+      "Structural diagnostics"
+    ]
+  },
+  {
+    "objectID": "formats/diagnostics.html#failure-preservation",
+    "href": "formats/diagnostics.html#failure-preservation",
+    "title": "Structural diagnostics",
+    "section": "Failure preservation",
+    "text": "Failure preservation\nDefault document ingestion does not discard a table merely because optional metadata or structure is malformed. TraceCite preserves the exact raw source, marks the result as unsupported, records table.normalisation-failed, and emits no retrieval text for that table. The original evidence remains available for inspection.\nStrict validation deliberately fails instead:\ntracecite check docs/build\nFor example, this invalid metadata is shown as source text rather than interpreted by this page:\n&lt;!-- tracecite-table: {not-json} --&gt;\n| A | B |\n|---|---|\n| 1 | 2 |\n\n: Broken metadata. {#tbl-broken}",
+    "crumbs": [
+      "Formats",
+      "Structural diagnostics"
+    ]
+  },
+  {
+    "objectID": "formats/pandoc-tables.html",
+    "href": "formats/pandoc-tables.html",
+    "title": "Pandoc Markdown tables",
+    "section": "",
+    "text": "Table 1: A captioned pipe table that is directly readable by people and Pandoc.\n\n\n\n\n\nRank\nStation\nDate\nDaily maximum temperature (°C)\n\n\n\n\n1\nOodnadatta Airport\n1960-01-02\n50.7\n\n\n2\nMardie\n2022-01-13\n50.5",
+    "crumbs": [
+      "Formats",
+      "Pandoc Markdown tables"
+    ]
+  },
+  {
+    "objectID": "formats/pandoc-tables.html#native-pipe-table",
+    "href": "formats/pandoc-tables.html#native-pipe-table",
+    "title": "Pandoc Markdown tables",
+    "section": "",
+    "text": "Table 1: A captioned pipe table that is directly readable by people and Pandoc.\n\n\n\n\n\nRank\nStation\nDate\nDaily maximum temperature (°C)\n\n\n\n\n1\nOodnadatta Airport\n1960-01-02\n50.7\n\n\n2\nMardie\n2022-01-13\n50.5",
+    "crumbs": [
+      "Formats",
+      "Pandoc Markdown tables"
+    ]
+  },
+  {
+    "objectID": "formats/pandoc-tables.html#grid-table",
+    "href": "formats/pandoc-tables.html#grid-table",
+    "title": "Pandoc Markdown tables",
+    "section": "Grid table",
+    "text": "Grid table\n\n\n\nTable 2: A grid table discovered through the Pandoc AST.\n\n\n\n\n\n\n\n\n\n\nRank\nTechnology\nCost ($/kW)\n\n\n\n\n1\nSolar PV\n1250\n\n\n2\nBattery BESS\n890.5",
+    "crumbs": [
+      "Formats",
+      "Pandoc Markdown tables"
+    ]
+  },
+  {
+    "objectID": "formats/pandoc-tables.html#multiline-table",
+    "href": "formats/pandoc-tables.html#multiline-table",
+    "title": "Pandoc Markdown tables",
+    "section": "Multiline table",
+    "text": "Multiline table\n\n\n\nTable 3: A multiline table whose headers and cells span source lines.\n\n\n\n\n\n\n\n\n\n\n\nCentered Header\nDefault Aligned\nRight Aligned\nLeft Aligned\n\n\n\n\nFirst\nrow\n12.0\nExample of a row that spans multiple lines.\n\n\nSecond\nrow\n5.0\nHere’s another one. Note the blank line between rows.\n\n\n\n\n\n\nThe document extractor preserves exact source for ordinary pipe tables. For complex Pandoc tables whose source boundaries are ambiguous, it stores Pandoc’s canonical table representation and emits an explicit diagnostic.",
+    "crumbs": [
+      "Formats",
+      "Pandoc Markdown tables"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html",
+    "href": "examples/workbook-vector-search/index.html",
+    "title": "Search an Excel workbook with vectors",
+    "section": "",
+    "text": "TraceCite can index stored worksheet content from .xlsx and .xlsm files and retrieve candidate evidence through lexical and semantic search. This example uses AEMO’s 2023 Electric Vehicle workbook because its separate weekday and weekend charging-profile worksheets provide a clear semantic retrieval case.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#source-workbook",
+    "href": "examples/workbook-vector-search/index.html#source-workbook",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Source workbook",
+    "text": "Source workbook\nWorkbook: local copy · AEMO online copy\nIndexed local file SHA-256: 5fb01b7eb8861d20a50d02628fdb686bae83f7f046a5288f2f62cb27126eb246\nBoth links open the workbook as a file. The worksheet and A1-range locators returned by TraceCite identify the relevant evidence; a generic workbook URL does not encode those locators. The SHA-256 above identifies the bundled local copy used for this example and should be recalculated before assuming that a separately downloaded copy is byte-identical.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#synchronise-the-workbook",
+    "href": "examples/workbook-vector-search/index.html#synchronise-the-workbook",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Synchronise the workbook",
+    "text": "Synchronise the workbook\nThe demonstrated run used sentence-transformers/all-MiniLM-L6-v2 and a maximum chunk size of 2,400 characters. The model must already be present in the selected cache or be available for download.\nmkdir -p .tracecite\n\ncat &gt; .tracecite/workbook-example.toml &lt;&lt;'TOML'\nschema_version = 1\n\n[[source]]\npath = \"2023-iasr-ev-workbook.xlsx\"\nTOML\n\ntracecite sync \\\n  --root docs/examples/workbook-vector-search/sources/aemo \\\n  --manifest .tracecite/workbook-example.toml \\\n  --database .tracecite/workbook-example.sqlite \\\n  --model-cache-dir .tracecite/model-cache \\\n  --max-chunk-chars 2400\n\ntracecite doctor --database .tracecite/workbook-example.sqlite\nThe run indexed ten worksheets as 616 retrieval chunks and generated 616 embeddings. The integrity check reported no issues.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#run-a-semantic-query",
+    "href": "examples/workbook-vector-search/index.html#run-a-semantic-query",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Run a semantic query",
+    "text": "Run a semantic query\nThe query describes the subject rather than copying a workbook phrase:\ntracecite search \\\n  \"weekday versus weekend electric vehicle charging behaviour\" \\\n  --database .tracecite/workbook-example.sqlite \\\n  --model-cache-dir .tracecite/model-cache \\\n  --limit 5\nThe two highest-ranked results were retrieved through the vector index:\n\n\n\n\n\n\n\n\n\n\nRank\nWorksheet\nBounding range\nExact contributing ranges\nRetrieval\n\n\n\n\n1\nBEV_PHEV_Profile_kW (Weekend)\nB2:AT9\nB2, B3, B4, B5, B8, C9:AT9\nvector\n\n\n2\nBEV_PHEV_Profile_kW (Weekday)\nB2:AT8\nB2, B3, B4, B5, B7, C8:AT8\nvector\n\n\n\nvector provenance means that semantic retrieval contributed the result while lexical FTS did not contribute it to this ranking. The bounding range is a convenient envelope; only the listed exact ranges contributed to the indexed passage.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#run-a-literal-query",
+    "href": "examples/workbook-vector-search/index.html#run-a-literal-query",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Run a literal query",
+    "text": "Run a literal query\nA query that copies exact workbook wording is retrieved through lexical search rather than semantic search:\ntracecite search \"Articulated Truck\" \\\n  --database .tracecite/workbook-example.sqlite \\\n  --model-cache-dir .tracecite/model-cache \\\n  --limit 1\nThe top result is retrieved through both indexes at once:\n\n\n\nRank\nWorksheet\nBounding range\nRetrieval\n\n\n\n\n1\nBEV_Numbers\nB132:AH135\nlexical, vector\n\n\n\nThe matched cell is B132 = \"Articulated Truck\"; the returned bounding range also includes three adjacent rows the chunk grouped it with. “Articulated Truck” is a literal fleet-category label copied from the workbook, unlike the reworded semantic query above, so the FTS5 index also contributes to this result’s provenance.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#confirm-re-synchronisation-is-idempotent",
+    "href": "examples/workbook-vector-search/index.html#confirm-re-synchronisation-is-idempotent",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Confirm re-synchronisation is idempotent",
+    "text": "Confirm re-synchronisation is idempotent\nRunning the same synchronisation command again without changing the workbook does not reparse it or regenerate embeddings:\ntracecite sync \\\n  --root docs/examples/workbook-vector-search/sources/aemo \\\n  --manifest .tracecite/workbook-example.toml \\\n  --database .tracecite/workbook-example.sqlite \\\n  --model-cache-dir .tracecite/model-cache \\\n  --max-chunk-chars 2400\nstatus: ok\nadded: []\nreparsed: []\nrechunked: []\nrenamed: []\nselected-missing: []\nunmatched-globs: []\nindexed-but-unselected: []\ncleanup-warnings: []\nunchanged: 1 source(s)\nchunks added=0 updated=0 deleted=0\nembeddings generated: 0",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#cite-the-workbook-evidence",
+    "href": "examples/workbook-vector-search/index.html#cite-the-workbook-evidence",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Cite the workbook evidence",
+    "text": "Cite the workbook evidence\nA defensible citation keeps the workbook identity and the evidence locator together:\n\nAEMO, 2023 Electric Vehicle workbook, sheets BEV_PHEV_Profile_kW (Weekend) and BEV_PHEV_Profile_kW (Weekday), exact ranges B2, B3, B4, B5, B8, C9:AT9 and B2, B3, B4, B5, B7, C8:AT8 (local workbook; online workbook).\n\nThe links provide local and official online access to the source workbook. The worksheet names, exact A1 ranges, and local file hash provide the evidence identity that the workbook links themselves cannot express portably.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/workbook-vector-search/index.html#evidence-boundary",
+    "href": "examples/workbook-vector-search/index.html#evidence-boundary",
+    "title": "Search an Excel workbook with vectors",
+    "section": "Evidence boundary",
+    "text": "Evidence boundary\nSearch rank identifies candidate evidence rather than proving a claim on its own. Inspect the returned cells in the workbook before relying on them, and record whether a formula, cached value, or literal stored value supports the interpretation.",
+    "crumbs": [
+      "Examples",
+      "Workbook vector search"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/public/report.html",
+    "href": "examples/report-adoption/aemo-isp-comparison/public/report.html",
+    "title": "Coal Retirement Trajectories in the 2024 and 2026 ISPs",
+    "section": "",
+    "text": "[!NOTE]\n\nThis report demonstrates TraceCite’s authoring, page-citation, indexing, search, diagnostics, and publish-only workflow. It compares AEMO’s Step Change coal-capacity trajectories rather than reconstructing unit-level closure schedules.\n\n\n\nAEMO’s 2024 and 2026 Integrated System Plans both project coal retirement under the central Step Change scenario, but their headline percentages use different baselines and should not be compared as if they measured the same fleet.\nThe 2024 ISP described retirement from the then-current 21 GW fleet:\n\nIn Step Change, the most likely scenario, about 90% of the current 21 gigawatts (GW) of coal capacity would retire by 2034-35, and all before 2040.\n— 2024 Integrated System Plan\n\nThe 2026 ISP described retirement from the fleet remaining in that edition:\n\nIn the Step Change scenario, the ODP projects that nearly two thirds of the NEM’s remaining coal fleet would retire by 2035 (faster than that announced), with all to retire by 2050.\n— 2026 Integrated System Plan\n\nThe 2026 report separately states that 10 major coal-fired generators had retired since 2012. It does not establish that a large share of the 2024 fleet retired between the two ISP editions.\n\n\n\nFigure 18 in the 2026 ISP plots the 2024 ISP Step Change trajectory and the 2026 Step Change trajectory on the same capacity and time axes. The 2026 trajectory remains above the 2024 trajectory through much of the 2030s and reaches zero around 2050, whereas the 2024 trajectory reaches zero around 2040.\nBoth editions project retirement faster than announced schedules. They also discuss operating and fuel costs, maintenance, fuel security, renewable competition, reliability and security needs, and government policy settings. The comparison therefore supports a later projected coal exit in the 2026 Step Change trajectory, but not a policy-only explanation for the difference.\nAEMO publishes both reports, along with supporting appendices and consultation material, on its Integrated System Plan program page.",
+    "crumbs": [
+      "Examples",
+      "AEMO ISP comparison"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/public/report.html#summary-statements-use-different-baselines",
+    "href": "examples/report-adoption/aemo-isp-comparison/public/report.html#summary-statements-use-different-baselines",
+    "title": "Coal Retirement Trajectories in the 2024 and 2026 ISPs",
+    "section": "",
+    "text": "AEMO’s 2024 and 2026 Integrated System Plans both project coal retirement under the central Step Change scenario, but their headline percentages use different baselines and should not be compared as if they measured the same fleet.\nThe 2024 ISP described retirement from the then-current 21 GW fleet:\n\nIn Step Change, the most likely scenario, about 90% of the current 21 gigawatts (GW) of coal capacity would retire by 2034-35, and all before 2040.\n— 2024 Integrated System Plan\n\nThe 2026 ISP described retirement from the fleet remaining in that edition:\n\nIn the Step Change scenario, the ODP projects that nearly two thirds of the NEM’s remaining coal fleet would retire by 2035 (faster than that announced), with all to retire by 2050.\n— 2026 Integrated System Plan\n\nThe 2026 report separately states that 10 major coal-fired generators had retired since 2012. It does not establish that a large share of the 2024 fleet retired between the two ISP editions.",
+    "crumbs": [
+      "Examples",
+      "AEMO ISP comparison"
+    ]
+  },
+  {
+    "objectID": "examples/report-adoption/aemo-isp-comparison/public/report.html#figure-18-provides-the-aligned-comparison",
+    "href": "examples/report-adoption/aemo-isp-comparison/public/report.html#figure-18-provides-the-aligned-comparison",
+    "title": "Coal Retirement Trajectories in the 2024 and 2026 ISPs",
+    "section": "",
+    "text": "Figure 18 in the 2026 ISP plots the 2024 ISP Step Change trajectory and the 2026 Step Change trajectory on the same capacity and time axes. The 2026 trajectory remains above the 2024 trajectory through much of the 2030s and reaches zero around 2050, whereas the 2024 trajectory reaches zero around 2040.\nBoth editions project retirement faster than announced schedules. They also discuss operating and fuel costs, maintenance, fuel security, renewable competition, reliability and security needs, and government policy settings. The comparison therefore supports a later projected coal exit in the 2026 Step Change trajectory, but not a policy-only explanation for the difference.\nAEMO publishes both reports, along with supporting appendices and consultation material, on its Integrated System Plan program page.",
+    "crumbs": [
+      "Examples",
+      "AEMO ISP comparison"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html",
+    "href": "examples/python/hottest_temperature.html",
+    "title": "Normalise and inspect ranked results",
+    "section": "",
+    "text": "Pandas sorts and ranks these weather rows. TraceCite does not rank data: it records the declared ordering, validates relevant structure, and derives canonical and normalised retrieval representations.\n\n\nShow source code\nimport pandas as pd\n\nfrom tracecite.tables import knowledge_table\n\n\nweather_events = pd.DataFrame(\n    {\n        \"place\": [\n            \"Mardie, Western Australia\",\n            \"Oodnadatta Airport, South Australia\",\n            \"Onslow Airport, Western Australia\",\n            \"Roebourne, Western Australia\",\n        ],\n        \"date\": pd.to_datetime(\n            [\"2022-01-13\", \"1960-01-02\", \"2022-01-13\", \"2022-01-13\"]\n        ),\n        \"daily_maximum_temperature_c\": [50.5, 50.7, 50.7, 50.5],\n    }\n)\n\nhighest_temperature = (\n    weather_events.sort_values(\n        [\"daily_maximum_temperature_c\", \"date\", \"place\"],\n        ascending=[False, True, True],\n        kind=\"stable\",\n    )\n    .head(4)\n    .reset_index(drop=True)\n)\nhighest_temperature.insert(0, \"rank\", range(1, len(highest_temperature) + 1))",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#responsibility-boundary",
+    "href": "examples/python/hottest_temperature.html#responsibility-boundary",
+    "title": "Normalise and inspect ranked results",
+    "section": "",
+    "text": "Pandas sorts and ranks these weather rows. TraceCite does not rank data: it records the declared ordering, validates relevant structure, and derives canonical and normalised retrieval representations.\n\n\nShow source code\nimport pandas as pd\n\nfrom tracecite.tables import knowledge_table\n\n\nweather_events = pd.DataFrame(\n    {\n        \"place\": [\n            \"Mardie, Western Australia\",\n            \"Oodnadatta Airport, South Australia\",\n            \"Onslow Airport, Western Australia\",\n            \"Roebourne, Western Australia\",\n        ],\n        \"date\": pd.to_datetime(\n            [\"2022-01-13\", \"1960-01-02\", \"2022-01-13\", \"2022-01-13\"]\n        ),\n        \"daily_maximum_temperature_c\": [50.5, 50.7, 50.7, 50.5],\n    }\n)\n\nhighest_temperature = (\n    weather_events.sort_values(\n        [\"daily_maximum_temperature_c\", \"date\", \"place\"],\n        ascending=[False, True, True],\n        kind=\"stable\",\n    )\n    .head(4)\n    .reset_index(drop=True)\n)\nhighest_temperature.insert(0, \"rank\", range(1, len(highest_temperature) + 1))",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#emit-the-ranked-table",
+    "href": "examples/python/hottest_temperature.html#emit-the-ranked-table",
+    "title": "Normalise and inspect ranked results",
+    "section": "1. Emit the ranked table",
+    "text": "1. Emit the ranked table\nThe ranking is complete before TraceCite receives the DataFrame. The helper records the ordering and row identity as metadata but does not reorder rows.\n\n\nShow source code\nranked_markdown = knowledge_table(\n    highest_temperature,\n    caption=\"Highest observed daily maximum temperatures.\",\n    table_id=\"tbl-highest-temperature-python\",\n    labels={\n        \"rank\": \"Rank\",\n        \"place\": \"Place\",\n        \"date\": \"Date\",\n        \"daily_maximum_temperature_c\": \"Daily maximum temperature (°C)\",\n    },\n    formats={\n        \"date\": lambda value: value.strftime(\"%Y-%m-%d\"),\n        \"daily_maximum_temperature_c\": \".1f\",\n    },\n    units={\"daily_maximum_temperature_c\": \"°C\"},\n    ordering=(\n        \"Daily maximum temperature descending, then Date ascending, \"\n        \"then Place ascending\"\n    ),\n    row_identity=[\"place\", \"date\"],\n    description=\"Highest daily maximum-temperature events in the example dataset.\",\n    summary=False,\n)\nprint(ranked_markdown)\n\n\n\n\n\nTable 1: Highest observed daily maximum temperatures.\n\n\n\n\n\n\n\n\n\n\n\nRank\nPlace\nDate\nDaily maximum temperature (°C)\n\n\n\n\n1\nOodnadatta Airport, South Australia\n1960-01-02\n50.7\n\n\n2\nOnslow Airport, Western Australia\n2022-01-13\n50.7\n\n\n3\nMardie, Western Australia\n2022-01-13\n50.5\n\n\n4\nRoebourne, Western Australia\n2022-01-13\n50.5",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#normalise-and-inspect-through-the-public-api",
+    "href": "examples/python/hottest_temperature.html#normalise-and-inspect-through-the-public-api",
+    "title": "Normalise and inspect ranked results",
+    "section": "2. Normalise and inspect through the public API",
+    "text": "2. Normalise and inspect through the public API\nThe debug renderer shows raw Markdown, canonical Markdown, normalised retrieval text, and row records together. This inspection representation is the exact text prepared for retrieval or a future embedding pipeline; it is not an embedding vector, and TraceCite does not currently generate or display vectors.\n\n\nShow source code\nfrom tracecite.tables import TableContext, normalise_pandoc_table, render_debug_markdown\n\n\nnormalised = normalise_pandoc_table(\n    ranked_markdown,\n    context=TableContext(\n        document_path=\"docs/build/examples/python/hottest_temperature.html.md\",\n        section_path=(\"Normalise and inspect ranked results\",),\n        source_code_path=\"docs/examples/python/hottest_temperature.py\",\n    ),\n)\n# Remove Markdown hard-break markers so retained source remains whitespace-clean.\nprint(render_debug_markdown(normalised).replace(\"  \\n\", \"\\n\"))\n\n\nTraceCite table-normalisation inspection\nSource document: docs/build/examples/python/hottest_temperature.html.md Table identifier: tbl-highest-temperature-python\n\nRaw source\n&lt;!-- tracecite-table: {\"description\": \"Highest daily maximum-temperature events in the example dataset.\", \"ordering\": \"Daily maximum temperature descending, then Date ascending, then Place ascending\", \"row_identity\": [\"Place\", \"Date\"], \"units\": {\"Daily maximum temperature (°C)\": \"°C\"}} --&gt;\n\n|   Rank | Place                               | Date       |   Daily maximum temperature (°C) |\n|-------:|:------------------------------------|:-----------|---------------------------------:|\n|      1 | Oodnadatta Airport, South Australia | 1960-01-02 |                             50.7 |\n|      2 | Onslow Airport, Western Australia   | 2022-01-13 |                             50.7 |\n|      3 | Mardie, Western Australia           | 2022-01-13 |                             50.5 |\n|      4 | Roebourne, Western Australia        | 2022-01-13 |                             50.5 |\n\n: Highest observed daily maximum temperatures. {#tbl-highest-temperature-python}\n\n\nCanonical Markdown\n| Rank | Place | Date | Daily maximum temperature (°C) |\n| ---: | :--- | :--- | ---: |\n| 1 | Oodnadatta Airport, South Australia | 1960-01-02 | 50.7 |\n| 2 | Onslow Airport, Western Australia | 2022-01-13 | 50.7 |\n| 3 | Mardie, Western Australia | 2022-01-13 | 50.5 |\n| 4 | Roebourne, Western Australia | 2022-01-13 | 50.5 |\n\n: Highest observed daily maximum temperatures. {#tbl-highest-temperature-python}\n\n\nNormalised retrieval text\nTable: Highest observed daily maximum temperatures.\nTable identifier: tbl-highest-temperature-python\nSource document: docs/build/examples/python/hottest_temperature.html.md\nExecutable source: docs/examples/python/hottest_temperature.py\nSection: Normalise and inspect ranked results\nDescription: Highest daily maximum-temperature events in the example dataset.\nOrdering: Daily maximum temperature descending, then Date ascending, then Place ascending\nRow identity columns: Place; Date\nColumns: Rank; Place; Date; Daily maximum temperature (°C)\n\nRank 1. Place: Oodnadatta Airport, South Australia; Date: 1960-01-02; Daily maximum temperature (°C): 50.7.\n\nRank 2. Place: Onslow Airport, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.7.\n\nRank 3. Place: Mardie, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.\n\nRank 4. Place: Roebourne, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.\n\n\nRow records\n\nRow 1\nRecord ID: tbl-highest-temperature-python:row-f69c2d542ee7696e\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 1. Place: Oodnadatta Airport, South Australia; Date: 1960-01-02; Daily maximum temperature (°C): 50.7.\n\n\nRow 2\nRecord ID: tbl-highest-temperature-python:row-03e95d6b90f0b42e\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 2. Place: Onslow Airport, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.7.\n\n\nRow 3\nRecord ID: tbl-highest-temperature-python:row-99c23ed09ef524ef\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 3. Place: Mardie, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.\n\n\nRow 4\nRecord ID: tbl-highest-temperature-python:row-750a0524cb07d01d\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 4. Place: Roebourne, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#raw-source",
+    "href": "examples/python/hottest_temperature.html#raw-source",
+    "title": "Normalise and inspect ranked results",
+    "section": "Raw source",
+    "text": "Raw source\n&lt;!-- tracecite-table: {\"description\": \"Highest daily maximum-temperature events in the example dataset.\", \"ordering\": \"Daily maximum temperature descending, then Date ascending, then Place ascending\", \"row_identity\": [\"Place\", \"Date\"], \"units\": {\"Daily maximum temperature (°C)\": \"°C\"}} --&gt;\n\n|   Rank | Place                               | Date       |   Daily maximum temperature (°C) |\n|-------:|:------------------------------------|:-----------|---------------------------------:|\n|      1 | Oodnadatta Airport, South Australia | 1960-01-02 |                             50.7 |\n|      2 | Onslow Airport, Western Australia   | 2022-01-13 |                             50.7 |\n|      3 | Mardie, Western Australia           | 2022-01-13 |                             50.5 |\n|      4 | Roebourne, Western Australia        | 2022-01-13 |                             50.5 |\n\n: Highest observed daily maximum temperatures. {#tbl-highest-temperature-python}",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#canonical-markdown",
+    "href": "examples/python/hottest_temperature.html#canonical-markdown",
+    "title": "Normalise and inspect ranked results",
+    "section": "Canonical Markdown",
+    "text": "Canonical Markdown\n| Rank | Place | Date | Daily maximum temperature (°C) |\n| ---: | :--- | :--- | ---: |\n| 1 | Oodnadatta Airport, South Australia | 1960-01-02 | 50.7 |\n| 2 | Onslow Airport, Western Australia | 2022-01-13 | 50.7 |\n| 3 | Mardie, Western Australia | 2022-01-13 | 50.5 |\n| 4 | Roebourne, Western Australia | 2022-01-13 | 50.5 |\n\n: Highest observed daily maximum temperatures. {#tbl-highest-temperature-python}",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#normalised-retrieval-text",
+    "href": "examples/python/hottest_temperature.html#normalised-retrieval-text",
+    "title": "Normalise and inspect ranked results",
+    "section": "Normalised retrieval text",
+    "text": "Normalised retrieval text\nTable: Highest observed daily maximum temperatures.\nTable identifier: tbl-highest-temperature-python\nSource document: docs/build/examples/python/hottest_temperature.html.md\nExecutable source: docs/examples/python/hottest_temperature.py\nSection: Normalise and inspect ranked results\nDescription: Highest daily maximum-temperature events in the example dataset.\nOrdering: Daily maximum temperature descending, then Date ascending, then Place ascending\nRow identity columns: Place; Date\nColumns: Rank; Place; Date; Daily maximum temperature (°C)\n\nRank 1. Place: Oodnadatta Airport, South Australia; Date: 1960-01-02; Daily maximum temperature (°C): 50.7.\n\nRank 2. Place: Onslow Airport, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.7.\n\nRank 3. Place: Mardie, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.\n\nRank 4. Place: Roebourne, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#row-records",
+    "href": "examples/python/hottest_temperature.html#row-records",
+    "title": "Normalise and inspect ranked results",
+    "section": "Row records",
+    "text": "Row records\n\nRow 1\nRecord ID: tbl-highest-temperature-python:row-f69c2d542ee7696e\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 1. Place: Oodnadatta Airport, South Australia; Date: 1960-01-02; Daily maximum temperature (°C): 50.7.\n\n\nRow 2\nRecord ID: tbl-highest-temperature-python:row-03e95d6b90f0b42e\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 2. Place: Onslow Airport, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.7.\n\n\nRow 3\nRecord ID: tbl-highest-temperature-python:row-99c23ed09ef524ef\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 3. Place: Mardie, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.\n\n\nRow 4\nRecord ID: tbl-highest-temperature-python:row-750a0524cb07d01d\nTable: Highest observed daily maximum temperatures. Table identifier: tbl-highest-temperature-python. Source document: docs/build/examples/python/hottest_temperature.html.md. Executable source: docs/examples/python/hottest_temperature.py. Section: Normalise and inspect ranked results. Description: Highest daily maximum-temperature events in the example dataset. Ordering: Daily maximum temperature descending, then Date ascending, then Place ascending. Row identity columns: Place; Date. Columns: Rank; Place; Date; Daily maximum temperature (°C). Rank 4. Place: Roebourne, Western Australia; Date: 2022-01-13; Daily maximum temperature (°C): 50.5.",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/python/hottest_temperature.html#map-the-api-to-the-public-cli",
+    "href": "examples/python/hottest_temperature.html#map-the-api-to-the-public-cli",
+    "title": "Normalise and inspect ranked results",
+    "section": "3. Map the API to the public CLI",
+    "text": "3. Map the API to the public CLI\nThe equivalent public commands use the product terms debug-markdown, embedding-markdown, and the embedding inspection site:\ntracecite table normalise table.md --to debug-markdown\ntracecite document normalise report.md --to embedding-markdown\ntracecite prepare docs/build \\\n  --keep-embedding-markdown .tracecite/embedding-site \\\n  --render-embedding-site\nThese commands produce retrieval text and inspection pages, not vectors.",
+    "crumbs": [
+      "Tutorials",
+      "Normalise and inspect ranked results"
+    ]
+  },
+  {
+    "objectID": "examples/julia/dirty_dataframe.html",
+    "href": "examples/julia/dirty_dataframe.html",
+    "title": "TraceCite with Julia",
+    "section": "",
+    "text": "Julia is optional. TraceCite’s Python normaliser and CLI do not require Julia. Rendering this executable page requires Julia 1.10 or newer, DataFrames.jl, Tables.jl, and Quarto’s Julia engine.\nThis page uses the same table contract as the Python introduction: HTML MIME and native Pandoc output are two evidence routes into TraceCite’s canonical model.\n\n\nShow source code\nusing DataFrames\nusing TraceCite\n\n\ndirty_table = DataFrame(\n    technology = [\n        \"Solar PV\",\n        \"Battery | BESS\",\n        \"Gas *peaker*\",\n        \"Hydrogen &lt;draft&gt;\",\n        \"Demand response\",\n    ],\n    capital_cost_per_kw = Union{Missing, Float64}[1250.0, 890.5, 760.0, missing, 140.0],\n    variable_cost_per_mwh = [0.0, 12.4, 185.0, 240.0, -15.0],\n    status = [\"firm\", \"provisional\", \"review\", \"missing\", \"credit\"],\n    notes = [\n        \"Currency: A\\$1,250/kW\",\n        \"literal pipe: north | south\",\n        \"emphasis must remain literal\",\n        \"HTML-looking text must be escaped\",\n        \"negative value is intentional\",\n    ],\n)\n\n\n5×5 DataFrame\n\n\n\nRow\ntechnology\ncapital_cost_per_kw\nvariable_cost_per_mwh\nstatus\nnotes\n\n\n\nString\nFloat64?\nFloat64\nString\nString\n\n\n\n\n1\nSolar PV\n1250.0\n0.0\nfirm\nCurrency: A$1,250/kW\n\n\n2\nBattery | BESS\n890.5\n12.4\nprovisional\nliteral pipe: north | south\n\n\n3\nGas *peaker*\n760.0\n185.0\nreview\nemphasis must remain literal\n\n\n4\nHydrogen &lt;draft&gt;\nmissing\n240.0\nmissing\nHTML-looking text must be escaped\n\n\n5\nDemand response\n140.0\n-15.0\ncredit\nnegative value is intentional",
+    "crumbs": [
+      "Tutorials",
+      "TraceCite with Julia"
+    ]
+  },
+  {
+    "objectID": "examples/julia/dirty_dataframe.html#julia-is-optional",
+    "href": "examples/julia/dirty_dataframe.html#julia-is-optional",
+    "title": "TraceCite with Julia",
+    "section": "",
+    "text": "Julia is optional. TraceCite’s Python normaliser and CLI do not require Julia. Rendering this executable page requires Julia 1.10 or newer, DataFrames.jl, Tables.jl, and Quarto’s Julia engine.\nThis page uses the same table contract as the Python introduction: HTML MIME and native Pandoc output are two evidence routes into TraceCite’s canonical model.\n\n\nShow source code\nusing DataFrames\nusing TraceCite\n\n\ndirty_table = DataFrame(\n    technology = [\n        \"Solar PV\",\n        \"Battery | BESS\",\n        \"Gas *peaker*\",\n        \"Hydrogen &lt;draft&gt;\",\n        \"Demand response\",\n    ],\n    capital_cost_per_kw = Union{Missing, Float64}[1250.0, 890.5, 760.0, missing, 140.0],\n    variable_cost_per_mwh = [0.0, 12.4, 185.0, 240.0, -15.0],\n    status = [\"firm\", \"provisional\", \"review\", \"missing\", \"credit\"],\n    notes = [\n        \"Currency: A\\$1,250/kW\",\n        \"literal pipe: north | south\",\n        \"emphasis must remain literal\",\n        \"HTML-looking text must be escaped\",\n        \"negative value is intentional\",\n    ],\n)\n\n\n5×5 DataFrame\n\n\n\nRow\ntechnology\ncapital_cost_per_kw\nvariable_cost_per_mwh\nstatus\nnotes\n\n\n\nString\nFloat64?\nFloat64\nString\nString\n\n\n\n\n1\nSolar PV\n1250.0\n0.0\nfirm\nCurrency: A$1,250/kW\n\n\n2\nBattery | BESS\n890.5\n12.4\nprovisional\nliteral pipe: north | south\n\n\n3\nGas *peaker*\n760.0\n185.0\nreview\nemphasis must remain literal\n\n\n4\nHydrogen &lt;draft&gt;\nmissing\n240.0\nmissing\nHTML-looking text must be escaped\n\n\n5\nDemand response\n140.0\n-15.0\ncredit\nnegative value is intentional",
+    "crumbs": [
+      "Tutorials",
+      "TraceCite with Julia"
+    ]
+  },
+  {
+    "objectID": "examples/julia/dirty_dataframe.html#evidence-route-1-html-mime",
+    "href": "examples/julia/dirty_dataframe.html#evidence-route-1-html-mime",
+    "title": "TraceCite with Julia",
+    "section": "Evidence route 1: HTML MIME",
+    "text": "Evidence route 1: HTML MIME\nThe native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.\n\n\nShow source code\ndirty_table\n\n\n5×5 DataFrame\n\n\n\nRow\ntechnology\ncapital_cost_per_kw\nvariable_cost_per_mwh\nstatus\nnotes\n\n\n\nString\nFloat64?\nFloat64\nString\nString\n\n\n\n\n1\nSolar PV\n1250.0\n0.0\nfirm\nCurrency: A$1,250/kW\n\n\n2\nBattery | BESS\n890.5\n12.4\nprovisional\nliteral pipe: north | south\n\n\n3\nGas *peaker*\n760.0\n185.0\nreview\nemphasis must remain literal\n\n\n4\nHydrogen &lt;draft&gt;\nmissing\n240.0\nmissing\nHTML-looking text must be escaped\n\n\n5\nDemand response\n140.0\n-15.0\ncredit\nnegative value is intentional",
+    "crumbs": [
+      "Tutorials",
+      "TraceCite with Julia"
+    ]
+  },
+  {
+    "objectID": "examples/julia/dirty_dataframe.html#evidence-route-2-native-pandoc-tables",
+    "href": "examples/julia/dirty_dataframe.html#evidence-route-2-native-pandoc-tables",
+    "title": "TraceCite with Julia",
+    "section": "Evidence route 2: Native Pandoc tables",
+    "text": "Evidence route 2: Native Pandoc tables\nknowledge_table() needs a stable table identifier. A caption is optional, so the minimal form emits a bare pipe table without a numbered Quarto caption.\n\nShow source code\nprint(\n    knowledge_table(\n        dirty_table;\n        table_id = \"dirty-dataframe-julia-minimal\", # Required: stable TraceCite identity.\n    ),\n)\n\n\n\n\n\n\n\n\n\n\n\n\ntechnology\ncapital cost per kw\nvariable cost per mwh\nstatus\nnotes\n\n\n\n\nSolar PV\n1250\n0\nfirm\nCurrency: A$1,250/kW\n\n\nBattery | BESS\n890.5\n12.4\nprovisional\nliteral pipe: north | south\n\n\nGas *peaker*\n760\n185\nreview\nemphasis must remain literal\n\n\nHydrogen &lt;draft&gt;\nnot available\n240\nmissing\nHTML-looking text must be escaped\n\n\nDemand response\n140\n-15\ncredit\nnegative value is intentional\n\n\n\nThe advanced call below controls presentation, retrieval context, stable row identity, and the data-derived finding. TraceCite can also normalise tables produced by other libraries; this helper is a convenient Pandoc Markdown output route.\n\nShow source code\nprint(\n    knowledge_table(\n        dirty_table;\n        table_id = \"tbl-dirty-julia\", # Required: stable identity and Quarto target.\n        caption = \"Technology costs.\", # Optional: visible caption enabling Quarto references.\n        labels = Dict( # Optional: reader-facing column headings.\n            \"technology\" =&gt; \"Technology\",\n            \"capital_cost_per_kw\" =&gt; \"Capital cost (\\$/kW)\",\n            \"variable_cost_per_mwh\" =&gt; \"Variable cost (\\$/MWh)\",\n            \"status\" =&gt; \"Status\",\n            \"notes\" =&gt; \"Notes\",\n        ),\n        formats = Dict( # Optional: deterministic numeric display formats.\n            \"capital_cost_per_kw\" =&gt; \".2f\",\n            \"variable_cost_per_mwh\" =&gt; \".2f\",\n        ),\n        units = Dict( # Optional: units retained in retrieval metadata and findings.\n            \"capital_cost_per_kw\" =&gt; \"\\$/kW\",\n            \"variable_cost_per_mwh\" =&gt; \"\\$/MWh\",\n        ),\n        row_identity = [\"technology\"], # Optional: logical identity for stable row IDs.\n        summary = [ # Optional: first field is the subject of the generated finding.\n            \"technology\", \"capital_cost_per_kw\", \"status\"\n        ],\n    ),\n)\n\n\n\n\n\nTable 1: Technology costs.\n\n\n\n\n\n\n\n\n\n\n\n\nTechnology\nCapital cost ($/kW)\nVariable cost ($/MWh)\nStatus\nNotes\n\n\n\n\nSolar PV\n1250.00\n0.00\nfirm\nCurrency: A$1,250/kW\n\n\nBattery | BESS\n890.50\n12.40\nprovisional\nliteral pipe: north | south\n\n\nGas *peaker*\n760.00\n185.00\nreview\nemphasis must remain literal\n\n\nHydrogen &lt;draft&gt;\nnot available\n240.00\nmissing\nHTML-looking text must be escaped\n\n\nDemand response\n140.00\n-15.00\ncredit\nnegative value is intentional\n\n\n\n\n\n\nFirst-row finding. For Solar PV, capital cost ($/kW) is 1250.00 $/kW and status is firm.",
+    "crumbs": [
+      "Tutorials",
+      "TraceCite with Julia"
+    ]
+  }
+]
