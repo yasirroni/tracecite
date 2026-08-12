@@ -141,6 +141,42 @@ Source formats produce different retrieval units and locators.
 The table-normalisation API separately produces table-level and row-level retrieval text while preserving the original table as evidence.
 Those records are useful when a caller needs individual rows to stand alone semantically rather than embedding one large raw table.
 
+## Restrict search to one source type
+
+`tracecite search` accepts a repeatable `--source-type` option (`pdf`, `markdown`, `workbook`) that restricts results to the named type or types. The filter is applied before lexical and vector candidates are fused and truncated to `--limit`, not as a filter on the already-truncated result list, so a filtered query re-ranks within the matching type rather than merely hiding non-matching rows from an unfiltered ranking.
+
+The following run indexes the two `docs/examples/report-adoption/aemo-isp-comparison/` ISP PDFs together with the `docs/examples/workbook-vector-search/` EV workbook in one database, then queries `"electric vehicle charging"`. Unfiltered, the top five results mix both source types:
+
+| Rank | Source type | Source | Provenance |
+|---:|---|---|---|
+| 1 | pdf | `2026-integrated-system-plan.pdf` | lexical, vector |
+| 2 | workbook | `2023-iasr-ev-workbook.xlsx` | lexical, vector |
+| 3 | workbook | `2023-iasr-ev-workbook.xlsx` | lexical, vector |
+| 4 | workbook | `2023-iasr-ev-workbook.xlsx` | lexical, vector |
+| 5 | pdf | `2024-integrated-system-plan.pdf` | vector |
+
+```sh
+tracecite search "electric vehicle charging" --database evidence.sqlite --source-type pdf --limit 3
+```
+
+```text
+1  pdf  2026-integrated-system-plan.pdf  page 41  lexical, vector
+2  pdf  2024-integrated-system-plan.pdf  page 43  vector
+3  pdf  2024-integrated-system-plan.pdf  page 69  vector
+```
+
+Rank 2 and rank 3 were not in the unfiltered top five at all — restricting to `pdf` surfaced the next-best PDF matches instead of merely dropping the workbook rows from the same fixed-size list.
+
+```sh
+tracecite search "electric vehicle charging" --database evidence.sqlite --source-type workbook --limit 3
+```
+
+```text
+1  workbook  2023-iasr-ev-workbook.xlsx  sheet "BEV_PHEV_Profile_kW (Weekend)"  lexical, vector
+2  workbook  2023-iasr-ev-workbook.xlsx  sheet "Context and Use"                lexical, vector
+3  workbook  2023-iasr-ev-workbook.xlsx  sheet "BEV_PHEV_Profile_kW (Weekday)"  lexical, vector
+```
+
 ## Written and retained representations
 
 The same page may exist as written Markdown and retained Markdown:
