@@ -68,6 +68,14 @@ def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.Argume
     search_parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     search_parser.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
     search_parser.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
+    search_parser.add_argument(
+        "--source-type",
+        dest="source_types",
+        action="append",
+        choices=["pdf", "markdown", "workbook"],
+        default=None,
+        help="Restrict results to one or more source types (repeatable).",
+    )
 
     page_parser = subparsers.add_parser("page", help="Retrieve retained text for one physical page or selector.")
     _add_evidence_common_args(page_parser)

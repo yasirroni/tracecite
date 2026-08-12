@@ -101,6 +101,14 @@ tracecite doctor --database .tracecite/evidence.sqlite
 
 `sync` is incremental and non-pruning. Unavailable or no-longer-selected sources remain in the database until an explicit `tracecite prune` operation is previewed and applied.
 
+Restrict `search` to one or more source types with `--source-type` (repeatable; one of `pdf`, `markdown`, `workbook`). The filter is applied before lexical and vector candidates are ranked and truncated to `--limit`, not as a post-hoc filter on the final result list:
+
+```sh
+tracecite search "coal retirement" \
+  --database .tracecite/evidence.sqlite \
+  --source-type pdf
+```
+
 Search results include retrieval provenance and a source-specific locator. The abbreviated JSON below shows the stable workbook evidence fields; the actual worksheet and ranges depend on the indexed workbook and chunk configuration.
 
 ```json

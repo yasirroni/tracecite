@@ -88,17 +88,25 @@ def _relative_pdf_link(database_path: Path, sources_dir: Path | None, source_row
     return f"{path}#page={page}"
 
 
-def _fts_rows(conn, query, fts_limit):
-    statement = """
+def _fts_rows(conn, query, fts_limit, source_types=None):
+    type_filter = ""
+    type_params: list = []
+    if source_types:
+        placeholders = ",".join("?" for _ in source_types)
+        type_filter = f" AND sources.source_type IN ({placeholders})"
+        type_params = list(source_types)
+
+    statement = f"""
         SELECT chunks.chunk_id AS chunk_id, bm25(chunks_fts) AS score
         FROM chunks_fts
         JOIN chunks ON chunks.rowid = chunks_fts.rowid
-        WHERE chunks_fts MATCH ?
+        JOIN sources ON sources.source_pk = chunks.source_pk
+        WHERE chunks_fts MATCH ?{type_filter}
         ORDER BY bm25(chunks_fts)
         LIMIT ?
     """
     try:
-        return conn.execute(statement, (query, fts_limit)).fetchall()
+        return conn.execute(statement, [query, *type_params, fts_limit]).fetchall()
     except sqlite3.OperationalError as exc:
         if not str(exc).startswith("fts5: syntax error"):
             raise
@@ -108,15 +116,26 @@ def _fts_rows(conn, query, fts_limit):
             "Vector retrieval still uses the original query.",
             file=sys.stderr,
         )
-        return conn.execute(statement, (fallback_query, fts_limit)).fetchall()
+        return conn.execute(statement, [fallback_query, *type_params, fts_limit]).fetchall()
 
 
-def _search(conn, sources_dir, query, limit, fts_limit, vector_limit, model_cache_dir, database_path):
+def _search(
+    conn,
+    sources_dir,
+    query,
+    limit,
+    fts_limit,
+    vector_limit,
+    model_cache_dir,
+    database_path,
+    *,
+    source_types=None,
+):
     from . import schema, sync as sync_module, vector_backend
 
     config = schema.load_config(conn)
 
-    fts_rows = _fts_rows(conn, query, fts_limit)
+    fts_rows = _fts_rows(conn, query, fts_limit, source_types)
     fts_rank = {row["chunk_id"]: rank for rank, row in enumerate(fts_rows, start=1)}
 
     if hasattr(model_cache_dir, "embed"):
@@ -130,9 +149,23 @@ def _search(conn, sources_dir, query, limit, fts_limit, vector_limit, model_cach
     query_vector = embedder.embed([query])[0]
 
     active_model_id = config.embedding_model_id
-    allowed_rows = conn.execute(
-        "SELECT embedding_id FROM embeddings WHERE model_id = ?", (active_model_id,)
-    ).fetchall()
+    if source_types:
+        placeholders = ",".join("?" for _ in source_types)
+        allowed_rows = conn.execute(
+            f"""
+            SELECT DISTINCT chunk_embeddings.embedding_id
+            FROM chunk_embeddings
+            JOIN embeddings ON embeddings.embedding_id = chunk_embeddings.embedding_id
+            JOIN chunks ON chunks.chunk_id = chunk_embeddings.chunk_id
+            JOIN sources ON sources.source_pk = chunks.source_pk
+            WHERE embeddings.model_id = ? AND sources.source_type IN ({placeholders})
+            """,
+            [active_model_id, *source_types],
+        ).fetchall()
+    else:
+        allowed_rows = conn.execute(
+            "SELECT embedding_id FROM embeddings WHERE model_id = ?", (active_model_id,)
+        ).fetchall()
     allowed_ids = [row["embedding_id"] for row in allowed_rows]
 
     backend = vector_backend.SqliteVecBackend()
@@ -244,6 +277,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             args.vector_limit,
             args.model_cache_dir,
             args.database,
+            source_types=getattr(args, "source_types", None),
         )
         source_cache: dict[str, object] = {}
         for result in results:

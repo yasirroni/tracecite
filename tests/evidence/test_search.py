@@ -22,6 +22,45 @@ def _sync_corpus(corpus_dir, manifest_path, database_path, embedder):
     return sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
 
 
+def _sync_mixed_type_corpus(corpus_dir, manifest_path, database_path, embedder):
+    build_pdf(
+        corpus_dir / "doc.pdf",
+        [["Retirement", "Coal plant retirement dates were pushed later in this planning cycle report."]],
+    )
+    build_markdown(
+        corpus_dir / "doc.md",
+        "# Retirement\n\nCoal plant retirement dates were pushed later in this planning cycle note.\n",
+    )
+    write_manifest(manifest_path, {"doc.pdf": "doc.pdf", "doc.md": "doc.md"})
+    return sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+
+
+def test_search_source_type_filter_restricts_lexical_and_vector_results(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    _sync_mixed_type_corpus(corpus_dir, manifest_path, database_path, make_embedder())
+    conn = schema.connect(database_path)
+    try:
+        unfiltered = _search(conn, corpus_dir, "coal plant retirement", 5, 50, 50, make_embedder(), database_path)
+        assert {result["source_type"] for result in unfiltered} == {"pdf", "markdown"}
+
+        pdf_only = _search(
+            conn, corpus_dir, "coal plant retirement", 5, 50, 50, make_embedder(), database_path,
+            source_types=["pdf"],
+        )
+        assert pdf_only
+        assert {result["source_type"] for result in pdf_only} == {"pdf"}
+
+        markdown_only = _search(
+            conn, corpus_dir, "coal plant retirement", 5, 50, 50, make_embedder(), database_path,
+            source_types=["markdown"],
+        )
+        assert markdown_only
+        assert {result["source_type"] for result in markdown_only} == {"markdown"}
+    finally:
+        conn.close()
+
+
 def test_fts_initial_population_and_integrity(corpus_dir, manifest_path, database_path, make_embedder):
     _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
     conn = schema.connect(database_path)
