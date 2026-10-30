@@ -131,3 +131,4 @@ owned = [".gitignore", "_quarto.yml"]
 [[project]]
 name = "docs_jl"
 owned = [".gitignore", "Project.toml", "make.jl", "src/dirty_dataframe.md"]
+ignored = ["Manifest.toml"]
