@@ -18,6 +18,7 @@ from ._text import (
     is_missing,
     normalise_label,
     slug,
+    strip_caption_id,
 )
 from .models import (
     NormalisedTable,
@@ -75,18 +76,14 @@ def normalise_pandoc_table(
             f"normalise_pandoc_table expects exactly one table; found {len(parsed_tables)}"
         )
 
-    parsed = parsed_tables[0]
-    result = _build_normalised_table(
-        parsed,
+    return normalise_parsed_table(
+        parsed_tables[0],
         raw_source=source,
-        source_format="pandoc-markdown",
         context=context,
         metadata=metadata,
         extra_diagnostics=parse_diagnostics,
+        strict=strict,
     )
-    if strict and result.has_errors:
-        raise TableNormalisationError(_strict_message(result))
-    return result
 
 
 def normalise_parsed_table(
@@ -772,11 +769,7 @@ def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
     while cursor < len(lines) and not lines[cursor].strip():
         cursor += 1
     if cursor < len(lines) and lines[cursor].lstrip().startswith(":"):
-        caption = lines[cursor].lstrip()[1:].strip()
-        match = re.search(r"\s*\{#([A-Za-z][A-Za-z0-9_.:-]*)\}\s*$", caption)
-        if match:
-            table_id = match.group(1)
-            caption = caption[: match.start()].strip()
+        caption, table_id = strip_caption_id(lines[cursor].lstrip()[1:])
     return ParsedPandocTable(
         table_id=table_id,
         caption=caption,
