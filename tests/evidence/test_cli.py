@@ -1,5 +1,4 @@
-"""CLI-level tests, including the exact invocation contract from the task
-card ("Tool-project layout and invocation contract")."""
+"""CLI-level tests, including the package invocation contract."""
 
 from __future__ import annotations
 

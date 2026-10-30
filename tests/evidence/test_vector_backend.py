@@ -113,8 +113,6 @@ def test_backend_search_scans_shards_for_filtered_and_unfiltered_results(conn):
 
 
 def test_schema_v1_database_requires_rebuild_and_resync(tmp_path):
-    """This is the closest existing test module for schema compatibility."""
-
     database_path = tmp_path / "schema-v1.sqlite"
     connection = schema.connect(database_path)
     schema.ensure_schema(connection)

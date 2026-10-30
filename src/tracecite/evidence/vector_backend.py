@@ -1,10 +1,7 @@
-"""Narrow vector-backend interface, hiding all sqlite-vec-specific SQL.
+"""sqlite-vec storage and KNN search for embedding vectors.
 
-Synchronisation, retrieval, verification, and CLI code must depend only on
-``SqliteVecBackend`` (or the ``VectorBackend`` protocol it implements), never
-on vec0 virtual-table SQL directly. This is the seam plan 0006 requires so a
-later vector-store migration would not require rewriting parsers, chunk
-synchronisation, lexical retrieval, report verification, or the CLI.
+All vec0 virtual-table SQL lives here; the rest of the evidence code calls
+``SqliteVecBackend``.
 """
 
 from __future__ import annotations
@@ -74,8 +71,6 @@ def version(conn: sqlite3.Connection) -> str:
 
 
 class SqliteVecBackend:
-    """The default (and, for this task, only) vector-backend implementation."""
-
     def __init__(self, table: str = VECTOR_TABLE) -> None:
         self.table = table
 

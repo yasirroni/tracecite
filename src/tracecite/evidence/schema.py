@@ -1,16 +1,12 @@
-"""Versioned SQLite schema for the local TraceCite (plan 0006).
+"""Versioned SQLite schema for a TraceCite evidence database.
 
 One SQLite file holds ordinary relational tables, an FTS5 lexical index, and
 a normalised (model_id, semantic_input_hash)-keyed embedding store backed by
 sqlite-vec. PDF page renders and crops are written to a repo-relative
 ``imgs/`` tree next to the database; SQLite stores only their metadata.
 
-Every real corpus gets its own database created fresh with this schema from
-the start (see task 0089's "Database-path model" contract). This module
-does not migrate task 0083's bootstrap smoke-test table
-(``tracecite_bootstrap``); it refuses to touch a database that already
-contains unrecognised tables so a bootstrap artifact is never silently
-reused as a real corpus database.
+Schemas are never migrated. A database with another schema version or with
+tables this module did not create is rejected; rebuild it at a fresh path.
 """
 
 from __future__ import annotations
@@ -172,9 +168,7 @@ def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
     """Create the schema if the database is empty, or load its config.
 
     Raises ``IncompatibleDatabaseError`` if the database already has tables
-    that are not part of this schema (for example, task 0083's bootstrap
-    ``tracecite_bootstrap`` metadata table) -- callers must choose a
-    fresh database path for a real corpus rather than reusing that one.
+    that are not part of this schema.
     """
 
     existing = _existing_tables(conn)
@@ -195,8 +189,7 @@ def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
         raise IncompatibleDatabaseError(
             "database already contains unrecognised tables "
             f"({sorted(unknown)}); this tool never migrates or reuses an "
-            "unrelated database (e.g. task 0083's bootstrap smoke-test "
-            "file) -- choose a fresh --database path for this corpus"
+            "unrelated database -- choose a fresh --database path for this corpus"
         )
 
     _create_schema(conn)

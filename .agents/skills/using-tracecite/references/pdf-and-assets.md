@@ -14,7 +14,7 @@ reopening the PDF.
 
 `chunking.group_units()` merges adjacent units into one chunk while they share the same
 `heading_path` and `physical_page` and stay under `--max-chunk-chars` (default 1200) — so a chunk
-never silently straddles a heading or page boundary. PDF chunks are page-local by design; a chunk spanning multiple pages never happens in the current implementation (plan 0006 only permits it when content genuinely spans pages, which this version does not yet detect).
+never silently straddles a heading or page boundary. PDF chunks are page-local: a chunk never spans two pages.
 
 ## Markdown extraction
 

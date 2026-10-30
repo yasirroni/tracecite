@@ -1,4 +1,4 @@
-"""Incremental, transaction-safe synchronisation lifecycle (plan 0006).
+"""Incremental, transaction-safe synchronisation lifecycle.
 
     scan filesystem
         |
@@ -329,7 +329,10 @@ class _SourcePlan:
 
 
 def _match_chunks(existing_rows: list[sqlite3.Row], candidates: list[chunking.ChunkCandidate]):
-    """Three-pass chunk matching (plan 0006)."""
+    """Match candidates to existing chunks by logical key, then by a semantic hash
+    unique on both sides; the remaining candidates are new and the remaining
+    rows are deleted.
+    """
 
     existing_by_key: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for row in existing_rows:
@@ -527,9 +530,7 @@ def sync(
         plans: list[_SourcePlan] = []
         hint_updates: list[tuple[str, str, int, int]] = []
         # (chunk_id, semantic_input_hash) pairs needing only a fresh embedding
-        # mapping -- e.g. the embedding model changed but nothing else did,
-        # so the source is otherwise untouched (plan 0006: "Embedding model
-        # or dimensions: Re-embed only").
+        # mapping: the embedding model changed but the source did not.
         reembed_only_chunks: list[tuple[str, str]] = []
         pending_embeddings: dict[str, str] = {}  # semantic_input_hash -> body text
 
@@ -1497,10 +1498,8 @@ def _insert_asset(conn, source_pk: int, source_path: str, physical_page, asset_p
     asset_id = f"{source_path}:{asset_path.stem}"
     asset_identifier = asset_path.resolve().relative_to(Path(database_path).resolve().parent).as_posix()
     schema.resolve_asset_path(database_path, asset_identifier)
-    # `ocr_text`/`visual_description` remain hardcoded NULL -- out of scope
-    # for this change (task 0090 item 1/2 boundary: OCR fallback targets
-    # page/chunk text only, not the assets table's separate OCR/visual
-    # description columns).
+    # NOTE: ocr_text and visual_description are always NULL; OCR fallback
+    # writes page and chunk text only.
     conn.execute(
         """
         INSERT INTO assets (

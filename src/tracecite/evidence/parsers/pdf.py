@@ -2,9 +2,7 @@
 
 All PyMuPDF interaction (text extraction, page rendering, image crops) is
 kept behind this module so the database and command contracts never depend
-on the specific PDF backend (plan 0006: "Keep it behind the parser interface
-so another parser can be evaluated later without changing the database or
-command contracts.").
+on the specific PDF backend.
 """
 
 from __future__ import annotations
@@ -23,27 +21,19 @@ NAME = "pdf-pymupdf"
 VERSION = "1"
 HEADING_MAX_CHARS = 70
 
-# A page whose normally-extracted text falls below this many characters is
-# treated as effectively text-less (e.g. a scanned/rasterised page with no
-# real text layer) and routed through the two-stage OCR fallback below. 20
-# was chosen to match the nem-knowledge prototype this behaviour is ported
-# from: short enough that legitimate near-blank pages (e.g. a title page
-# with just a heading) are not misdiagnosed as scans, but well above the
-# handful of stray characters PyMuPDF sometimes extracts from a purely
-# rasterised page's invisible metadata.
+# A page whose extracted text is shorter than this is treated as a scanned
+# page without a text layer and goes through the OCR fallback. 20 keeps a
+# near-blank title page out of OCR while staying above the few stray
+# characters PyMuPDF can extract from a rasterised page's metadata.
 MIN_EXTRACTED_TEXT_CHARS = 20
 DEFAULT_OCR_LANG = "eng"
 OCR_DPI = 300
 TESSERACT_CMD = "tesseract"
 
-# Nearby-text association for figure crops (item 2): a text block is
-# considered "nearby" a crop if it overlaps horizontally (with some
-# tolerance, since a caption is often centered/narrower than the image it
-# describes) and sits within this many PDF points above or below the
-# crop's bounding box. 72pt (1 inch) is a generous but bounded
-# caption/label distance -- enough to catch a caption directly above or
-# below a figure without pulling in unrelated body text further down the
-# page.
+# A text block is "nearby" a figure crop when it overlaps the crop
+# horizontally (with tolerance, since captions are often narrower than the
+# image) and sits within 72pt (1 inch) above or below it: close enough for a
+# caption without pulling in body text further down the page.
 NEARBY_TEXT_MAX_VERTICAL_DISTANCE = 72.0
 NEARBY_TEXT_HORIZONTAL_TOLERANCE = 20.0
 
@@ -156,12 +146,7 @@ def _pymupdf_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
 
 
 def _tesseract_cli_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
-    """Second, last-resort OCR fallback stage: shell out to the Tesseract
-    CLI against a rendered page image.
-
-    Always invoked via ``subprocess.run`` with an explicit argument list --
-    never ``shell=True`` and never a string-interpolated command.
-    """
+    """Second OCR fallback stage: run the Tesseract CLI on a rendered page image."""
 
     pixmap = page.get_pixmap(dpi=dpi)
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -280,10 +265,8 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
 def units_from_page_layout(source_path: str, physical_page: int, layout_json: str) -> list[ParsedChunkUnit]:
     """Rebuild chunk-input units from retained ``pages.layout_json``.
 
-    Used for a chunker- or normalisation-only change so PyMuPDF is never
-    reopened when the retained page extraction is still valid (plan 0006:
-    "Do not reopen PDFs merely because the chunker or embedding model
-    changed if retained page extraction is sufficient.").
+    A chunker- or normalisation-only change rechunks from this layout
+    without reopening the PDF.
     """
 
     layout = json.loads(layout_json) if layout_json else {"blocks": []}

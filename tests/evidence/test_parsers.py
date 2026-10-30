@@ -50,7 +50,7 @@ def test_pdf_parser_heading_and_body_content_types(tmp_path):
 def test_pdf_parser_ocr_fallback_for_no_text_layer_page(tmp_path):
     """A page with a genuinely rasterised, no-text-layer image (built via
     PyMuPDF like every other fixture here, not mocked) must still surface
-    plausible text through the OCR fallback (task 0090 item 1), while an
+    plausible text through the OCR fallback, while an
     ordinary text-layer page alongside it is completely unaffected."""
 
     import sys
@@ -102,7 +102,7 @@ def test_pdf_parser_short_real_text_page_not_replaced_by_ocr(tmp_path):
 
 def test_pdf_parser_figure_crop_nearby_text_association(tmp_path):
     """A figure crop's ``nearby_text`` should pick up a caption that sits
-    just above the image (task 0090 item 2), reusing the page's
+    just above the image, reusing the page's
     already-computed text blocks -- not re-implementing block extraction."""
 
     import pymupdf

@@ -77,7 +77,7 @@ def build_pdf_with_image_only_page(
 ) -> Path:
     """Build a synthetic PDF whose final page has ONLY a rasterised image
     with baked-in text -- no real text layer at all -- so the OCR fallback
-    path (task 0090 item 1) is genuinely exercised end-to-end rather than
+    path is genuinely exercised end-to-end rather than
     unit-tested against a mocked function. Any ``leading_pages`` (same shape
     as :func:`build_pdf`'s ``pages``) come first as ordinary text pages.
     """

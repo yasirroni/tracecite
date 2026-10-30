@@ -1,5 +1,4 @@
-"""Incremental synchronisation lifecycle and invalidation-rule tests
-(plan 0006's required-test list, task 0089's implementation)."""
+"""Incremental synchronisation lifecycle and invalidation-rule tests."""
 
 from __future__ import annotations
 
@@ -815,7 +814,7 @@ def test_markdown_source_indexes_and_chunks(corpus_dir, manifest_path, database_
 
 
 def test_sync_ocr_fallback_populates_pages_and_chunks(corpus_dir, manifest_path, database_path, make_embedder):
-    """A source with a genuinely no-text-layer page (task 0090 item 1) must
+    """A source with a genuinely no-text-layer page must
     still get real text into the ``pages``/``chunks`` tables through the
     normal sync path, via the two-stage OCR fallback -- while an ordinary
     text-layer page in the same document is completely unaffected."""
@@ -892,8 +891,7 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
 ):
     """A figure crop with a caption directly above it must get that caption
     threaded into the ``assets.nearby_text`` column through the normal sync
-    path (task 0090 item 2), while ``ocr_text``/``visual_description`` stay
-    ``NULL`` (out of scope)."""
+    path, while ``ocr_text``/``visual_description`` stay ``NULL``."""
 
     import pymupdf
 

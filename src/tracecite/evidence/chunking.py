@@ -2,8 +2,8 @@
 
 Parsers emit fine-grained ``ParsedChunkUnit`` sequences (for example, a PDF
 text block, Markdown paragraph, or workbook row range). This module groups
-adjacent units into retrieval-sized chunks and computes the two identity
-hashes plan 0006 requires:
+adjacent units into retrieval-sized chunks and computes two identity
+hashes:
 
 - ``lexical_hash``: sha256 of the raw (unnormalised) chunk body.
 - ``semantic_input_hash``: sha256 of
