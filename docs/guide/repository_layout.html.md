@@ -132,7 +132,6 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   └── test_vectorize.py
 │   ├── evidence/
 │   │   ├── conftest.py
-│   │   ├── measure_help.py
 │   │   ├── test_asset_generations.py
 │   │   ├── test_cli.py
 │   │   ├── test_config.py
@@ -144,7 +143,6 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   ├── test_page_cli.py
 │   │   ├── test_page_json.py
 │   │   ├── test_page_selection.py
-│   │   ├── test_page_selection_surfaces.py
 │   │   ├── test_parsers.py
 │   │   ├── test_paths.py
 │   │   ├── test_profile_cli.py
@@ -162,7 +160,6 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   ├── test_bootstrap_docs.py
 │   ├── test_build_docs.py
 │   ├── test_docs.py
-│   ├── test_evidence_imports.py
 │   ├── test_repository_tree.py
 │   ├── test_skills.py
 │   ├── test_tables.py
