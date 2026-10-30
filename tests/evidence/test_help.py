@@ -11,7 +11,7 @@ SRC = Path(__file__).resolve().parents[2] / "src"
 
 
 FORBIDDEN = (
-    "fitz",
+    "pymupdf",
     "sqlite_vec",
     "sentence_transformers",
     "tracecite.evidence.sync",

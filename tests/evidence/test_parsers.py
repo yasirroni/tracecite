@@ -105,9 +105,9 @@ def test_pdf_parser_figure_crop_nearby_text_association(tmp_path):
     just above the image (task 0090 item 2), reusing the page's
     already-computed text blocks -- not re-implementing block extraction."""
 
-    import fitz
+    import pymupdf
 
-    helper = fitz.open()
+    helper = pymupdf.open()
     try:
         helper_page = helper.new_page(width=300, height=150)
         helper_page.insert_text((10, 80), "A simple figure", fontsize=18)
@@ -115,11 +115,11 @@ def test_pdf_parser_figure_crop_nearby_text_association(tmp_path):
     finally:
         helper.close()
 
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         page = document.new_page()
         page.insert_text((72, 90), "Figure 1: Illustrative capacity chart shown below.", fontsize=11)
-        page.insert_image(fitz.Rect(72, 110, 372, 260), stream=image_bytes)
+        page.insert_image(pymupdf.Rect(72, 110, 372, 260), stream=image_bytes)
         pdf_path = tmp_path / "figure.pdf"
         document.save(pdf_path)
     finally:
@@ -156,9 +156,9 @@ def test_pdf_parser_figure_crop_without_nearby_text_is_none(tmp_path):
     """A figure crop with no text anywhere near its bbox must get ``None``,
     not an empty string or an unrelated far-away block."""
 
-    import fitz
+    import pymupdf
 
-    helper = fitz.open()
+    helper = pymupdf.open()
     try:
         helper_page = helper.new_page(width=300, height=150)
         helper_page.insert_text((10, 80), "A simple figure", fontsize=18)
@@ -166,11 +166,11 @@ def test_pdf_parser_figure_crop_without_nearby_text_is_none(tmp_path):
     finally:
         helper.close()
 
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         page = document.new_page(height=800)
         page.insert_text((72, 700), "Unrelated text far below the figure.", fontsize=11)
-        page.insert_image(fitz.Rect(72, 80, 372, 230), stream=image_bytes)
+        page.insert_image(pymupdf.Rect(72, 80, 372, 230), stream=image_bytes)
         pdf_path = tmp_path / "figure-no-caption.pdf"
         document.save(pdf_path)
     finally:

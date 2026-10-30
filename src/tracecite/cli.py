@@ -300,7 +300,7 @@ def _is_missing_evidence_dependency(error: ModuleNotFoundError) -> bool:
     if "tracecite[evidence]" in str(error):
         return True
     return (error.name or "").split(".", 1)[0] in {
-        "fitz",
+        "pymupdf",
         "huggingface_hub",
         "sentence_transformers",
         "sqlite_vec",

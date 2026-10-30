@@ -2,7 +2,7 @@
 
 ## PDF extraction
 
-`parsers/pdf.py` uses PyMuPDF (`fitz`) exclusively, behind the `Parser` protocol in
+`parsers/pdf.py` uses PyMuPDF (`pymupdf`) exclusively, behind the `Parser` protocol in
 `parsers/base.py`. Per physical page: `page.get_text("blocks")` is filtered to text blocks and
 sorted into reading order (`round(y0, 1)`, then `round(x0, 1)`); each block becomes one
 `ParsedChunkUnit` with a positional `logical_key` (`page{NNNN}-block{NNN}`), plus a lightweight

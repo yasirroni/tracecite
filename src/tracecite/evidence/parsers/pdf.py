@@ -15,7 +15,7 @@ import json
 import subprocess
 import tempfile
 
-import fitz
+import pymupdf
 
 from .base import ParsedAsset, ParsedChunkUnit, ParsedPage, ParseResult
 
@@ -71,7 +71,7 @@ def _looks_like_heading(text: str) -> bool:
     return True
 
 
-def _blocks_for_page(page: fitz.Page) -> list[dict]:
+def _blocks_for_page(page: pymupdf.Page) -> list[dict]:
     raw_blocks = page.get_text("blocks")
     text_blocks = [b for b in raw_blocks if b[6] == 0 and b[4].strip()]
     text_blocks.sort(key=lambda b: (round(b[1], 1), round(b[0], 1)))
@@ -137,12 +137,12 @@ def _nearby_text_for_bbox(
     return "\n".join(text for _, text in matches)
 
 
-def _pymupdf_ocr_text(page: fitz.Page, *, lang: str, dpi: int) -> str:
+def _pymupdf_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
     """First OCR fallback stage: PyMuPDF's own built-in OCR support."""
 
     try:
         textpage = page.get_textpage_ocr(
-            flags=fitz.TEXTFLAGS_TEXT | fitz.TEXT_PRESERVE_WHITESPACE,
+            flags=pymupdf.TEXTFLAGS_TEXT | pymupdf.TEXT_PRESERVE_WHITESPACE,
             language=lang,
             dpi=dpi,
             full=True,
@@ -155,7 +155,7 @@ def _pymupdf_ocr_text(page: fitz.Page, *, lang: str, dpi: int) -> str:
         return ""
 
 
-def _tesseract_cli_ocr_text(page: fitz.Page, *, lang: str, dpi: int) -> str:
+def _tesseract_cli_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
     """Second, last-resort OCR fallback stage: shell out to the Tesseract
     CLI against a rendered page image.
 
@@ -179,7 +179,7 @@ def _tesseract_cli_ocr_text(page: fitz.Page, *, lang: str, dpi: int) -> str:
     return result.stdout.strip()
 
 
-def _ocr_fallback_text(page: fitz.Page, *, lang: str, dpi: int) -> tuple[str, str]:
+def _ocr_fallback_text(page: pymupdf.Page, *, lang: str, dpi: int) -> tuple[str, str]:
     """Two-stage OCR fallback for a page whose normal text extraction came
     back effectively empty: try PyMuPDF's built-in OCR first, and only if
     that still returns too little text, fall back to the Tesseract CLI.
@@ -205,7 +205,7 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
     units: list[ParsedChunkUnit] = []
     assets: list[ParsedAsset] = []
 
-    with fitz.open(path) as document:
+    with pymupdf.open(path) as document:
         for index, page in enumerate(document):
             physical_page = index + 1
             blocks = _blocks_for_page(page)
@@ -308,9 +308,9 @@ def units_from_page_layout(source_path: str, physical_page: int, layout_json: st
 
 
 def render_page(path: Path, physical_page: int, zoom: float = 2.0) -> RenderedAsset:
-    with fitz.open(path) as document:
+    with pymupdf.open(path) as document:
         page = document[physical_page - 1]
-        matrix = fitz.Matrix(zoom, zoom)
+        matrix = pymupdf.Matrix(zoom, zoom)
         pixmap = page.get_pixmap(matrix=matrix)
         return RenderedAsset(
             physical_page=physical_page,
@@ -325,7 +325,7 @@ def render_page(path: Path, physical_page: int, zoom: float = 2.0) -> RenderedAs
 
 def render_figure_crops(path: Path, physical_page: int) -> list[RenderedAsset]:
     rendered: list[RenderedAsset] = []
-    with fitz.open(path) as document:
+    with pymupdf.open(path) as document:
         page = document[physical_page - 1]
         blocks = _blocks_for_page(page)
         for image_index, image in enumerate(page.get_images(full=True)):

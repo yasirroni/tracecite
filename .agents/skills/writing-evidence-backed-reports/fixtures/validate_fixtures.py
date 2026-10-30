@@ -17,7 +17,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 FIXTURE_DIR = Path(__file__).resolve().parent
@@ -53,7 +53,7 @@ def run_cli(*args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
 
 def write_pdf(path: Path, pages: list[list[str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         for paragraphs in pages:
             page = document.new_page()

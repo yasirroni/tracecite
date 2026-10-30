@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-import fitz
+import pymupdf
 import pytest
 
 from tracecite.evidence import schema, sync as sync_module
@@ -54,7 +54,7 @@ def read_manifest(path: Path) -> dict[str, str]:
 def build_pdf(path: Path, pages: list[list[str]]) -> Path:
     """Build a small synthetic PDF: one paragraph-per-string, per page."""
 
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         for paragraphs in pages:
             page = document.new_page()
@@ -84,7 +84,7 @@ def build_pdf_with_image_only_page(
 
     # Rasterise `image_text` on a throwaway page purely to get pixel bytes
     # with baked-in text; this helper document is never saved to disk.
-    helper_document = fitz.open()
+    helper_document = pymupdf.open()
     try:
         helper_page = helper_document.new_page(width=400, height=200)
         helper_page.insert_text((20, 100), image_text, fontsize=14)
@@ -92,7 +92,7 @@ def build_pdf_with_image_only_page(
     finally:
         helper_document.close()
 
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         for paragraphs in leading_pages or []:
             page = document.new_page()

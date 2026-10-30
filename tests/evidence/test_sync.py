@@ -895,9 +895,9 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
     path (task 0090 item 2), while ``ocr_text``/``visual_description`` stay
     ``NULL`` (out of scope)."""
 
-    import fitz
+    import pymupdf
 
-    helper = fitz.open()
+    helper = pymupdf.open()
     try:
         helper_page = helper.new_page(width=300, height=150)
         helper_page.insert_text((10, 80), "A simple figure", fontsize=18)
@@ -905,11 +905,11 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
     finally:
         helper.close()
 
-    document = fitz.open()
+    document = pymupdf.open()
     try:
         page = document.new_page()
         page.insert_text((72, 90), "Figure 1: Illustrative capacity chart shown below.", fontsize=11)
-        page.insert_image(fitz.Rect(72, 110, 372, 260), stream=image_bytes)
+        page.insert_image(pymupdf.Rect(72, 110, 372, 260), stream=image_bytes)
         pdf_path = corpus_dir / "figure.pdf"
         document.save(pdf_path)
     finally:

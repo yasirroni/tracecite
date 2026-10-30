@@ -146,9 +146,9 @@ def extract_pages(
     if source_sha256 != source_row["sha256"]:
         raise PageExtractionPdfMismatchError(f"source pdf changed since indexing: {source_path}")
 
-    import fitz
+    import pymupdf
 
-    with fitz.open(source_pdf_resolved) as document:
+    with pymupdf.open(source_pdf_resolved) as document:
         if document.page_count < max(normalized_pages):
             raise PageExtractionPdfMismatchError(
                 f"source pdf has only {document.page_count} page(s), cannot satisfy selection {normalized_pages}"
@@ -165,7 +165,7 @@ def extract_pages(
             temp_root_path = Path(temp_root)
             staged_pdf = temp_root_path / pdf_name
             staged_manifest = temp_root_path / manifest_name
-            derivative = fitz.open()
+            derivative = pymupdf.open()
             try:
                 for page in normalized_pages:
                     derivative.insert_pdf(document, from_page=page - 1, to_page=page - 1)
