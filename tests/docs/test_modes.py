@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import replace
 import hashlib
 import json
-from pathlib import Path
 import subprocess
 import sys
+from dataclasses import replace
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from tracecite.docs import author_docs, check_docs, load_docs_contract, sync_docs_index
-import tracecite.docs.modes as modes
+from tracecite.docs import (
+    author_docs,
+    check_docs,
+    load_docs_contract,
+    modes,
+    sync_docs_index,
+)
 from tracecite.evidence import schema
 
 
@@ -268,11 +273,15 @@ def test_hook_failure_preserves_outputs_and_sibling(tmp_path: Path) -> None:
     (sibling / "keep.txt").write_bytes(b"keep")
     before = _snapshot(root)
     failing = replace(contract, host_render_command=("render",))
-    with patch.object(
-        modes.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "render")
+    with (
+        patch.object(
+            modes.subprocess,
+            "run",
+            side_effect=subprocess.CalledProcessError(1, "render"),
+        ),
+        pytest.raises(subprocess.CalledProcessError),
     ):
-        with pytest.raises(subprocess.CalledProcessError):
-            author_docs(failing, config_path=config, repo_root=root)
+        author_docs(failing, config_path=config, repo_root=root)
     assert _snapshot(root) == before
 
 

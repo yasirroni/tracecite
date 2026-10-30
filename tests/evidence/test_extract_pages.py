@@ -5,11 +5,10 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import build_pdf
 
 from tracecite import cli
 from tracecite.evidence import schema
-
-from conftest import build_pdf
 
 
 def _insert_pdf_source(

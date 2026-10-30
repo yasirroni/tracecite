@@ -25,10 +25,6 @@ transaction (status ``"aborted-source-changed"``) so callers can retry.
 
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass, field
-from collections.abc import Collection, Sequence
-from pathlib import Path
 import hashlib
 import json
 import os
@@ -37,8 +33,13 @@ import sqlite3
 import stat
 import tempfile
 import uuid
+from collections import defaultdict
+from collections.abc import Collection, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 
-from . import chunking, manifest as manifest_module, schema, vector_backend
+from . import chunking, schema, vector_backend
+from . import manifest as manifest_module
 from .embedding import Embedder, EmbeddingModel
 from .parsers import markdown as markdown_parser
 from .parsers import pdf as pdf_parser

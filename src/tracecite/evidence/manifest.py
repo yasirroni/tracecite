@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from collections.abc import Mapping, Sequence
 import fnmatch
 import tomllib
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 from types import MappingProxyType
 
 from .paths import PathAuthorityError, normalise_relative_declaration
-
 
 SOURCE_TYPES = {
     ".pdf": "pdf",

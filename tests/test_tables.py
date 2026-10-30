@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 import pandas as pd
 import yaml
@@ -11,8 +11,8 @@ import yaml
 from tracecite.tables import (
     TableContext,
     TableNormalisationError,
-    computed_first_row_summary,
     augment_document_with_embedding_text,
+    computed_first_row_summary,
     export_embedding_site,
     html_table_to_markdown,
     knowledge_table,
@@ -20,7 +20,6 @@ from tracecite.tables import (
     normalise_html_table,
     normalise_pandoc_table,
 )
-
 
 PIPE_TABLE = """<!-- tracecite-table: {"ordering":"temperature descending","row_identity":["Place","Date"]} -->
 

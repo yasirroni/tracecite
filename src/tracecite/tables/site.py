@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import re
 import shutil
 import subprocess
+from copy import deepcopy
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
 
 from .document import augment_document_with_embedding_text
 from .models import NORMALISER_VERSION, NormalisedTable, TableNormalisationError
-
 
 _LINK_RE = re.compile(r"(\]\([^\s)]+?)\.(?:py|jl|qmd)(#[^)]+)?\)")
 _OUTPUT_MARKER = ".tracecite-embedding-site"

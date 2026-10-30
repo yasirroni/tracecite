@@ -1,8 +1,8 @@
 """Host-owned static publish fixture; intentionally stdlib-only."""
 
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).parent
 OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "_generated"

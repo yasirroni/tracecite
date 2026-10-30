@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import re
 import shutil
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..evidence.paths import file_sha256
@@ -445,7 +445,8 @@ def doctor_docs_index(contract: DocsEvidenceContract) -> tuple[str, ...]:
     issues = list(docs_index_freshness_diagnostics(contract))
     if not profile.database_path.is_file():
         return tuple(issues)
-    from ..evidence import schema, sync as sync_module
+    from ..evidence import schema
+    from ..evidence import sync as sync_module
 
     conn = schema.connect_existing(profile.database_path, read_only=True)
     try:

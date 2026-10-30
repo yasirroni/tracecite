@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from conftest import FakeEmbedder, build_pdf
+
 from tracecite import cli
 from tracecite.evidence import sync as sync_module
-from conftest import FakeEmbedder, build_pdf
 
 
 def test_explicit_config_supplies_runtime_and_inline_rules_for_commands(

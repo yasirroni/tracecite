@@ -6,10 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from tracecite.evidence import schema, sync as sync_module, verify
-
 from conftest import build_pdf, write_manifest
+
+from tracecite.evidence import schema, verify
+from tracecite.evidence import sync as sync_module
 
 
 def _index_report_corpus(corpus_dir, manifest_path, database_path, embedder):

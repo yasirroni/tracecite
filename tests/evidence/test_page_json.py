@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tracecite import cli
-from tracecite.evidence import schema, sync as sync_module
+from conftest import FakeEmbedder, build_pdf_with_image_only_page, write_manifest
 
-from conftest import build_pdf_with_image_only_page, write_manifest, FakeEmbedder
+from tracecite import cli
+from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
 
 
 def _sync_pdf_with_assets(

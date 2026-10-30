@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
-import os
 
 
 class Embedder(Protocol):

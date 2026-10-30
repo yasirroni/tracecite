@@ -7,11 +7,11 @@ on the specific PDF backend.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import json
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
 import pymupdf
 

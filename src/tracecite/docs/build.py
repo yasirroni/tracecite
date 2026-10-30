@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-from typing import Iterator, Literal, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
 
 import yaml
 

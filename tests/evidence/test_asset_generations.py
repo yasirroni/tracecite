@@ -5,9 +5,10 @@ import shutil
 from pathlib import Path
 
 import pytest
-
-from tracecite.evidence import schema, sync as sync_module
 from conftest import build_pdf, write_manifest
+
+from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
 
 
 def _asset_state(database_path: Path):

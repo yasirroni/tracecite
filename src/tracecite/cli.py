@@ -4,21 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 from . import __version__
-from .tables import (
-    TableContext,
-    TableNormalisationError,
-    augment_document_with_embedding_text,
-    export_embedding_site,
-    normalise_document_tables,
-    normalise_html_table,
-    normalise_pandoc_table,
-    render_debug_markdown,
-)
 from .docs import (
     author_docs,
     build_docs,
@@ -28,6 +18,16 @@ from .docs import (
     search_docs_index,
     stage_docs,
     sync_docs_index,
+)
+from .tables import (
+    TableContext,
+    TableNormalisationError,
+    augment_document_with_embedding_text,
+    export_embedding_site,
+    normalise_document_tables,
+    normalise_html_table,
+    normalise_pandoc_table,
+    render_debug_markdown,
 )
 
 EVIDENCE_COMMANDS = {

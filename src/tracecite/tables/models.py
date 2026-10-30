@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
-import json
-from typing import Any, Literal, Mapping
-
+from typing import Any, Literal
 
 Severity = Literal["info", "warning", "error"]
 SourceFormat = Literal["pandoc-markdown", "html"]
@@ -25,7 +25,7 @@ class TableContext:
     ordering: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
-    def merged(self, **updates: Any) -> "TableContext":
+    def merged(self, **updates: Any) -> TableContext:
         values = {
             "document_path": self.document_path,
             "section_path": self.section_path,

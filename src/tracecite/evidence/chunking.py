@@ -14,10 +14,10 @@ hashes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
 import json
 import re
+from dataclasses import dataclass, field
 
 from .parsers.base import ParsedChunkUnit
 

@@ -13,16 +13,15 @@ contains values.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import posixpath
 import re
 import xml.etree.ElementTree as ET
 import zipfile
+from dataclasses import dataclass
+from pathlib import Path
 
 from .base import ParsedChunkUnit, ParsedPage, ParseResult
-
 
 NAME = "workbook-ooxml"
 DEFAULT_MAX_UNIT_CHARS = 1000

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
-from typing import Any, Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from ._text import collapse_space, strip_caption_id, strip_html
 from .models import TableDiagnostic, TableNormalisationError

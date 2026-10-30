@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
-import os
-import json
 from pathlib import Path
 
-from tracecite import cli
-from tracecite.evidence import schema, sync as sync_module
-
 from conftest import FakeEmbedder, build_pdf, write_manifest
+
+from tracecite import cli
+from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

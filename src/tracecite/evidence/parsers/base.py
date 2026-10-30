@@ -5,8 +5,8 @@ into stored chunks; parsers never write to the database directly.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)

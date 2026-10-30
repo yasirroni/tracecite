@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import re
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from functools import cmp_to_key
 from hashlib import sha256
-import json
 from pathlib import Path
-import re
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from ._text import (
     cell_unit,
@@ -29,12 +30,11 @@ from .models import (
 )
 from .pandoc import ParsedPandocTable, parse_pandoc_tables
 
-
 _METADATA_RE = re.compile(
-    r"<!--\s*(?:knowledge-table|tracecite-table)\s*:\s*(\{.*?\})\s*-->", re.S
+    r"<!--\s*(?:knowledge-table|tracecite-table)\s*:\s*(\{.*?\})\s*-->", re.DOTALL
 )
 _ORDINALS = {"index", "order", "position", "rank", "row"}
-_DIRECTION_RE = re.compile(r"(.+?)\s+(ascending|descending)\b", re.I)
+_DIRECTION_RE = re.compile(r"(.+?)\s+(ascending|descending)\b", re.IGNORECASE)
 _NUMBER_RE = re.compile(r"^\s*[-+]?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ].*)?$")
 
@@ -783,8 +783,7 @@ def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
 
 def _split_pipe_row(line: str) -> list[str]:
     stripped = line.strip()
-    if stripped.startswith("|"):
-        stripped = stripped[1:]
+    stripped = stripped.removeprefix("|")
     if stripped.endswith("|") and not stripped.endswith("\\|"):
         stripped = stripped[:-1]
     cells: list[str] = []

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
+from conftest import FakeEmbedder, build_markdown, build_pdf, write_manifest
+
 from tracecite import cli
 from tracecite.evidence import sync as sync_module
-
-from conftest import build_markdown, build_pdf, write_manifest, FakeEmbedder
 
 
 def test_search_pdf_results_expose_page_assets_without_losing_existing_fields(

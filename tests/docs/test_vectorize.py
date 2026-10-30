@@ -16,8 +16,8 @@ from tracecite.docs import (
     prepare_docs_index_input,
     search_docs_index,
     sync_docs_index,
+    vectorize,
 )
-from tracecite.docs import vectorize
 from tracecite.docs.vectorize import docs_index_freshness_diagnostics
 from tracecite.evidence import schema
 

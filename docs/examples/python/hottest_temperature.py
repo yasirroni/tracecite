@@ -19,7 +19,6 @@ import pandas as pd
 
 from tracecite.tables import knowledge_table
 
-
 weather_events = pd.DataFrame(
     {
         "place": [
@@ -98,7 +97,6 @@ embedding vector, and TraceCite does not currently generate or display vectors.
 #| output: asis
 
 from tracecite.tables import TableContext, normalise_pandoc_table, render_debug_markdown
-
 
 normalised = normalise_pandoc_table(
     ranked_markdown,

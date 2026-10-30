@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from html import escape as html_escape
-import json
-import re
 from typing import Any
 
 import pandas as pd
 from tabulate import tabulate
-
 
 Formatter = str | Callable[[Any], str]
 _TABLE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]*$")

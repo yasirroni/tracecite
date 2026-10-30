@@ -13,12 +13,10 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
 import pymupdf
-
 
 FIXTURE_DIR = Path(__file__).resolve().parent
 SKILL_DIR = FIXTURE_DIR.parent

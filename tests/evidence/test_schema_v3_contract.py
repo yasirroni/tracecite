@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 import pytest
-
-from tracecite.evidence import schema, sync as sync_module
-
 from conftest import build_pdf, write_manifest
+
+from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
 
 
 def test_schema_v3_uses_internal_source_pk_only(database_path: Path):

@@ -6,13 +6,13 @@ tests exercise the script as a subprocess rather than importing it.
 
 from __future__ import annotations
 
-from pathlib import Path
 import importlib.util
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -145,11 +145,13 @@ class BootstrapCleanCheckTests(unittest.TestCase):
                     raise OSError("injected manifest promotion failure")
                 return real_replace(source, target)
 
-            with mock.patch.object(
-                module.os, "replace", side_effect=fail_once_on_manifest
+            with (
+                mock.patch.object(
+                    module.os, "replace", side_effect=fail_once_on_manifest
+                ),
+                self.assertRaisesRegex(OSError, "injected manifest"),
             ):
-                with self.assertRaisesRegex(OSError, "injected manifest"):
-                    module.bootstrap(mappings)
+                module.bootstrap(mappings)
 
             self.assertEqual(destination.read_bytes(), old_destination)
             self.assertEqual(manifest.read_bytes(), old_manifest)

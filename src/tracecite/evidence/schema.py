@@ -11,11 +11,11 @@ tables this module did not create is rejected; rebuild it at a fresh path.
 
 from __future__ import annotations
 
+import json
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-import json
-import sqlite3
 
 from . import vector_backend
 

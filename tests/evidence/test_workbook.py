@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
-import zipfile
 
-from tracecite.evidence import chunking, schema, sync as sync_module
+from conftest import build_markdown, write_manifest
+
+from tracecite.evidence import chunking, schema
+from tracecite.evidence import sync as sync_module
 from tracecite.evidence.commands import cmd_page, hybrid_search
 from tracecite.evidence.parsers import workbook as workbook_parser
 from tracecite.evidence.parsers.base import units_from_layout
-
-from conftest import build_markdown, write_manifest
 
 
 def _write_test_workbook(path: Path, retirement_year: int = 2035) -> Path:

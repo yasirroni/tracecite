@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 
 from .chunking import normalise_text
 from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
@@ -201,10 +201,8 @@ def verify_report(
                 quote_parts.append(_BLOCKQUOTE_RE.match(lines[index]).group("quote"))
             quote_parts[0] = quote_parts[0].lstrip()
             quote_parts[-1] = quote_parts[-1].rstrip()
-            if quote_parts[0].startswith('"'):
-                quote_parts[0] = quote_parts[0][1:]
-            if quote_parts[-1].endswith('"'):
-                quote_parts[-1] = quote_parts[-1][:-1]
+            quote_parts[0] = quote_parts[0].removeprefix('"')
+            quote_parts[-1] = quote_parts[-1].removesuffix('"')
             quote = "\n".join(quote_parts)
             viable: list[tuple[str, object, ReferenceDefinition]] = []
             for key in dict.fromkeys(paragraph_keys):

@@ -1,7 +1,7 @@
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
 import tempfile
 import unittest
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
 
 class RepositoryTreeTests(unittest.TestCase):

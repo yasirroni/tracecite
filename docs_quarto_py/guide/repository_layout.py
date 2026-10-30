@@ -13,8 +13,8 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 #| echo: false
 #| output: asis
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def repository_root(start: Path) -> Path:

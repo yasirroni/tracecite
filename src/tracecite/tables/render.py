@@ -7,7 +7,6 @@ import re
 from ._text import escape_markdown_inline
 from .models import NormalisedTable
 
-
 _START = "<!-- tracecite-embedding:start"
 _END = "<!-- tracecite-embedding:end -->"
 

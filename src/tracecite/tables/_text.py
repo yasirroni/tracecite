@@ -6,7 +6,6 @@ import re
 
 from bs4 import BeautifulSoup
 
-
 _ID_RE = re.compile(r"[^a-z0-9]+")
 _TRAILING_ID_RE = re.compile(r"\s*\{#([A-Za-z][A-Za-z0-9_.:-]*)\}\s*$")
 _NUMBER_WITH_UNIT_RE = re.compile(

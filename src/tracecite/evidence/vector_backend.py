@@ -6,9 +6,9 @@ All vec0 virtual-table SQL lives here; the rest of the evidence code calls
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from collections.abc import Sequence
 import sqlite3
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 VECTOR_TABLE = "embedding_vectors"
 MAX_KNN_K = 4096

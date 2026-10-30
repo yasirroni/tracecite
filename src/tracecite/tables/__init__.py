@@ -19,8 +19,8 @@ from .render import render_debug_markdown, render_embedding_block
 from .site import SiteExportResult, export_embedding_site, render_embedding_site
 
 __all__ = [
-    "DocumentTransform",
     "NORMALISER_VERSION",
+    "DocumentTransform",
     "NormalisedTable",
     "SiteExportResult",
     "TableContext",

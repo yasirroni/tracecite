@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, replace
 from hashlib import sha256
-import json
 from pathlib import Path
-import re
 from typing import Any
 
 from bs4 import BeautifulSoup
 
+from .html import normalise_html_table
 from .models import (
     NormalisedTable,
     TableContext,
@@ -19,29 +20,27 @@ from .models import (
     source_hash,
 )
 from .normalise import normalise_pandoc_table, normalise_parsed_table
-from .html import normalise_html_table
 from .pandoc import ParsedPandocTable, ast_tables_with_sections
 from .render import render_embedding_block, strip_embedding_blocks
-
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 _RAW_HTML_FENCE_RE = re.compile(
     r"^\s*(`{3,}|~{3,})\s*(?:@raw\s+html|\{=html\})\s*$",
-    re.I,
+    re.IGNORECASE,
 )
 _SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 _METADATA_RE = re.compile(
     r"^\s*<!--\s*(?:knowledge-table|tracecite-table)\s*:\s*(\{.*\})\s*-->\s*$"
 )
 _CAPTION_RE = re.compile(r"^\s*:\s+.+")
-_TABLE_OPEN_RE = re.compile(r"<table\b", re.I)
-_TABLE_CLOSE_RE = re.compile(r"</table\s*>", re.I)
-_TABLE_TOKEN_RE = re.compile(r"</?table\b[^>]*>", re.I | re.S)
+_TABLE_OPEN_RE = re.compile(r"<table\b", re.IGNORECASE)
+_TABLE_CLOSE_RE = re.compile(r"</table\s*>", re.IGNORECASE)
+_TABLE_TOKEN_RE = re.compile(r"</?table\b[^>]*>", re.IGNORECASE | re.DOTALL)
 _TABLE_ID_RE = re.compile(r"\{#([A-Za-z][A-Za-z0-9_.:-]*)\}")
 _HTML_TABLE_ID_RE = re.compile(
     r"<table\b[^>]*\bid\s*=\s*(['\"])([A-Za-z][A-Za-z0-9_.:-]*)\1",
-    re.I | re.S,
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -385,8 +384,7 @@ def _looks_like_pipe_table(lines: list[str], index: int) -> bool:
 
 def _split_pipe_row(line: str) -> list[str]:
     stripped = line.strip()
-    if stripped.startswith("|"):
-        stripped = stripped[1:]
+    stripped = stripped.removeprefix("|")
     if stripped.endswith("|") and not stripped.endswith("\\|"):
         stripped = stripped[:-1]
     cells: list[str] = []

@@ -9,11 +9,11 @@ bibliography, citation-key, or remote-ingestion system.
 
 from __future__ import annotations
 
+import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import re
-import tomllib
 from urllib.parse import urlparse
 
 from .paths import PathAuthorityError, normalise_source_path

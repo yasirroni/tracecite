@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass, replace
+from pathlib import Path
 
 from .contract import DocsEvidenceContract
 from .stage import stage_docs

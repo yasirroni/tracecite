@@ -6,16 +6,16 @@ import json
 from pathlib import Path
 
 import pytest
-
-from tracecite.evidence import schema, sync as sync_module
-from tracecite.evidence.sync import SyncError, SyncOptions
-
 from conftest import (
     build_markdown,
     build_pdf,
     build_pdf_with_image_only_page,
     write_manifest,
 )
+
+from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
+from tracecite.evidence.sync import SyncError, SyncOptions
 
 
 def test_production_embedding_has_no_test_fake_environment_branch():
@@ -252,8 +252,8 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
     one_pdf_corpus.rename(renamed_path)
     write_manifest(manifest_path, {"doc-renamed.pdf": "doc-renamed.pdf"})
 
-    from tracecite.evidence.parsers import pdf as pdf_parser
     import tracecite.evidence.sync as sync_mod
+    from tracecite.evidence.parsers import pdf as pdf_parser
 
     original_parse = pdf_parser.parse
     parse_calls = []

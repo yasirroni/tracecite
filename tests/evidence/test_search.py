@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import sqlite3
 
-from tracecite.evidence import schema, sync as sync_module
-from tracecite.evidence.commands import _fts_rows, active_embedding_model, hybrid_search
-
 from conftest import build_markdown, build_pdf, write_manifest
+
+from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
+from tracecite.evidence.commands import _fts_rows, active_embedding_model, hybrid_search
 
 
 def _sync_corpus(corpus_dir, manifest_path, database_path, embedder):

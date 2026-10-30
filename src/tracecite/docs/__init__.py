@@ -13,10 +13,10 @@ from .build import (
     snapshot_retained_markdown,
     stage_retained_markdown,
 )
-from .contract import DocsEvidenceContract
 from .config import load_docs_contract
-from .stage import DocsStageResult, stage_docs
+from .contract import DocsEvidenceContract
 from .modes import DocsModeResult, author_docs, check_docs
+from .stage import DocsStageResult, stage_docs
 from .vectorize import (
     DocsIndexProfile,
     DocsIndexResult,
@@ -32,25 +32,25 @@ __all__ = [
     "BuildVariant",
     "DocsBuildResult",
     "DocsEvidenceContract",
-    "DocsStageResult",
-    "DocsModeResult",
-    "Language",
-    "build_docs",
-    "changed_retained_markdown",
-    "classify_render_inputs",
-    "discover_render_inputs",
-    "load_docs_contract",
-    "select_build_variant",
-    "stage_docs",
-    "snapshot_retained_markdown",
-    "stage_retained_markdown",
-    "author_docs",
-    "check_docs",
     "DocsIndexProfile",
     "DocsIndexResult",
+    "DocsModeResult",
+    "DocsStageResult",
+    "Language",
+    "author_docs",
+    "build_docs",
+    "changed_retained_markdown",
+    "check_docs",
+    "classify_render_inputs",
+    "discover_render_inputs",
     "doctor_docs_index",
+    "load_docs_contract",
     "prepare_docs_index_input",
     "resolve_docs_index_profile",
     "search_docs_index",
+    "select_build_variant",
+    "snapshot_retained_markdown",
+    "stage_docs",
+    "stage_retained_markdown",
     "sync_docs_index",
 ]

@@ -3,11 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
 
-from . import config as config_module, schema
+from . import config as config_module
+from . import schema
 
 RRF_K = 60
 

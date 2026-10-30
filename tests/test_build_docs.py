@@ -1,8 +1,8 @@
-from pathlib import Path
 import re
 import tempfile
 import tomllib
 import unittest
+from pathlib import Path
 
 import yaml
 

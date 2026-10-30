@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
-from pathlib import Path
 import shutil
 import sqlite3
 import sys
+from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).resolve().parents[2]
 

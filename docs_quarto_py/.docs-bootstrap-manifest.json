@@ -17,15 +17,15 @@
       "source": "docs/examples/literate_documenter/index.md"
     },
     "examples/python/dirty_dataframe.py": {
-      "sha256": "38e0ad3e9c3fcc5bf4b6a948a10817bc23d165fb898ae5fbeaf8a6d1cd9ad1fb",
+      "sha256": "b3e7f812e76dc3031f173928535d170975c9b7f17c31bde8470d178b89b8e86a",
       "source": "docs/examples/python/dirty_dataframe.py"
     },
     "examples/python/hottest_temperature.py": {
-      "sha256": "1aa5f9236ecf3a540fb6ddfb13fbeed869489990d91e546de2371c4ddceb8c01",
+      "sha256": "f30b63c9c11428bb4dc1974c191fbfc598db078c999501108baa052f9cebfebb",
       "source": "docs/examples/python/hottest_temperature.py"
     },
     "examples/python/quarto_code_visibility.py": {
-      "sha256": "cb04c19d98ff7e4d319f3c51a9a74e99d5e312dd3713ed73d0fc62739b521241",
+      "sha256": "7bdfe7db37946bdf40121777df726ac0cb74ccd1461ee2ad216c514d95100a4f",
       "source": "docs/examples/python/quarto_code_visibility.py"
     },
     "examples/report-adoption/aemo-isp-comparison/index.md": {
@@ -69,7 +69,7 @@
       "source": "docs/guide/embedding-site.md"
     },
     "guide/repository_layout.py": {
-      "sha256": "e31077fb93c174a4a553d37f5d90dd0fc630cc37ea33ef2c3460e91ff2d22c8e",
+      "sha256": "0589d36433c1f73e092a944486e324a89cab3e4ba286e174c40a0acfd532bd0f",
       "source": "docs/guide/repository_layout.py"
     },
     "guide/searchable-evidence.md": {

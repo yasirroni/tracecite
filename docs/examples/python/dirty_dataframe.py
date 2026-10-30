@@ -20,7 +20,6 @@ import pandas as pd
 
 from tracecite.tables import knowledge_table
 
-
 dirty_table = pd.DataFrame(
     {
         "technology": [

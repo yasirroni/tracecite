@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
+import tracecite.evidence.verify as verify_module
 from tracecite.docs import load_docs_contract, stage_docs
 from tracecite.evidence.source_links import (
     parse_source_link_destination,
     parse_staged_source_destination,
 )
 from tracecite.evidence.verify import _parse_definitions
-import tracecite.evidence.verify as verify_module
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path, str]:

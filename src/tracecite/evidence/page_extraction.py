@@ -5,7 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -45,7 +45,7 @@ def _slugify(text: str, *, limit: int = 24) -> str:
 def _selector_token(selector: str | None, normalized_pages: list[int]) -> str:
     raw = selector if selector is not None else "1"
     return hashlib.sha256(
-        f"{raw}|{','.join(map(str, normalized_pages))}".encode("utf-8")
+        f"{raw}|{','.join(map(str, normalized_pages))}".encode()
     ).hexdigest()[:12]
 
 
@@ -188,9 +188,7 @@ def extract_pages(
                 "source_sha256": source_sha256,
                 "derivative_filename": pdf_name,
                 "derivative_sha256": file_sha256(staged_pdf),
-                "created_at_utc": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "created_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             }
             staged_manifest.write_text(
                 json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
