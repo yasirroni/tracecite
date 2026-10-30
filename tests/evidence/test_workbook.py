@@ -11,10 +11,10 @@ from tracecite.evidence import chunking, schema, sync as sync_module
 from tracecite.evidence.commands import _search, cmd_page
 from tracecite.evidence.parsers import workbook as workbook_parser
 
-from conftest import write_manifest
+from conftest import build_markdown, write_manifest
 
 
-def _write_test_workbook(path: Path) -> Path:
+def _write_test_workbook(path: Path, retirement_year: int = 2035) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     parts = {
         "xl/workbook.xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -37,7 +37,7 @@ def _write_test_workbook(path: Path) -> Path:
   <si><r><t>Retirement </t></r><r><t>year</t></r></si>
 </sst>
 """,
-        "xl/worksheets/sheet1.xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        "xl/worksheets/sheet1.xml": f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetData>
     <row r="1">
@@ -46,7 +46,7 @@ def _write_test_workbook(path: Path) -> Path:
     </row>
     <row r="2">
       <c r="A2" t="s"><v>1</v></c>
-      <c r="B2"><v>2035</v></c>
+      <c r="B2"><v>{retirement_year}</v></c>
       <c r="C2"><f>B2+5</f><v>2040</v></c>
     </row>
     <row r="3">
@@ -185,3 +185,63 @@ def test_page_command_rejects_workbook_sheet_indexes_as_pdf_pages(
     assert status == 2
     assert captured.out == ""
     assert captured.err == "source is not a pdf: assumptions.xlsx\n"
+
+def test_workbook_dropped_from_manifest_is_retained_until_prune(
+    corpus_dir,
+    manifest_path,
+    database_path,
+    make_embedder,
+):
+    workbook_path = _write_test_workbook(corpus_dir / "assumptions.xlsx")
+    notes_path = build_markdown(corpus_dir / "notes.md", "# Notes\n\nA Markdown source that stays selected.\n")
+    write_manifest(manifest_path, {"workbook": workbook_path.name, "notes": notes_path.name})
+    embedder = make_embedder()
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+
+    write_manifest(manifest_path, {"notes": notes_path.name})
+    report = sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+    assert report.indexed_unselected_paths == ["assumptions.xlsx"]
+    assert report.selected_missing_paths == []
+
+    conn = schema.connect(database_path)
+    try:
+        workbook_chunks = "SELECT count(*) FROM chunks JOIN sources USING (source_pk) WHERE sources.path = 'assumptions.xlsx'"
+        assert conn.execute(workbook_chunks).fetchone()[0] > 0
+
+        plan = sync_module.plan_prune(conn, selected_paths=["notes.md"])
+        assert plan.paths == ("assumptions.xlsx",)
+        assert sync_module.apply_prune(conn, database_path, plan) == []
+        assert {row["path"] for row in conn.execute("SELECT path FROM sources")} == {"notes.md"}
+        assert conn.execute(workbook_chunks).fetchone()[0] == 0
+        assert sync_module.integrity_check(conn) == []
+    finally:
+        conn.close()
+
+
+def test_workbook_cell_change_reparses_and_replaces_searchable_chunks(
+    corpus_dir,
+    manifest_path,
+    database_path,
+    make_embedder,
+):
+    workbook_path = _write_test_workbook(corpus_dir / "assumptions.xlsx")
+    write_manifest(manifest_path, {workbook_path.name: workbook_path.name})
+    embedder = make_embedder()
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+
+    _write_test_workbook(workbook_path, retirement_year=2031)
+    report = sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+    assert report.sources_reparsed == ["assumptions.xlsx"]
+
+    conn = schema.connect(database_path)
+    try:
+        body = "\n".join(row["body"] for row in conn.execute("SELECT body FROM chunks"))
+        assert "B2 = 2031" in body
+        assert "B2 = 2035" not in body
+
+        results = _search(conn, corpus_dir, "brown coal retirement year", 5, 50, 50, embedder, database_path)
+        assert results[0]["source_path"] == "assumptions.xlsx"
+        assert "B2 = 2031" in results[0]["passage"]
+        assert sync_module.integrity_check(conn) == []
+    finally:
+        conn.close()
