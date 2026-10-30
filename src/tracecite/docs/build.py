@@ -120,8 +120,6 @@ def select_build_variant(
     )
     classified = classify_render_inputs(inputs)
     available = {language for language, paths in classified.items() if paths}
-    if only is not None and only not in {"python", "julia"}:
-        raise ValueError(f"Unsupported language selection: {only}")
     if only and not classified[only]:
         raise ValueError(
             "Requested language is absent from configured render inputs: "
@@ -169,14 +167,10 @@ def select_build_variant(
     if available == {"julia"}:
         if julia:
             return BuildSelection("julia", None, tuple(inputs), (), None)
-        return _missing_julia()
+        raise ValueError("Configured Julia documentation inputs require Julia on PATH")
     if available == {"python"}:
         return BuildSelection("python", None, tuple(inputs), (), None)
     return BuildSelection("prose", None, tuple(inputs), (), None)
-
-
-def _missing_julia() -> BuildSelection:
-    raise ValueError("Configured Julia documentation inputs require Julia on PATH")
 
 
 def snapshot_retained_markdown(project_root: Path) -> dict[Path, bytes]:

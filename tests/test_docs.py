@@ -9,6 +9,7 @@ from unittest.mock import patch
 import yaml
 
 from tracecite import docs
+from tracecite.docs import build as docs_build
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -75,11 +76,11 @@ class DiscoveryTests(unittest.TestCase):
         python = root / "a.py"
         julia = root / "b.jl"
         inputs = (python, julia)
-        with patch.object(docs.shutil, "which", return_value="/bin/julia"):
+        with patch.object(docs_build.shutil, "which", return_value="/bin/julia"):
             combined = docs.select_build_variant(root, inputs, julia="/bin/julia")
         self.assertEqual(combined.variant, "combined")
         self.assertIsNone(combined.profile)
-        with patch.object(docs.shutil, "which", return_value=None):
+        with patch.object(docs_build.shutil, "which", return_value=None):
             fallback = docs.select_build_variant(root, inputs, julia=None)
         self.assertEqual(fallback.variant, "python")
         self.assertEqual(fallback.skipped, (julia.resolve(),))
@@ -218,14 +219,14 @@ class BuildTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / "index.md").write_text("# Index\n", encoding="utf-8")
-            with patch.object(docs.subprocess, "run") as run, patch.object(
-                docs, "export_embedding_site"
+            with patch.object(docs_build.subprocess, "run") as run, patch.object(
+                docs_build, "export_embedding_site"
             ) as export:
                 result = docs.build_docs(root, inspection=True)
             self.assertEqual(result.selection.variant, "prose")
             self.assertEqual(
                 run.call_args.args[0][:3],
-                [str(docs.shutil.which("quarto")), "render", root.name],
+                [str(docs_build.shutil.which("quarto")), "render", root.name],
             )
             export.assert_called_once()
 
@@ -253,7 +254,7 @@ class BuildTests(unittest.TestCase):
                 output.mkdir()
                 (output / "index.html").write_text("rendered\n", encoding="utf-8")
 
-            with patch.object(docs.subprocess, "run", side_effect=render):
+            with patch.object(docs_build.subprocess, "run", side_effect=render):
                 result = docs.build_docs(root, inspection=False)
 
             self.assertEqual(result.output_root, (root / "build").resolve())
@@ -291,7 +292,7 @@ class BuildTests(unittest.TestCase):
                 output.mkdir()
                 (output / "example.html").write_text("rendered\n", encoding="utf-8")
 
-            with patch.object(docs.subprocess, "run", side_effect=render):
+            with patch.object(docs_build.subprocess, "run", side_effect=render):
                 result = docs.build_docs(root, inspection=False)
 
             self.assertEqual(result.retained_count, 1)
@@ -326,7 +327,7 @@ class BuildTests(unittest.TestCase):
 
     def test_missing_quarto_is_reported(self) -> None:
         root, _ = self._project()
-        with patch.object(docs.shutil, "which", return_value=None):
+        with patch.object(docs_build.shutil, "which", return_value=None):
             with self.assertRaisesRegex(FileNotFoundError, "Quarto"):
                 docs.build_docs(root, inspection=False)
 
@@ -334,7 +335,7 @@ class BuildTests(unittest.TestCase):
         root, source = self._project("published")
         retained = source.with_name("index.html.md")
         retained.write_text("retained\n", encoding="utf-8")
-        with patch.object(docs.subprocess, "run"):
+        with patch.object(docs_build.subprocess, "run"):
             result = docs.build_docs(root, inspection=False)
         self.assertEqual(result.output_root, (root / "published").resolve())
         self.assertTrue((root / "published/index.html.md").is_file())
@@ -347,7 +348,7 @@ class BuildTests(unittest.TestCase):
         stale.write_text("stale\n", encoding="utf-8")
         retained = source.with_name("index.html.md")
         retained.write_text("retained\n", encoding="utf-8")
-        with patch.object(docs.subprocess, "run"):
+        with patch.object(docs_build.subprocess, "run"):
             docs.build_docs(root, inspection=False)
         self.assertFalse(stale.exists())
         self.assertTrue((output / "index.html.md").exists())
@@ -356,7 +357,7 @@ class BuildTests(unittest.TestCase):
         root, source = self._project()
         retained = source.with_name("index.html.md")
         retained.write_text("retained\n", encoding="utf-8")
-        with patch.object(docs.subprocess, "run"):
+        with patch.object(docs_build.subprocess, "run"):
             result = docs.build_docs(
                 root, inspection=False, check_retained=True
             )
@@ -370,7 +371,7 @@ class BuildTests(unittest.TestCase):
         def render(*args: object, **kwargs: object) -> None:
             retained.write_text("after\n", encoding="utf-8")
 
-        with patch.object(docs.subprocess, "run", side_effect=render):
+        with patch.object(docs_build.subprocess, "run", side_effect=render):
             result = docs.build_docs(
                 root, inspection=False, check_retained=True
             )
@@ -378,8 +379,8 @@ class BuildTests(unittest.TestCase):
 
     def test_inspection_can_be_disabled(self) -> None:
         root, _ = self._project()
-        with patch.object(docs.subprocess, "run") as run, patch.object(
-            docs, "export_embedding_site"
+        with patch.object(docs_build.subprocess, "run") as run, patch.object(
+            docs_build, "export_embedding_site"
         ) as export:
             docs.build_docs(root, inspection=False)
         run.assert_called_once()
@@ -387,8 +388,8 @@ class BuildTests(unittest.TestCase):
 
     def test_export_receives_strict_render_and_profile_controls(self) -> None:
         root, _ = self._project()
-        with patch.object(docs.subprocess, "run"), patch.object(
-            docs,
+        with patch.object(docs_build.subprocess, "run"), patch.object(
+            docs_build,
             "export_embedding_site",
             return_value=None,
         ) as export:
@@ -418,16 +419,16 @@ class BuildTests(unittest.TestCase):
         retained = source.with_name("index.html.md")
         retained.write_text("retained\n", encoding="utf-8")
         (root / "_quarto-python.yml").write_text("{}\n", encoding="utf-8")
-        with patch.object(docs.shutil, "which", return_value="/bin/tool"), patch.object(
-            docs.subprocess, "run"
-        ), patch.object(docs, "export_embedding_site", return_value=None) as export:
+        with patch.object(docs_build.shutil, "which", return_value="/bin/tool"), patch.object(
+            docs_build.subprocess, "run"
+        ), patch.object(docs_build, "export_embedding_site", return_value=None) as export:
             docs.build_docs(root, only="python")
         self.assertEqual(export.call_args.kwargs["project_profile"], "python")
 
     def test_quarto_failure_is_propagated(self) -> None:
         root, _ = self._project()
         failure = subprocess.CalledProcessError(17, ["quarto", "render"])
-        with patch.object(docs.subprocess, "run", side_effect=failure):
+        with patch.object(docs_build.subprocess, "run", side_effect=failure):
             with self.assertRaises(subprocess.CalledProcessError) as raised:
                 docs.build_docs(root, inspection=False)
         self.assertEqual(raised.exception.returncode, 17)

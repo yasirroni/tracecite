@@ -115,14 +115,12 @@ end
 """Describe the first row using only values computed in the supplied table."""
 function computed_first_row_summary(
     table;
-    title = nothing,
     columns = nothing,
     labels = Dict(),
     units = Dict(),
     formats = Dict(),
     prefix::AbstractString = "First-row finding",
 )
-    title = nothing
     source = Tables.columntable(table)
     available = string.(propertynames(source))
     selected = columns === nothing ? available : string.(columns)

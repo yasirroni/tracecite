@@ -71,12 +71,6 @@ end
         "**First-row finding.** Status is **firm**."
     @test computed_first_row_summary(table; columns = String[]) ==
         "**First-row finding.** No fields were selected."
-    @test computed_first_row_summary(
-        table;
-        title = "Legacy title",
-        columns = ["status"],
-    ) ==
-        "**First-row finding.** Status is **firm**."
     empty = DataFrame(status = String[])
     @test computed_first_row_summary(empty; columns = ["status"]) ==
         "**First-row finding.** The table contains no rows."

@@ -324,13 +324,6 @@ class PublishTests(unittest.TestCase):
         rendered = knowledge_table(frame, table_id="tbl-empty-summary", summary=[])
         self.assertIn("**First-row finding.** No fields were selected.", rendered)
 
-    def test_summary_title_is_source_compatible_but_not_repeated(self) -> None:
-        frame = pd.DataFrame({"status": ["firm"]})
-        rendered = computed_first_row_summary(
-            frame, title="Legacy title", columns=["status"]
-        )
-        self.assertEqual(rendered, "**First-row finding.** Status is **firm**.")
-
     def test_first_row_summary_handles_no_fields_and_no_rows(self) -> None:
         populated = pd.DataFrame({"status": ["firm"]})
         empty = pd.DataFrame({"status": pd.Series(dtype="object")})

@@ -1003,8 +1003,6 @@ def plan_prune(conn: sqlite3.Connection, selected_paths: Collection[str]) -> Pru
 def _canonical_asset_parts(database_path: Path, stored_asset_path: str, *, validate_filesystem: bool = True) -> tuple[str, ...]:
     if validate_filesystem:
         resolved = schema.resolve_asset_path(database_path, stored_asset_path)
-    elif stored_asset_path.startswith("/"):
-        resolved = Path(stored_asset_path)
     else:
         resolved = Path(database_path).resolve().parent.joinpath(*stored_asset_path.split("/"))
     try:

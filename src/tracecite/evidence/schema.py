@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 import json
-import re
 import sqlite3
 
 from . import vector_backend
@@ -505,12 +504,10 @@ def imgs_dir(database_path: Path) -> Path:
 def resolve_asset_path(database_path: Path, asset_identifier: str) -> Path:
     """Validate and resolve one stored asset identifier.
 
-    The preferred identifier form is a POSIX path relative to the database
-    parent beginning exactly with ``imgs/generations/``.  Existing databases may
-    still contain absolute paths under that same tree until the storage
-    migration runs.  The returned path is a validation snapshot: consumers must
-    call this function again immediately before using it when an operation lock
-    is held.
+    An identifier is a POSIX path relative to the database parent that begins
+    with ``imgs/generations/``. The returned path is a validation snapshot:
+    consumers must call this function again immediately before using it when
+    an operation lock is held.
     """
 
     if not isinstance(asset_identifier, str) or not asset_identifier:
@@ -519,29 +516,16 @@ def resolve_asset_path(database_path: Path, asset_identifier: str) -> Path:
         raise ValueError(f"asset identifier must be a POSIX path: {asset_identifier!r}")
     database_parent = Path(database_path).resolve().parent
     root = database_parent / "imgs"
-    generations_root = root / "generations"
     root_resolved = root.resolve(strict=False)
     if root.is_symlink():
         raise ValueError(f"asset image root is a symlink: {root}")
 
-    if asset_identifier.startswith("/"):
-        candidate = Path(asset_identifier)
-        try:
-            candidate.relative_to(generations_root)
-        except ValueError as exc:
-            raise ValueError(f"asset path escapes image root: {asset_identifier!r}") from exc
-    else:
-        if re.match(r"^[A-Za-z]:", asset_identifier):
-            raise ValueError(f"asset identifier must be relative: {asset_identifier!r}")
-
-        parts = asset_identifier.split("/")
-        if len(parts) < 3 or parts[:2] != ["imgs", "generations"]:
-            raise ValueError(f"asset identifier has the wrong root: {asset_identifier!r}")
-        if any(not part or part in (".", "..") for part in parts):
-            raise ValueError(f"asset identifier is not normalized: {asset_identifier!r}")
-        # Conversion happens only after the raw POSIX grammar has been checked.
-        identifier = Path(*parts)
-        candidate = database_parent.joinpath(*identifier.parts)
+    parts = asset_identifier.split("/")
+    if len(parts) < 3 or parts[:2] != ["imgs", "generations"]:
+        raise ValueError(f"asset identifier has the wrong root: {asset_identifier!r}")
+    if any(not part or part in (".", "..") for part in parts):
+        raise ValueError(f"asset identifier is not normalized: {asset_identifier!r}")
+    candidate = database_parent.joinpath(*parts)
 
     current = database_parent
     for component in candidate.relative_to(database_parent).parts:

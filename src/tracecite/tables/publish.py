@@ -141,7 +141,6 @@ def table_metadata_comment(
 def computed_first_row_summary(
     table: pd.DataFrame,
     *,
-    title: str | None = None,
     columns: Sequence[str] | None = None,
     labels: Mapping[str, str] | None = None,
     units: Mapping[str, str] | None = None,
@@ -150,7 +149,6 @@ def computed_first_row_summary(
 ) -> str:
     """Describe the first row using only values computed in ``table``."""
 
-    del title
     labels = dict(labels or {})
     units = dict(units or {})
     formats = dict(formats or {})

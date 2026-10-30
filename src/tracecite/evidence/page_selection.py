@@ -56,8 +56,6 @@ def resolve_page_selection(
     selector = selector.strip()
     if not selector:
         raise PageSelectionSyntaxError("invalid page selector: empty selector")
-    if selector == "--all-pages":
-        raise PageSelectionSyntaxError("invalid page selector: --all-pages")
 
     terms = [term.strip() for term in selector.split(",")]
     if any(term == "" for term in terms):
