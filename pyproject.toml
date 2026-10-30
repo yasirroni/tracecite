@@ -42,3 +42,11 @@ tracecite = ["skills/**/*"]
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.11"
+
+[tool.ruff]
+# scripts/bootstrap_docs.py copies these files from docs/.
+extend-exclude = ["docs_quarto_py"]
+
+[tool.ruff.lint.per-file-ignores]
+# A bare expression at the end of a notebook cell displays its value.
+"docs/examples/**/*.py" = ["B018"]

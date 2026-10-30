@@ -1,0 +1,9 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+        # Retained .html.md pages are generated docs output, so Markdown is not formatted.
+        types_or: [python, pyi, jupyter]

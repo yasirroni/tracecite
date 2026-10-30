@@ -265,6 +265,17 @@ To build the whole `docs/`, Julia environment is needed.
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
+### Lint and format
+
+[pre-commit](https://pre-commit.com/) runs [Ruff](https://docs.astral.sh/ruff/) on the Python files in each commit. Install it once and enable the hook:
+
+```sh
+uv tool install pre-commit
+pre-commit install
+```
+
+To check every file, run `pre-commit run --all-files`.
+
 ### Test
 
 Python tests and build:
