@@ -240,6 +240,13 @@ public_url = "https://example.invalid/report.pdf"
     assert any("query or fragment" in issue for issue in issues)
 
 
+def test_top_level_source_must_be_an_array_of_tables(tmp_path: Path) -> None:
+    registry_path = _write(tmp_path / "source-links.toml", "schema_version = 3\nsource = 42\n")
+    registry, issues = load_source_links(registry_path, tmp_path)
+    assert registry == {}
+    assert issues == [f"{registry_path} field source must be an array of tables"]
+
+
 def test_metadata_must_be_a_table(tmp_path: Path) -> None:
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")

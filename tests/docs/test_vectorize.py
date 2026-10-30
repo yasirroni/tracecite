@@ -441,18 +441,15 @@ def test_docs_index_cli_help_and_fixture_commands(tmp_path: Path, make_embedder)
     assert cli._docs_doctor(doctor_args) == 0
 
 
-def test_docs_index_commands_require_evidence_extra_guidance_when_missing() -> None:
-    args = cli.build_parser().parse_args(
-        ["docs", "index", "--docs-config", "docs/tracecite.toml", "--repo-root", "."]
-    )
-
+def test_docs_index_commands_require_evidence_extra_guidance_when_missing(capsys) -> None:
     def _raise(*_args, **_kwargs):
         raise ModuleNotFoundError("tracecite[evidence] is required")
 
     with patch.object(cli, "load_docs_contract", return_value=object()), patch.object(
         cli, "sync_docs_index", side_effect=_raise
     ):
-        assert cli._docs_index(args) == 2
+        assert cli.main(["docs", "index", "--docs-config", "docs/tracecite.toml", "--repo-root", "."]) == 2
+    assert "install with tracecite[evidence]" in capsys.readouterr().err
 
 
 def test_docs_index_search_doctor_parser_options_are_explicit() -> None:

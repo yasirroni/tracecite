@@ -695,33 +695,3 @@ def test_reference_destinations_accept_true_angle_and_escaped_space_paths(
         conn.close()
     assert result.quote_results[0].status == "exact"
     assert result.quote_results[0].source_path == "AEMO 2026 ISP.pdf"
-
-
-def test_source_links_top_level_source_must_be_array_of_tables(tmp_path):
-    source_links_path = tmp_path / "source-links.toml"
-    source_links_path.write_text("schema_version = 3\nsource = 42\n", encoding="utf-8")
-
-    registry, issues = verify._load_source_links(source_links_path, tmp_path)
-
-    assert registry == {}
-    assert issues == [f"{source_links_path} field source must be an array of tables"]
-
-
-@pytest.mark.parametrize("local_path", ["AEMO_2026_ISP.pdf?download=1", "AEMO_2026_ISP.pdf#page=65"])
-def test_verifier_source_link_loader_rejects_local_path_query_or_fragment(tmp_path, local_path):
-    source_links_path = tmp_path / "source-links.toml"
-    source_links_path.write_text(
-        f'''schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "{local_path}"
-public_url = "https://example.invalid/source.pdf"
-''',
-        encoding="utf-8",
-    )
-
-    registry, issues = verify._load_source_links(source_links_path, tmp_path)
-
-    assert registry == {}
-    assert issues == ["source entry 1 local_path must not contain a query or fragment"]
