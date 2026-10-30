@@ -25,15 +25,15 @@
       "source": "docs/examples/literate_documenter/src/temperature_eda.jl"
     },
     "examples/python/dirty_dataframe.html.md": {
-      "sha256": "324886682b3e911ed31d89bef8cf39d533a4814fe2e99a59517b289b29914d19",
+      "sha256": "fce801cb2d04d2dcecf7fb95c937fbd8d331ecc4be31a0f790c888514244d65e",
       "source": "docs/examples/python/dirty_dataframe.html.md"
     },
     "examples/python/hottest_temperature.html.md": {
-      "sha256": "cff73c411cb6a0390fce777a7ee5e39d9fca7f157444af7adbe460499a9979fb",
+      "sha256": "5be73a3514384ee66306dcdd56464712adced6cc4e6ddd91136983f50acd7ed7",
       "source": "docs/examples/python/hottest_temperature.html.md"
     },
     "examples/python/quarto_code_visibility.html.md": {
-      "sha256": "086f4f1030b8483d6acb8cfac9635f55f4c4c10f62a9835b1b3cef491e1f9715",
+      "sha256": "62c06b31917222533127528e1b952a19a3882a690cedc799acf13d0a37d30d93",
       "source": "docs/examples/python/quarto_code_visibility.html.md"
     },
     "examples/report-adoption/aemo-isp-comparison/index.md": {

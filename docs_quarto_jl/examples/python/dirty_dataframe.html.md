@@ -16,7 +16,6 @@ import pandas as pd
 
 from tracecite.tables import knowledge_table
 
-
 dirty_table = pd.DataFrame(
     {
         "technology": [
@@ -185,7 +184,9 @@ print(
         },
         row_identity=["technology"],  # Optional: logical identity for stable row IDs.
         summary=[  # Optional: first field is the subject of the generated finding.
-            "technology", "capital_cost_per_kw", "status"
+            "technology",
+            "capital_cost_per_kw",
+            "status",
         ],
     )
 )
