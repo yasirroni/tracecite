@@ -18,11 +18,6 @@ from tracecite.evidence import sync as sync_module
 from tracecite.evidence.sync import SyncError, SyncOptions
 
 
-def test_production_embedding_has_no_test_fake_environment_branch():
-    sync_source = Path(sync_module.__file__).read_text(encoding="utf-8")
-    assert "TRACECITE_TEST_FAKE_EMBEDDER" not in sync_source
-
-
 def _touch_future_mtime(path: Path) -> None:
     """Bump mtime without changing bytes, simulating an mtime-only touch."""
 

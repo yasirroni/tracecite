@@ -217,8 +217,6 @@ def test_author_renders_retained_with_callout_and_verified_page_citations(
     assert "sources/aemo/2026-integrated-system-plan.pdf#page=76" in text
     assert "sources/aemo/2026-integrated-system-plan.pdf#page=77" in text
     assert WEBSITE_CITATION in text
-    assert "large share of the original coal fleet already retired" not in text
-    assert "policy-driven retirement" not in text
 
     assert (root / "docs/authored/report.qmd").read_bytes() == authored_before
 

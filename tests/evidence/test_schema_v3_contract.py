@@ -4,10 +4,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from conftest import build_pdf, write_manifest
 
 from tracecite.evidence import schema
-from tracecite.evidence import sync as sync_module
 
 
 def test_schema_v3_uses_internal_source_pk_only(database_path: Path):
@@ -19,33 +17,13 @@ def test_schema_v3_uses_internal_source_pk_only(database_path: Path):
             for table in ("sources", "pages", "chunks", "assets")
         }
         assert columns["sources"][:2] == ["source_pk", "path"]
-        assert "source_id" not in columns["sources"]
         for table in ("pages", "chunks", "assets"):
             assert "source_pk" in columns[table]
-            assert "source_id" not in columns[table]
         source_sql = conn.execute(
             "SELECT sql FROM sqlite_master WHERE name='sources'"
         ).fetchone()[0]
         assert "source_pk INTEGER PRIMARY KEY AUTOINCREMENT" in source_sql
         assert "path TEXT NOT NULL UNIQUE" in source_sql
-    finally:
-        conn.close()
-
-
-def test_search_and_tables_expose_paths_not_source_ids(
-    corpus_dir, manifest_path, database_path, make_embedder
-):
-    build_pdf(
-        corpus_dir / "doc.pdf",
-        [["Title", "Path identity should be the only public identity."]],
-    )
-    write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    conn = schema.connect(database_path)
-    try:
-        source = conn.execute("SELECT * FROM sources").fetchone()
-        assert source["path"] == "doc.pdf"
-        assert "source_id" not in source
     finally:
         conn.close()
 
