@@ -5,5 +5,3 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
-        # Retained .html.md pages are generated docs output, so Markdown is not formatted.
-        types_or: [python, pyi, jupyter]

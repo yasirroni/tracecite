@@ -44,9 +44,10 @@ include = ["src", "tests"]
 pythonVersion = "3.11"
 
 [tool.ruff]
-# scripts/bootstrap_docs.py copies these files from docs/.
-extend-exclude = ["docs_quarto_py"]
+# scripts/bootstrap_docs.py copies docs_quarto_py from docs/. Markdown is not formatted
+# because retained .html.md pages are generated output and skill fixtures are test data.
+extend-exclude = ["docs_quarto_py", "*.md"]
 
 [tool.ruff.lint.per-file-ignores]
 # A bare expression at the end of a notebook cell displays its value.
-"docs/examples/**/*.py" = ["B018"]
+"docs/examples/python/*.py" = ["B018"]
