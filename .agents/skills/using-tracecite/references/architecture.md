@@ -7,19 +7,18 @@ tracecite/
   pyproject.toml, uv.lock              # locked dependency truth
   src/tracecite/
     __init__.py
-    cli.py                  # public command router
+    cli.py                  # command parser and router for every subcommand
     evidence/
-      cli.py                # evidence subcommand parser
       commands.py           # sync, search, page, extract-pages, verify, prune, doctor
       parsers/
-        base.py             # ParsedPage / ParsedChunkUnit / ParsedAsset / Parser protocol
+        base.py             # ParsedPage / ParsedChunkUnit / units_from_layout
         pdf.py              # PyMuPDF-backed extraction, page render, figure crops
         markdown.py
         workbook.py         # OOXML worksheet and A1-range extraction
       chunking.py           # greedy char-budget grouping, normalisation, hashing
       schema.py             # versioned schema + path-keyed sources + connect/ensure_schema
       sync.py               # the whole incremental synchronisation lifecycle
-      vector_backend.py     # SqliteVecBackend behind a narrow VectorBackend interface
+      vector_backend.py     # SqliteVecBackend: all vec0 SQL
       page_selection.py     # physical PDF page selector grammar
       page_output.py        # validated PDF page/crop result payloads
       page_extraction.py    # selected-page derivative PDFs and manifests
@@ -42,15 +41,12 @@ sync.py                      -- the only place that opens a write transaction
 schema.py + vector_backend.py -- the only places that know SQL/vec0 syntax
 ```
 
-- `cli.py`, `sync.py`, and `verify.py` depend only on `vector_backend.VectorBackend`'s interface
-  (`upsert`, `delete`, `search`, `integrity_check`, `version`, `capabilities`), never on vec0
-  virtual-table SQL directly. `tests/test_vector_backend.py` has a contract-test section that
-  exercises only this interface, so a future non-sqlite-vec backend could be swapped in without
-  touching parsers, chunking, sync, verification, or the CLI.
+- `commands.py` and `sync.py` reach vectors only through `SqliteVecBackend` (`upsert`, `delete`,
+  `search`, `integrity_check`), never through vec0 virtual-table SQL directly.
 - `pages` rows (see `references/schema-and-migrations.md`) are the retained parser output. A
   chunker- or normalisation-only change rebuilds chunk-input units straight from `pages.layout_json`
-  (via the matching parser's `units_from_page_layout`) without reopening the
-  source file — see `references/synchronisation.md`.
+  (`pdf.units_from_page_layout` for PDFs, `base.units_from_layout` for Markdown and workbooks)
+  without reopening the source file — see `references/synchronisation.md`.
 
 ## Explicit-input contract
 

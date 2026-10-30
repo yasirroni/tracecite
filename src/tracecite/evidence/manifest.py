@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import fnmatch
 import tomllib
 from types import MappingProxyType
@@ -53,7 +53,7 @@ class ManifestRules:
     explicit_paths: tuple[str, ...] = ()
     include_globs: tuple[str, ...] = ()
     exclude_globs: tuple[str, ...] = ()
-    origins: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    origins: Mapping[tuple[str, str], str] = field(default_factory=lambda: MappingProxyType({}))
 
     def selects_path(self, path: str) -> bool:
         path = str(path).replace("\\", "/")

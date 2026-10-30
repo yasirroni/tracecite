@@ -11,7 +11,7 @@ SqliteVecBackend exact k-NN top --vector-limit (default 50)
 reciprocal-rank fusion (k = 60), reduced to --limit (default 10)
 ```
 
-`cli._search()` computes both candidate lists, fuses them by `score(chunk) = sum(1 / (60 + rank))` over whichever list(s) contain that chunk, then returns the top `--limit` chunks (configurable 10-20 is the practical default; both `--fts-limit`
+`commands.hybrid_search()` computes both candidate lists, fuses them by `score(chunk) = sum(1 / (60 + rank))` over whichever list(s) contain that chunk, then returns the top `--limit` chunks (configurable 10-20 is the practical default; both `--fts-limit`
 and `--vector-limit` are independently configurable). Each result reports `rank`, `source_path`, `source_type`, `source_sha256`, `heading_path`, `passage` (`body`), `physical_page`, `page_offsets`, `page_range`, `line_range`, `locator`, `content_type`, `provenance` (`["lexical"]`, `["vector"]`, or both), and `fused_score`. PDF results for a physical page also include a ready-to-use `pdf_link` of the form `<source-path>#page=<N>`, a validated `page_render`, and zero or more validated `figure_crops`. Results without a PDF physical page use `null` for `page_render` and an empty list for `figure_crops`. Internal `chunk_id`, `source_pk`, page IDs, and asset IDs are not part of the result contract. Fused scores are relative ranking signals, not calibrated probabilities; never present them as absolute semantic confidence.
 
 ## Query recovery
@@ -22,7 +22,7 @@ Search results are for discovery. For PDFs, inspect `source_path`, retrieve the 
 
 For workbooks, inspect `source_sha256`, `locator.sheet`, and `locator.exact_ranges` in the authoritative workbook. `locator.range` is a bounding rectangle rather than a claim that every enclosed cell contributed to the result. Workbook search does not create a portable browser deep link or independently verify a displayed Excel rendering. Rank, fused score, Markdown hits, workbook hits, and a failed verification do not establish external-source proof.
 
-Vector search is scoped to the **active** embedding model only: `_search()` restricts
+Vector search is scoped to the **active** embedding model only: `hybrid_search()` restricts
 `allowed_embedding_ids` to `embeddings` rows whose `model_id` matches the current `kb_config`, so a
 retained-but-inactive older model's vectors never leak into ranking.
 
