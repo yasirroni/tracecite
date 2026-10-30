@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tracecite.evidence.source_links import (
     load_source_links,
     parse_staged_markdown_destination,
@@ -225,14 +227,15 @@ public_url = "https://example.invalid/report.txt"
     assert any(".pdf or .md" in issue for issue in issues)
 
 
-def test_local_path_with_query_or_fragment_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("local_path", ["sources/report.pdf?download=1", "sources/report.pdf#page=65"])
+def test_local_path_with_query_or_fragment_is_rejected(tmp_path: Path, local_path: str) -> None:
     registry_path = _write(
         tmp_path / "source-links.toml",
-        """schema_version = 3
+        f"""schema_version = 3
 
 [[source]]
 name = "report"
-local_path = "sources/report.pdf?download=1"
+local_path = "{local_path}"
 public_url = "https://example.invalid/report.pdf"
 """,
     )
