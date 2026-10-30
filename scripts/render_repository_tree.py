@@ -89,8 +89,7 @@ def _append_children(
             for path in directory.iterdir()
             if _is_visible(root, path, git_visible_files)
             and (
-                not path.is_dir()
-                or _has_visible_entries(root, path, git_visible_files)
+                not path.is_dir() or _has_visible_entries(root, path, git_visible_files)
             )
         ),
         key=lambda path: (not path.is_dir(), path.name.casefold()),
@@ -162,9 +161,6 @@ def _has_visible_entries(
             if not child.is_dir():
                 return True
             continue
-        if (
-            not child.is_dir()
-            or _has_visible_entries(root, child, git_visible_files)
-        ):
+        if not child.is_dir() or _has_visible_entries(root, child, git_visible_files):
             return True
     return False

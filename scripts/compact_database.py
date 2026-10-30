@@ -34,7 +34,15 @@ class MaintenanceError(RuntimeError):
     pass
 
 
-ORDINARY_TABLES = ("kb_config", "sources", "pages", "chunks", "embeddings", "chunk_embeddings", "assets")
+ORDINARY_TABLES = (
+    "kb_config",
+    "sources",
+    "pages",
+    "chunks",
+    "embeddings",
+    "chunk_embeddings",
+    "assets",
+)
 
 
 @dataclass
@@ -69,9 +77,13 @@ class MaintenanceHooks:
 
         conn = schema.connect_existing(candidate, read_only=False)
         try:
-            row = conn.execute("SELECT embedding_id FROM embedding_vectors ORDER BY embedding_id LIMIT 1").fetchone()
+            row = conn.execute(
+                "SELECT embedding_id FROM embedding_vectors ORDER BY embedding_id LIMIT 1"
+            ).fetchone()
             if row is not None:
-                conn.execute("DELETE FROM embedding_vectors WHERE embedding_id = ?", (row[0],))
+                conn.execute(
+                    "DELETE FROM embedding_vectors WHERE embedding_id = ?", (row[0],)
+                )
         finally:
             conn.close()
 
@@ -95,14 +107,27 @@ def _connect_rw_existing(path: Path) -> sqlite3.Connection:
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        is not None
+    )
 
 
 def table_row_counts(path: Path) -> dict[str, int | None]:
     with _connect_ro(path) as conn:
         counts: dict[str, int | None] = {}
         for table in ORDINARY_TABLES:
-            counts[table] = int(conn.execute(f"SELECT COUNT(*) FROM {_quote_identifier(table)}").fetchone()[0]) if _table_exists(conn, table) else None
+            counts[table] = (
+                int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM {_quote_identifier(table)}"
+                    ).fetchone()[0]
+                )
+                if _table_exists(conn, table)
+                else None
+            )
         return counts
 
 
@@ -110,7 +135,9 @@ def kb_config_values(path: Path) -> list[dict[str, Any]]:
     with _connect_ro(path) as conn:
         if not _table_exists(conn, "kb_config"):
             return []
-        return [dict(row) for row in conn.execute("SELECT * FROM kb_config ORDER BY id")]
+        return [
+            dict(row) for row in conn.execute("SELECT * FROM kb_config ORDER BY id")
+        ]
 
 
 def logical_fingerprint(path: Path) -> dict[str, str | None]:
@@ -120,11 +147,22 @@ def logical_fingerprint(path: Path) -> dict[str, str | None]:
             if not _table_exists(conn, table):
                 fingerprints[table] = None
                 continue
-            columns = [row[1] for row in conn.execute(f"PRAGMA table_info({_quote_identifier(table)})")]
+            columns = [
+                row[1]
+                for row in conn.execute(
+                    f"PRAGMA table_info({_quote_identifier(table)})"
+                )
+            ]
             order = ", ".join(_quote_identifier(column) for column in columns)
             digest = hashlib.sha256()
-            for row in conn.execute(f"SELECT * FROM {_quote_identifier(table)} ORDER BY {order}"):
-                digest.update(json.dumps(dict(row), sort_keys=True, default=str, separators=(",", ":")).encode("utf-8"))
+            for row in conn.execute(
+                f"SELECT * FROM {_quote_identifier(table)} ORDER BY {order}"
+            ):
+                digest.update(
+                    json.dumps(
+                        dict(row), sort_keys=True, default=str, separators=(",", ":")
+                    ).encode("utf-8")
+                )
                 digest.update(b"\n")
             fingerprints[table] = digest.hexdigest()
     return fingerprints
@@ -139,9 +177,13 @@ def vector_fingerprint(path: Path) -> dict[str, Any]:
         digest = hashlib.sha256()
         embedding_ids: list[int] = []
         try:
-            rows = conn.execute("SELECT embedding_id, vector FROM embedding_vectors ORDER BY embedding_id").fetchall()
+            rows = conn.execute(
+                "SELECT embedding_id, vector FROM embedding_vectors ORDER BY embedding_id"
+            ).fetchall()
         except sqlite3.Error as exc:
-            raise MaintenanceError(f"sqlite-vec vector payload unavailable: {exc}") from exc
+            raise MaintenanceError(
+                f"sqlite-vec vector payload unavailable: {exc}"
+            ) from exc
         for row in rows:
             embedding_id = int(row["embedding_id"])
             vector = bytes(row["vector"])
@@ -180,7 +222,15 @@ def _tracecite_schema_check(path: Path) -> None:
         conn.close()
 
 
-def validate_candidate(candidate: Path, original: Path, *, expected_counts: dict[str, int | None], expected_config: list[dict[str, Any]], expected_fingerprint: dict[str, str | None], expected_vectors: dict[str, Any]) -> None:
+def validate_candidate(
+    candidate: Path,
+    original: Path,
+    *,
+    expected_counts: dict[str, int | None],
+    expected_config: list[dict[str, Any]],
+    expected_fingerprint: dict[str, str | None],
+    expected_vectors: dict[str, Any],
+) -> None:
     _quick_check(candidate)
     _tracecite_schema_check(candidate)
     if table_row_counts(candidate) != expected_counts:
@@ -203,9 +253,13 @@ def _validate_target(path: Path) -> None:
     for suffix in ("-wal", "-shm", "-journal"):
         sidecar = path.with_name(path.name + suffix)
         if sidecar.exists():
-            raise MaintenanceError(f"refusing to compact while SQLite sidecar exists: {sidecar}")
+            raise MaintenanceError(
+                f"refusing to compact while SQLite sidecar exists: {sidecar}"
+            )
     if path.stat().st_dev != path.parent.stat().st_dev:
-        raise MaintenanceError("database and parent directory are not on same filesystem")
+        raise MaintenanceError(
+            "database and parent directory are not on same filesystem"
+        )
 
 
 def _fsync_file(path: Path) -> None:
@@ -234,13 +288,21 @@ def _vacuum_into(source: Path, candidate: Path, hooks: MaintenanceHooks) -> None
         conn.execute("VACUUM INTO ?", (str(candidate),))
 
 
-def compact_database(database: Path, *, apply: bool = False, hooks: MaintenanceHooks | None = None) -> dict[str, Any]:
+def compact_database(
+    database: Path, *, apply: bool = False, hooks: MaintenanceHooks | None = None
+) -> dict[str, Any]:
     hooks = hooks or MaintenanceHooks()
     database = Path(database)
     _validate_target(database)
     before = diagnose_database(database)
     if not apply:
-        return {"database": str(database), "applied": False, "before": before, "after": before, "reclaimed_bytes": 0}
+        return {
+            "database": str(database),
+            "applied": False,
+            "before": before,
+            "after": before,
+            "reclaimed_bytes": 0,
+        }
 
     mode = database.stat().st_mode & 0o7777
     expected_counts = table_row_counts(database)
@@ -248,15 +310,26 @@ def compact_database(database: Path, *, apply: bool = False, hooks: MaintenanceH
     expected_fingerprint = logical_fingerprint(database)
     expected_vectors = vector_fingerprint(database)
     token = uuid.uuid4().hex
-    candidate = database.with_name(f"{database.name}.tracecite-compact-{token}.candidate")
+    candidate = database.with_name(
+        f"{database.name}.tracecite-compact-{token}.candidate"
+    )
     quarantine = database.with_name(f"{database.name}.tracecite-original-{token}")
-    installed_failed = database.with_name(f"{database.name}.tracecite-compact-{token}.failed-install")
+    installed_failed = database.with_name(
+        f"{database.name}.tracecite-compact-{token}.failed-install"
+    )
     try:
         _vacuum_into(database, candidate, hooks)
         hooks.after_candidate_created(candidate)
         os.chmod(candidate, mode)
         _fsync_file(candidate)
-        validate_candidate(candidate, database, expected_counts=expected_counts, expected_config=expected_config, expected_fingerprint=expected_fingerprint, expected_vectors=expected_vectors)
+        validate_candidate(
+            candidate,
+            database,
+            expected_counts=expected_counts,
+            expected_config=expected_config,
+            expected_fingerprint=expected_fingerprint,
+            expected_vectors=expected_vectors,
+        )
         hooks.maybe_fail("prevalidate")
         if candidate.stat().st_dev != database.parent.stat().st_dev:
             raise MaintenanceError("candidate is not on same filesystem as target")
@@ -264,7 +337,14 @@ def compact_database(database: Path, *, apply: bool = False, hooks: MaintenanceH
         try:
             hooks.replace(candidate, database, "second_replace")
             try:
-                validate_candidate(database, quarantine, expected_counts=expected_counts, expected_config=expected_config, expected_fingerprint=expected_fingerprint, expected_vectors=expected_vectors)
+                validate_candidate(
+                    database,
+                    quarantine,
+                    expected_counts=expected_counts,
+                    expected_config=expected_config,
+                    expected_fingerprint=expected_fingerprint,
+                    expected_vectors=expected_vectors,
+                )
                 hooks.maybe_fail("postvalidate")
             except Exception:
                 if database.exists():
@@ -278,7 +358,13 @@ def compact_database(database: Path, *, apply: bool = False, hooks: MaintenanceH
         _fsync_parent(database)
         hooks.unlink(quarantine)
         after = diagnose_database(database)
-        return {"database": str(database), "applied": True, "before": before, "after": after, "reclaimed_bytes": before["file_bytes"] - after["file_bytes"]}
+        return {
+            "database": str(database),
+            "applied": True,
+            "before": before,
+            "after": after,
+            "reclaimed_bytes": before["file_bytes"] - after["file_bytes"],
+        }
     except MaintenanceError:
         raise
     except Exception as exc:
@@ -293,12 +379,21 @@ def compact_database(database: Path, *, apply: bool = False, hooks: MaintenanceH
 
 
 def format_compaction(report: dict[str, Any]) -> str:
-    lines = ["Before diagnostics:", format_human(report["before"]).rstrip(), "After diagnostics:", format_human(report["after"]).rstrip(), f"Applied: {report['applied']}", f"Reclaimed bytes: {report['reclaimed_bytes']}"]
+    lines = [
+        "Before diagnostics:",
+        format_human(report["before"]).rstrip(),
+        "After diagnostics:",
+        format_human(report["after"]).rstrip(),
+        f"Applied: {report['applied']}",
+        f"Reclaimed bytes: {report['reclaimed_bytes']}",
+    ]
     return "\n".join(lines) + "\n"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Preview or compact a TraceCite SQLite database safely.")
+    parser = argparse.ArgumentParser(
+        description="Preview or compact a TraceCite SQLite database safely."
+    )
     parser.add_argument("database", type=Path)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--json", action="store_true", dest="as_json")

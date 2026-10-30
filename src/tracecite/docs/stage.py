@@ -19,7 +19,9 @@ from ..evidence.source_links import (
 from .contract import DocsEvidenceContract
 
 StageTarget = Literal["local", "public"]
-_DEFINITION = re.compile(r"^(?P<prefix>\s{0,3}\[[^\]]+\]:\s*)(?P<destination>\S+)(?P<suffix>\s*)$")
+_DEFINITION = re.compile(
+    r"^(?P<prefix>\s{0,3}\[[^\]]+\]:\s*)(?P<destination>\S+)(?P<suffix>\s*)$"
+)
 _INLINE = re.compile(r"(?P<prefix>\[[^\]]+\]\()(?P<destination>[^\s)]+)(?P<suffix>\))")
 _FENCE = re.compile(r"^\s{0,3}(?P<marker>`{3,}|~{3,})(?P<suffix>.*)$")
 _HTML_TAG = re.compile(r"</?[A-Za-z][^>]*>")
@@ -28,23 +30,68 @@ _HTML_ELEMENT = re.compile(
     r"<(?P<tag>[A-Za-z][\w:-]*)\b[^>]*>.*?</(?P=tag)\s*>", re.DOTALL
 )
 _HTML_BLOCK_TAGS = {
-    "address", "article", "aside", "blockquote", "body", "caption", "center",
-    "colgroup", "dd", "details", "dialog", "dir", "div", "dl", "dt", "fieldset",
-    "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
-    "head", "header", "hgroup", "hr", "html", "legend", "li", "main", "menu", "nav",
-    "ol", "p", "pre", "script", "section", "summary", "table", "tbody", "td", "tfoot",
-    "th", "thead", "title", "tr", "ul",
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "body",
+    "caption",
+    "center",
+    "colgroup",
+    "dd",
+    "details",
+    "dialog",
+    "dir",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "head",
+    "header",
+    "hgroup",
+    "hr",
+    "html",
+    "legend",
+    "li",
+    "main",
+    "menu",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "script",
+    "section",
+    "summary",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "title",
+    "tr",
+    "ul",
 }
-_TABLE_SEPARATOR = re.compile(
-    r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$"
-)
+_TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
 
 
 def _in_inline_code(line: str, index: int) -> bool:
     return line[:index].count("`") % 2 == 1
 
 
-def _protected_ranges(line: str, in_comment: bool) -> tuple[list[tuple[int, int]], bool]:
+def _protected_ranges(
+    line: str, in_comment: bool
+) -> tuple[list[tuple[int, int]], bool]:
     ranges: list[tuple[int, int]] = []
     cursor = 0
     while cursor < len(line):
@@ -62,7 +109,9 @@ def _protected_ranges(line: str, in_comment: bool) -> tuple[list[tuple[int, int]
             break
         cursor = start
         in_comment = True
-    ranges.extend((match.start(), match.end()) for match in _HTML_ELEMENT.finditer(line))
+    ranges.extend(
+        (match.start(), match.end()) for match in _HTML_ELEMENT.finditer(line)
+    )
     for match in _HTML_TAG.finditer(line):
         if match.group(0).startswith("</"):
             continue
@@ -78,13 +127,20 @@ class DocsStageResult:
     changed_files: tuple[Path, ...]
 
 
-def _registry_entries(relative: str, markdown_path: Path,
-                      registry: dict[Path, list[SourceLinkEntry]]) -> list[SourceLinkEntry]:
+def _registry_entries(
+    relative: str, markdown_path: Path, registry: dict[Path, list[SourceLinkEntry]]
+) -> list[SourceLinkEntry]:
     return registry.get((markdown_path.parent / relative).resolve(), [])
 
 
-def _routed_destination(destination: str, markdown_path: Path, output_markdown_path: Path, repo_root: Path,
-                        registry: dict[Path, list[SourceLinkEntry]], target: StageTarget) -> str | None:
+def _routed_destination(
+    destination: str,
+    markdown_path: Path,
+    output_markdown_path: Path,
+    repo_root: Path,
+    registry: dict[Path, list[SourceLinkEntry]],
+    target: StageTarget,
+) -> str | None:
     """Return the staged form of a source-link destination, or ``None`` to leave it unchanged.
 
     A PDF ``#page=N`` destination must resolve to exactly one registry entry.
@@ -100,7 +156,9 @@ def _routed_destination(destination: str, markdown_path: Path, output_markdown_p
         relative, page = parsed
         entries = _registry_entries(relative, markdown_path, registry)
         if len(entries) != 1:
-            raise ValueError(f"source-link destination has {len(entries)} registry entries: {relative}")
+            raise ValueError(
+                f"source-link destination has {len(entries)} registry entries: {relative}"
+            )
         fragment = f"#page={page}"
     elif ".md" in destination.lower():
         parsed = parse_staged_markdown_destination(destination)
@@ -119,8 +177,14 @@ def _routed_destination(destination: str, markdown_path: Path, output_markdown_p
     return f"{Path(os.path.relpath(source, output_markdown_path.parent)).as_posix()}{fragment}"
 
 
-def _rewrite_markdown(text: str, markdown_path: Path, output_markdown_path: Path, repo_root: Path,
-                      registry: dict[Path, list[SourceLinkEntry]], target: StageTarget) -> str:
+def _rewrite_markdown(
+    text: str,
+    markdown_path: Path,
+    output_markdown_path: Path,
+    repo_root: Path,
+    registry: dict[Path, list[SourceLinkEntry]],
+    target: StageTarget,
+) -> str:
     output: list[str] = []
     fenced = False
     marker = ""
@@ -154,7 +218,11 @@ def _rewrite_markdown(text: str, markdown_path: Path, output_markdown_path: Path
         fence = _FENCE.match(bare)
         if fenced:
             output.append(line)
-            if fence and fence.group("marker")[0] == marker and not fence.group("suffix").strip():
+            if (
+                fence
+                and fence.group("marker")[0] == marker
+                and not fence.group("suffix").strip()
+            ):
                 fenced = False
             continue
         if fence:
@@ -171,7 +239,11 @@ def _rewrite_markdown(text: str, markdown_path: Path, output_markdown_path: Path
             or ("|" in bare and bool(_TABLE_SEPARATOR.match(next_bare)))
         )
         if table_line:
-            table_mode = separator or (table_mode and "|" in bare) or bare.lstrip().startswith("|")
+            table_mode = (
+                separator
+                or (table_mode and "|" in bare)
+                or bare.lstrip().startswith("|")
+            )
             output.append(line)
             continue
         if not bare.strip():
@@ -183,17 +255,28 @@ def _rewrite_markdown(text: str, markdown_path: Path, output_markdown_path: Path
         for opening in _HTML_OPEN_TAG.finditer(bare):
             tag = opening.group("tag").lower()
             if tag in _HTML_BLOCK_TAGS and not re.search(
-                rf"</{re.escape(tag)}\s*>", bare[opening.end():], re.IGNORECASE
+                rf"</{re.escape(tag)}\s*>", bare[opening.end() :], re.IGNORECASE
             ):
                 html_block_tag = tag
                 break
         definition = _DEFINITION.match(bare)
-        if definition and not any(start < definition.end() and definition.start() < end for start, end in protected):
+        if definition and not any(
+            start < definition.end() and definition.start() < end
+            for start, end in protected
+        ):
             replacement = _routed_destination(
-                definition.group("destination"), markdown_path, output_markdown_path, repo_root, registry, target
+                definition.group("destination"),
+                markdown_path,
+                output_markdown_path,
+                repo_root,
+                registry,
+                target,
             )
             if replacement is not None:
-                line = f"{definition.group('prefix')}{replacement}{definition.group('suffix')}" + line[len(bare):]
+                line = (
+                    f"{definition.group('prefix')}{replacement}{definition.group('suffix')}"
+                    + line[len(bare) :]
+                )
             output.append(line)
             continue
         cursor = 0
@@ -201,20 +284,36 @@ def _rewrite_markdown(text: str, markdown_path: Path, output_markdown_path: Path
         for match in _INLINE.finditer(bare):
             if _in_inline_code(bare, match.start()):
                 continue
-            if any(start < match.end() and match.start() < end for start, end in protected):
+            if any(
+                start < match.end() and match.start() < end for start, end in protected
+            ):
                 continue
             if match.start() > 0 and bare[match.start() - 1] == "!":
                 continue
             destination = match.group("destination")
             if destination.startswith("<"):
                 continue
-            replacement = _routed_destination(destination, markdown_path, output_markdown_path, repo_root, registry, target)
+            replacement = _routed_destination(
+                destination,
+                markdown_path,
+                output_markdown_path,
+                repo_root,
+                registry,
+                target,
+            )
             if replacement is not None:
-                pieces.extend((bare[cursor:match.start()], match.group("prefix"), replacement, match.group("suffix")))
+                pieces.extend(
+                    (
+                        bare[cursor : match.start()],
+                        match.group("prefix"),
+                        replacement,
+                        match.group("suffix"),
+                    )
+                )
                 cursor = match.end()
         if pieces:
             pieces.append(bare[cursor:])
-            line = "".join(pieces) + line[len(bare):]
+            line = "".join(pieces) + line[len(bare) :]
         output.append(line)
     return "".join(output)
 
@@ -234,7 +333,9 @@ def stage_docs(
         raise ValueError("invalid source-links registry: " + "; ".join(issues))
     contract.staged_root.parent.mkdir(parents=True, exist_ok=True)
     contract.staged_root.mkdir(parents=True, exist_ok=True)
-    temporary = Path(tempfile.mkdtemp(prefix=f".{target}-", dir=contract.staged_root.parent))
+    temporary = Path(
+        tempfile.mkdtemp(prefix=f".{target}-", dir=contract.staged_root.parent)
+    )
     target_path = contract.staged_root / target
     backup = target_path.with_name(f".{target}.previous")
     try:
@@ -256,7 +357,9 @@ def stage_docs(
             original = path.read_text(encoding="utf-8")
             relative = path.relative_to(temporary)
             link_path = link_root / relative
-            transformed = _rewrite_markdown(original, link_path, target_path / relative, root, registry, target)
+            transformed = _rewrite_markdown(
+                original, link_path, target_path / relative, root, registry, target
+            )
             if transformed != original:
                 path.write_text(transformed, encoding="utf-8")
                 changed.append(path.relative_to(temporary))
@@ -300,7 +403,9 @@ def validate_retained_source_links(
             continue
         relative = path.relative_to(contract.retained_root).as_posix()
         try:
-            _rewrite_markdown(path.read_text(encoding="utf-8"), path, path, root, registry, "local")
+            _rewrite_markdown(
+                path.read_text(encoding="utf-8"), path, path, root, registry, "local"
+            )
         except ValueError as exc:
             diagnostics.append(f"{relative}: {exc}")
     return tuple(diagnostics)

@@ -40,11 +40,16 @@ public_url = "https://www.aemo.com.au/path/to/2024-integrated-system-plan.pdf"
     entry = entries[0]
     assert entry.name == "aemo-isp-2024"
     assert entry.local_path == "sources/aemo/2024-integrated-system-plan.pdf"
-    assert entry.public_url == "https://www.aemo.com.au/path/to/2024-integrated-system-plan.pdf"
+    assert (
+        entry.public_url
+        == "https://www.aemo.com.au/path/to/2024-integrated-system-plan.pdf"
+    )
     assert entry.metadata == {}
 
 
-def test_opaque_nested_metadata_survives_parsing_without_affecting_identity(tmp_path: Path) -> None:
+def test_opaque_nested_metadata_survives_parsing_without_affecting_identity(
+    tmp_path: Path,
+) -> None:
     registry_path = _write(
         tmp_path / "source-links.toml",
         """schema_version = 3
@@ -98,7 +103,9 @@ type = "documentation"
 """,
     )
     (tmp_path / "docs/guide").mkdir(parents=True)
-    (tmp_path / "docs/guide/searchable-evidence.md").write_text("# Guide\n", encoding="utf-8")
+    (tmp_path / "docs/guide/searchable-evidence.md").write_text(
+        "# Guide\n", encoding="utf-8"
+    )
 
     registry, issues = load_source_links(registry_path, tmp_path)
     assert issues == []
@@ -162,7 +169,9 @@ public_url = "https://example.invalid/report.pdf"
 """,
     )
     registry, issues = load_source_links(registry_path, tmp_path)
-    assert any("missing required field" in issue and "name" in issue for issue in issues)
+    assert any(
+        "missing required field" in issue and "name" in issue for issue in issues
+    )
 
 
 def test_duplicate_names_are_rejected(tmp_path: Path) -> None:
@@ -227,8 +236,12 @@ public_url = "https://example.invalid/report.txt"
     assert any(".pdf or .md" in issue for issue in issues)
 
 
-@pytest.mark.parametrize("local_path", ["sources/report.pdf?download=1", "sources/report.pdf#page=65"])
-def test_local_path_with_query_or_fragment_is_rejected(tmp_path: Path, local_path: str) -> None:
+@pytest.mark.parametrize(
+    "local_path", ["sources/report.pdf?download=1", "sources/report.pdf#page=65"]
+)
+def test_local_path_with_query_or_fragment_is_rejected(
+    tmp_path: Path, local_path: str
+) -> None:
     registry_path = _write(
         tmp_path / "source-links.toml",
         f"""schema_version = 3
@@ -244,7 +257,9 @@ public_url = "https://example.invalid/report.pdf"
 
 
 def test_top_level_source_must_be_an_array_of_tables(tmp_path: Path) -> None:
-    registry_path = _write(tmp_path / "source-links.toml", "schema_version = 3\nsource = 42\n")
+    registry_path = _write(
+        tmp_path / "source-links.toml", "schema_version = 3\nsource = 42\n"
+    )
     registry, issues = load_source_links(registry_path, tmp_path)
     assert registry == {}
     assert issues == [f"{registry_path} field source must be an array of tables"]
@@ -268,7 +283,9 @@ metadata = ["not", "a", "table"]
     assert any("metadata must be a table" in issue for issue in issues)
 
 
-def test_public_url_allows_query_string_but_rejects_fragment_and_credentials(tmp_path: Path) -> None:
+def test_public_url_allows_query_string_but_rejects_fragment_and_credentials(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
 
@@ -339,7 +356,10 @@ source = ["not-a-table"]
 
 
 def test_parse_staged_source_destination_pdf_positive_page(tmp_path: Path) -> None:
-    assert parse_staged_source_destination("sources/report.pdf#page=7") == ("sources/report.pdf", 7)
+    assert parse_staged_source_destination("sources/report.pdf#page=7") == (
+        "sources/report.pdf",
+        7,
+    )
     assert parse_staged_source_destination("sources/report.pdf#page=0") is None
     assert parse_staged_source_destination("sources/report.pdf#page=-1") is None
     assert parse_staged_source_destination("sources/report.md#page=7") is None
@@ -357,7 +377,10 @@ def test_parse_staged_markdown_destination_without_anchor() -> None:
 
 
 def test_parse_staged_markdown_destination_with_anchor() -> None:
-    assert parse_staged_markdown_destination("relative.md#overview") == ("relative.md", "overview")
+    assert parse_staged_markdown_destination("relative.md#overview") == (
+        "relative.md",
+        "overview",
+    )
     assert parse_staged_markdown_destination("nested/page.md#section-2") == (
         "nested/page.md",
         "section-2",
@@ -369,7 +392,9 @@ def test_parse_staged_markdown_destination_rejects_malformed_candidates() -> Non
     assert parse_staged_markdown_destination("relative.md?download=1") is None
     assert parse_staged_markdown_destination("relative.md?download=1#overview") is None
     # Remote.
-    assert parse_staged_markdown_destination("https://example.invalid/relative.md") is None
+    assert (
+        parse_staged_markdown_destination("https://example.invalid/relative.md") is None
+    )
     # Angle-wrapped (escaping form), unsupported for narrow Markdown routing.
     assert parse_staged_markdown_destination("<relative.md>") is None
     # Multiple fragments or an empty fragment.

@@ -37,7 +37,9 @@ def _overlap(left: Path, right: Path) -> bool:
     return left.is_relative_to(right) or right.is_relative_to(left)
 
 
-def load_docs_contract(path: str | Path, *, repo_root: str | Path) -> DocsEvidenceContract:
+def load_docs_contract(
+    path: str | Path, *, repo_root: str | Path
+) -> DocsEvidenceContract:
     config_path = Path(path).resolve()
     root = Path(repo_root).resolve()
     try:
@@ -51,10 +53,14 @@ def load_docs_contract(path: str | Path, *, repo_root: str | Path) -> DocsEviden
     docs = data["docs"]
     unknown = set(docs) - _FIELDS
     if unknown:
-        raise ValueError(f"unknown docs configuration field(s): {', '.join(sorted(unknown))}")
+        raise ValueError(
+            f"unknown docs configuration field(s): {', '.join(sorted(unknown))}"
+        )
     missing = _FIELDS - set(docs) - {"host_render_command"}
     if missing:
-        raise ValueError(f"missing docs configuration field(s): {', '.join(sorted(missing))}")
+        raise ValueError(
+            f"missing docs configuration field(s): {', '.join(sorted(missing))}"
+        )
 
     authored = _path(docs.get("authored_root"), name="authored_root", repo_root=root)
     retained = _path(docs.get("retained_root"), name="retained_root", repo_root=root)
@@ -69,11 +75,15 @@ def load_docs_contract(path: str | Path, *, repo_root: str | Path) -> DocsEviden
         raise ValueError("retained_root and staged_root must not overlap")
     roots = (authored, retained, staged, source_links, index_output)
     for index, left in enumerate(roots):
-        for right in roots[index + 1:]:
-            if (left == authored and right == retained) or (left == retained and right == authored):
+        for right in roots[index + 1 :]:
+            if (left == authored and right == retained) or (
+                left == retained and right == authored
+            ):
                 if not _overlap(left, right) or left == right:
                     continue
-                raise ValueError("authored_root and retained_root may overlap only when equal")
+                raise ValueError(
+                    "authored_root and retained_root may overlap only when equal"
+                )
             if _overlap(left, right):
                 raise ValueError("docs contract paths must not contain one another")
 
@@ -85,9 +95,21 @@ def load_docs_contract(path: str | Path, *, repo_root: str | Path) -> DocsEviden
     )
     command = docs.get("host_render_command")
     if command is not None:
-        if not isinstance(command, list) or not command or not all(isinstance(item, str) and item for item in command):
+        if (
+            not isinstance(command, list)
+            or not command
+            or not all(isinstance(item, str) and item for item in command)
+        ):
             raise ValueError("host_render_command must be a non-empty argument array")
         command_tuple = tuple(command)
     else:
         command_tuple = None
-    return DocsEvidenceContract(authored, retained, staged, source_links, index_output, publication_exclude, command_tuple)
+    return DocsEvidenceContract(
+        authored,
+        retained,
+        staged,
+        source_links,
+        index_output,
+        publication_exclude,
+        command_tuple,
+    )

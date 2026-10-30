@@ -42,7 +42,9 @@ EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 EMBEDDING_DIMENSIONS = 384
 
 
-def embedding_model_id(model: str = EMBEDDING_MODEL, revision: str = EMBEDDING_REVISION) -> str:
+def embedding_model_id(
+    model: str = EMBEDDING_MODEL, revision: str = EMBEDDING_REVISION
+) -> str:
     return f"{model}@{revision}"
 
 
@@ -96,7 +98,16 @@ _REQUIRED_COLUMNS = {
         "created_at_utc",
         "updated_at_utc",
     },
-    "sources": {"source_pk", "path", "source_type", "sha256", "size_bytes", "mtime_ns", "parser_name", "parser_version"},
+    "sources": {
+        "source_pk",
+        "path",
+        "source_type",
+        "sha256",
+        "size_bytes",
+        "mtime_ns",
+        "parser_name",
+        "parser_version",
+    },
     "pages": {"page_id", "source_pk", "physical_page", "text"},
     "chunks": {"chunk_id", "source_pk", "logical_key", "body", "semantic_input_hash"},
     "embeddings": {"embedding_id", "model_id", "semantic_input_hash"},
@@ -105,9 +116,23 @@ _REQUIRED_COLUMNS = {
 }
 
 _REQUIRED_OBJECTS = {
-    "tables": {"kb_config", "sources", "pages", "chunks", "embeddings", "chunk_embeddings", "assets"},
+    "tables": {
+        "kb_config",
+        "sources",
+        "pages",
+        "chunks",
+        "embeddings",
+        "chunk_embeddings",
+        "assets",
+    },
     "virtual_tables": {"chunks_fts", "embedding_vectors"},
-    "indexes": {"chunks_sourcepk_idx", "chunks_source_logical_idx", "chunks_semantic_hash_idx", "chunk_embeddings_embedding_idx", "assets_sourcepk_page_idx"},
+    "indexes": {
+        "chunks_sourcepk_idx",
+        "chunks_source_logical_idx",
+        "chunks_semantic_hash_idx",
+        "chunk_embeddings_embedding_idx",
+        "assets_sourcepk_page_idx",
+    },
     "triggers": {"chunks_ai", "chunks_ad", "chunks_au"},
 }
 
@@ -194,27 +219,39 @@ def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
 def _object_names(conn: sqlite3.Connection, object_type: str) -> set[str]:
     return {
         row["name"]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = ?", (object_type,)).fetchall()
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = ?", (object_type,)
+        ).fetchall()
     }
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    return {
+        row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
 
 
 def _validate_schema_objects(conn: sqlite3.Connection) -> None:
     tables = _object_names(conn, "table") | _object_names(conn, "view")
-    for table in sorted(_REQUIRED_OBJECTS["tables"] | _REQUIRED_OBJECTS["virtual_tables"]):
+    for table in sorted(
+        _REQUIRED_OBJECTS["tables"] | _REQUIRED_OBJECTS["virtual_tables"]
+    ):
         if table not in tables:
-            raise IncompatibleDatabaseError(f"schema v{SCHEMA_VERSION} is missing required object {table}")
+            raise IncompatibleDatabaseError(
+                f"schema v{SCHEMA_VERSION} is missing required object {table}"
+            )
     indexes = _object_names(conn, "index")
     for index in sorted(_REQUIRED_OBJECTS["indexes"]):
         if index not in indexes:
-            raise IncompatibleDatabaseError(f"schema v{SCHEMA_VERSION} is missing required index {index}")
+            raise IncompatibleDatabaseError(
+                f"schema v{SCHEMA_VERSION} is missing required index {index}"
+            )
     triggers = _object_names(conn, "trigger")
     for trigger in sorted(_REQUIRED_OBJECTS["triggers"]):
         if trigger not in triggers:
-            raise IncompatibleDatabaseError(f"schema v{SCHEMA_VERSION} is missing required trigger {trigger}")
+            raise IncompatibleDatabaseError(
+                f"schema v{SCHEMA_VERSION} is missing required trigger {trigger}"
+            )
     for table, required_columns in sorted(_REQUIRED_COLUMNS.items()):
         columns = _columns(conn, table)
         missing = required_columns - columns
@@ -222,9 +259,13 @@ def _validate_schema_objects(conn: sqlite3.Connection) -> None:
             raise IncompatibleDatabaseError(
                 f"schema v{SCHEMA_VERSION} table {table} is missing required column(s) {', '.join(sorted(missing))}"
             )
-    absolute = conn.execute("SELECT asset_path FROM assets WHERE asset_path GLOB '/*' LIMIT 1").fetchone()
+    absolute = conn.execute(
+        "SELECT asset_path FROM assets WHERE asset_path GLOB '/*' LIMIT 1"
+    ).fetchone()
     if absolute is not None:
-        raise IncompatibleDatabaseError("schema v3 database contains absolute asset paths and must be rebuilt")
+        raise IncompatibleDatabaseError(
+            "schema v3 database contains absolute asset paths and must be rebuilt"
+        )
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
@@ -447,7 +488,9 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             )
             """
         )
-        conn.execute("CREATE INDEX assets_sourcepk_page_idx ON assets(source_pk, physical_page)")
+        conn.execute(
+            "CREATE INDEX assets_sourcepk_page_idx ON assets(source_pk, physical_page)"
+        )
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
@@ -537,5 +580,7 @@ def resolve_asset_path(database_path: Path, asset_identifier: str) -> Path:
     try:
         resolved.relative_to(root_resolved)
     except ValueError as exc:
-        raise ValueError(f"asset path escapes image root: {asset_identifier!r}") from exc
+        raise ValueError(
+            f"asset path escapes image root: {asset_identifier!r}"
+        ) from exc
     return candidate

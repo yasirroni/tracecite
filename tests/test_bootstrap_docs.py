@@ -145,7 +145,9 @@ class BootstrapCleanCheckTests(unittest.TestCase):
                     raise OSError("injected manifest promotion failure")
                 return real_replace(source, target)
 
-            with mock.patch.object(module.os, "replace", side_effect=fail_once_on_manifest):
+            with mock.patch.object(
+                module.os, "replace", side_effect=fail_once_on_manifest
+            ):
                 with self.assertRaisesRegex(OSError, "injected manifest"):
                     module.bootstrap(mappings)
 
@@ -160,7 +162,15 @@ class BootstrapCleanCheckTests(unittest.TestCase):
 
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
             subprocess.run(
-                ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "add", "-A"],
+                [
+                    "git",
+                    "-c",
+                    "user.email=test@example.com",
+                    "-c",
+                    "user.name=Test",
+                    "add",
+                    "-A",
+                ],
                 cwd=root,
                 check=True,
             )
@@ -184,7 +194,15 @@ class BootstrapCleanCheckTests(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
 
             subprocess.run(
-                ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "add", "-A"],
+                [
+                    "git",
+                    "-c",
+                    "user.email=test@example.com",
+                    "-c",
+                    "user.name=Test",
+                    "add",
+                    "-A",
+                ],
                 cwd=root,
                 check=True,
             )
@@ -235,7 +253,9 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
         for project in ("docs_quarto_py", "docs_quarto_jl", "docs_jl"):
             project_dir = REPO_ROOT / project
             for path in project_dir.rglob("*"):
-                if any(part in {"build", ".quarto", "site_libs"} for part in path.parts):
+                if any(
+                    part in {"build", ".quarto", "site_libs"} for part in path.parts
+                ):
                     continue
                 self.assertFalse(
                     path.is_symlink(),
@@ -248,7 +268,16 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
             shutil.rmtree(build_dir)
 
         result = subprocess.run(
-            ["uv", "run", "tracecite", "docs", "build", "docs_quarto_jl", "--only", "julia"],
+            [
+                "uv",
+                "run",
+                "tracecite",
+                "docs",
+                "build",
+                "docs_quarto_jl",
+                "--only",
+                "julia",
+            ],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

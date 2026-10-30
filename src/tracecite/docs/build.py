@@ -114,16 +114,12 @@ def select_build_variant(
     julia: str | None = None,
 ) -> BuildSelection:
     project_root = Path(project_root).resolve()
-    inputs = tuple(
-        _normalize_input_path(Path(path), project_root)
-        for path in inputs
-    )
+    inputs = tuple(_normalize_input_path(Path(path), project_root) for path in inputs)
     classified = classify_render_inputs(inputs)
     available = {language for language, paths in classified.items() if paths}
     if only and not classified[only]:
         raise ValueError(
-            "Requested language is absent from configured render inputs: "
-            f"{only}"
+            f"Requested language is absent from configured render inputs: {only}"
         )
     if only == "julia" and not julia:
         raise ValueError("Julia-only documentation build requires Julia on PATH")
@@ -154,13 +150,11 @@ def select_build_variant(
         overlay = project_root / "_quarto-python.yml"
         if not overlay.is_file():
             raise ValueError(
-                "Automatic Python fallback requires reduced overlay: "
-                f"{overlay}"
+                f"Automatic Python fallback requires reduced overlay: {overlay}"
             )
         skipped = classified["julia"]
         warning = "Julia unavailable; skipping configured files:\n" + "\n".join(
-            f"- {path.relative_to(project_root)}"
-            for path in skipped
+            f"- {path.relative_to(project_root)}" for path in skipped
         )
         included = tuple(path for path in inputs if path not in skipped)
         return BuildSelection("python", "python", included, skipped, warning)
@@ -212,9 +206,7 @@ def stage_retained_markdown(
         if not retained.is_file():
             continue
         relative = authored.relative_to(project_root)
-        destination = output_root / relative.with_name(
-            relative.stem + ".html.md"
-        )
+        destination = output_root / relative.with_name(relative.stem + ".html.md")
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(retained, destination)
         count += 1
@@ -297,9 +289,7 @@ def _publish_materialised_render(
     for authored in inputs:
         relative = authored.relative_to(project_root)
         staged_authored = staged_root / relative
-        staged_retained = staged_authored.with_name(
-            staged_authored.stem + ".html.md"
-        )
+        staged_retained = staged_authored.with_name(staged_authored.stem + ".html.md")
         if not staged_retained.is_file():
             continue
         destination = _retained_destination(authored)
@@ -369,7 +359,9 @@ def build_docs(
                 project_root,
                 selection.included,
             )
-    retained_count = stage_retained_markdown(project_root, output_root, selection.included)
+    retained_count = stage_retained_markdown(
+        project_root, output_root, selection.included
+    )
     exported = None
     if inspection:
         exported = export_embedding_site(
@@ -383,4 +375,6 @@ def build_docs(
             quarto=quarto_command,
         )
     changed = changed_retained_markdown(before, project_root) if check_retained else ()
-    return DocsBuildResult(project_root, output_root, selection, retained_count, exported, changed)
+    return DocsBuildResult(
+        project_root, output_root, selection, retained_count, exported, changed
+    )

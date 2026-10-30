@@ -82,19 +82,20 @@ publication_exclude = []
 def test_verifier_and_stager_share_destination_parser_contract() -> None:
     destination = "<sources/report\\ file.pdf#page=7>"
     assert parse_source_link_destination(destination) == ("sources/report file.pdf", 7)
-    definitions, issues, _ = _parse_definitions(
-        [f"[report]: {destination}"]
-    )
+    definitions, issues, _ = _parse_definitions([f"[report]: {destination}"])
     assert issues == []
     assert definitions["report"].path == "sources/report file.pdf"
     assert definitions["report"].page == 7
     assert parse_staged_source_destination("sources/report.pdf#page=7") == (
-        "sources/report.pdf", 7
+        "sources/report.pdf",
+        7,
     )
     assert parse_staged_source_destination("sources/report.pdf#page=0") is None
 
 
-def test_verifier_delegates_definition_parsing_at_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_verifier_delegates_definition_parsing_at_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[str] = []
 
     def delegated(destination: str) -> tuple[str, int]:
@@ -139,7 +140,9 @@ def test_stage_local_and_public_rewrite_only_targeted_links(tmp_path: Path) -> N
     assert (contract.staged_root / "local/index.md").is_file()
 
 
-def test_protected_markdown_constructs_are_preserved_byte_for_byte(tmp_path: Path) -> None:
+def test_protected_markdown_constructs_are_preserved_byte_for_byte(
+    tmp_path: Path,
+) -> None:
     config_path, _, original = _fixture(tmp_path)
     contract = load_docs_contract(config_path, repo_root=tmp_path)
     result = stage_docs(contract, target="public", repo_root=tmp_path)
@@ -181,13 +184,15 @@ def test_later_thematic_break_is_not_frontmatter(tmp_path: Path) -> None:
     ).read_text(encoding="utf-8")
 
 
-def test_eligible_links_outside_inline_html_and_comments_are_rewritten(tmp_path: Path) -> None:
+def test_eligible_links_outside_inline_html_and_comments_are_rewritten(
+    tmp_path: Path,
+) -> None:
     config_path, retained_file, _ = _fixture(tmp_path)
     retained_file.write_text(
-        '<span>[raw](../../sources/report.pdf#page=30)</span> '
-        'and [eligible](../../sources/report.pdf#page=31)\n'
-        '<!-- [comment](../../sources/report.pdf#page=32) --> '
-        'and [eligible-too](../../sources/report.pdf#page=33)\n',
+        "<span>[raw](../../sources/report.pdf#page=30)</span> "
+        "and [eligible](../../sources/report.pdf#page=31)\n"
+        "<!-- [comment](../../sources/report.pdf#page=32) --> "
+        "and [eligible-too](../../sources/report.pdf#page=33)\n",
         encoding="utf-8",
     )
     contract = load_docs_contract(config_path, repo_root=tmp_path)
@@ -200,7 +205,9 @@ def test_eligible_links_outside_inline_html_and_comments_are_rewritten(tmp_path:
     assert "https://publisher.example/report.pdf?rev=1#page=33" in text
 
 
-def test_multiline_raw_html_block_is_protected_until_closing_tag(tmp_path: Path) -> None:
+def test_multiline_raw_html_block_is_protected_until_closing_tag(
+    tmp_path: Path,
+) -> None:
     config_path, retained_file, _ = _fixture(tmp_path)
     retained_file.write_text(
         "<div>\n"
@@ -217,7 +224,9 @@ def test_multiline_raw_html_block_is_protected_until_closing_tag(tmp_path: Path)
     assert "https://publisher.example/report.pdf?rev=1#page=35" in text
 
 
-def test_multiline_html_comment_is_protected_until_closing_marker(tmp_path: Path) -> None:
+def test_multiline_html_comment_is_protected_until_closing_marker(
+    tmp_path: Path,
+) -> None:
     config_path, retained_file, _ = _fixture(tmp_path)
     retained_file.write_text(
         "<!--\n"
@@ -234,16 +243,16 @@ def test_multiline_html_comment_is_protected_until_closing_marker(tmp_path: Path
     assert "https://publisher.example/report.pdf?rev=1#page=37" in text
 
 
-@pytest.mark.parametrize("field_value", ["sources/report.pdf?download=1", "sources/report.pdf#page=2"])
+@pytest.mark.parametrize(
+    "field_value", ["sources/report.pdf?download=1", "sources/report.pdf#page=2"]
+)
 def test_registry_rejects_local_path_query_or_fragment(
     tmp_path: Path, field_value: str
 ) -> None:
     config_path, _, _ = _fixture(tmp_path)
     registry = tmp_path / "docs/source-links.toml"
     registry.write_text(
-        registry.read_text(encoding="utf-8").replace(
-            "sources/report.pdf", field_value
-        ),
+        registry.read_text(encoding="utf-8").replace("sources/report.pdf", field_value),
         encoding="utf-8",
     )
     contract = load_docs_contract(config_path, repo_root=tmp_path)
@@ -278,7 +287,9 @@ def _markdown_fixture(tmp_path: Path) -> tuple[Path, Path, str]:
     retained.mkdir()
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"pdf")
-    (tmp_path / "sources/architecture-note.md").write_text("# Architecture note\n", encoding="utf-8")
+    (tmp_path / "sources/architecture-note.md").write_text(
+        "# Architecture note\n", encoding="utf-8"
+    )
     (tmp_path / "docs/source-links.toml").write_text(
         """schema_version = 3
 
@@ -335,7 +346,9 @@ publication_exclude = []
     return config, retained / "index.md", source
 
 
-def test_markdown_to_html_routing_local_and_public_with_and_without_anchor(tmp_path: Path) -> None:
+def test_markdown_to_html_routing_local_and_public_with_and_without_anchor(
+    tmp_path: Path,
+) -> None:
     config_path, retained_file, original = _markdown_fixture(tmp_path)
     contract = load_docs_contract(config_path, repo_root=tmp_path)
 
@@ -359,7 +372,9 @@ def test_markdown_to_html_routing_local_and_public_with_and_without_anchor(tmp_p
     assert "https://publisher.example/report.pdf?rev=1#page=3" in public_text
 
 
-def test_markdown_routing_leaves_unrelated_and_unsupported_candidates_untouched(tmp_path: Path) -> None:
+def test_markdown_routing_leaves_unrelated_and_unsupported_candidates_untouched(
+    tmp_path: Path,
+) -> None:
     config_path, _, original = _markdown_fixture(tmp_path)
     contract = load_docs_contract(config_path, repo_root=tmp_path)
     result = stage_docs(contract, target="public", repo_root=tmp_path)
@@ -381,7 +396,9 @@ def test_markdown_routing_leaves_unrelated_and_unsupported_candidates_untouched(
         assert line in staged, line
 
 
-def test_markdown_routing_preserves_protected_regions_byte_for_byte(tmp_path: Path) -> None:
+def test_markdown_routing_preserves_protected_regions_byte_for_byte(
+    tmp_path: Path,
+) -> None:
     config_path, _, original = _markdown_fixture(tmp_path)
     contract = load_docs_contract(config_path, repo_root=tmp_path)
     result = stage_docs(contract, target="public", repo_root=tmp_path)

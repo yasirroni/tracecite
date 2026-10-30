@@ -24,9 +24,7 @@ import pandas as pd
 from tracecite.tables import knowledge_table
 
 
-example = pd.DataFrame(
-    {"method": ["visible", "hidden", "folded"], "count": [1, 2, 3]}
-)
+example = pd.DataFrame({"method": ["visible", "hidden", "folded"], "count": [1, 2, 3]})
 
 # %% [markdown]
 """

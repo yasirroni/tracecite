@@ -1,4 +1,5 @@
 """Host-owned static publish fixture; intentionally stdlib-only."""
+
 from pathlib import Path
 import shutil
 import sys

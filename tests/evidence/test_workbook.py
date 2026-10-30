@@ -178,6 +178,7 @@ def test_page_command_rejects_workbook_sheet_indexes_as_pdf_pages(
     assert captured.out == ""
     assert captured.err == "source is not a pdf: assumptions.xlsx\n"
 
+
 def test_workbook_dropped_from_manifest_is_retained_until_prune(
     corpus_dir,
     manifest_path,
@@ -185,13 +186,19 @@ def test_workbook_dropped_from_manifest_is_retained_until_prune(
     make_embedder,
 ):
     workbook_path = _write_test_workbook(corpus_dir / "assumptions.xlsx")
-    notes_path = build_markdown(corpus_dir / "notes.md", "# Notes\n\nA Markdown source that stays selected.\n")
-    write_manifest(manifest_path, {"workbook": workbook_path.name, "notes": notes_path.name})
+    notes_path = build_markdown(
+        corpus_dir / "notes.md", "# Notes\n\nA Markdown source that stays selected.\n"
+    )
+    write_manifest(
+        manifest_path, {"workbook": workbook_path.name, "notes": notes_path.name}
+    )
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
 
     write_manifest(manifest_path, {"notes": notes_path.name})
-    report = sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=embedder
+    )
     assert report.indexed_unselected_paths == ["assumptions.xlsx"]
     assert report.selected_missing_paths == []
 
@@ -203,7 +210,9 @@ def test_workbook_dropped_from_manifest_is_retained_until_prune(
         plan = sync_module.plan_prune(conn, selected_paths=["notes.md"])
         assert plan.paths == ("assumptions.xlsx",)
         assert sync_module.apply_prune(conn, database_path, plan) == []
-        assert {row["path"] for row in conn.execute("SELECT path FROM sources")} == {"notes.md"}
+        assert {row["path"] for row in conn.execute("SELECT path FROM sources")} == {
+            "notes.md"
+        }
         assert conn.execute(workbook_chunks).fetchone()[0] == 0
         assert sync_module.integrity_check(conn) == []
     finally:
@@ -222,7 +231,9 @@ def test_workbook_cell_change_reparses_and_replaces_searchable_chunks(
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
 
     _write_test_workbook(workbook_path, retirement_year=2031)
-    report = sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=embedder
+    )
     assert report.sources_reparsed == ["assumptions.xlsx"]
 
     conn = schema.connect(database_path)

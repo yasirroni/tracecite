@@ -104,7 +104,10 @@ def _touch_future_mtime(path: Path) -> None:
 def _index_snapshot(database_path: Path) -> dict[str, object]:
     conn = schema.connect(database_path)
     try:
-        sources = [row["path"] for row in conn.execute("SELECT path FROM sources ORDER BY path")]
+        sources = [
+            row["path"]
+            for row in conn.execute("SELECT path FROM sources ORDER BY path")
+        ]
         chunks = conn.execute(
             "SELECT chunk_id, source_pk, logical_key, lexical_hash, semantic_input_hash "
             "FROM chunks ORDER BY chunk_id"
@@ -138,7 +141,9 @@ def test_mirror_preserves_relative_paths_and_augments_tables(tmp_path: Path) -> 
     assert 'glob = "**/*.md"' in profile.manifest_path.read_text(encoding="utf-8")
 
 
-def test_prepare_atomically_replaces_index_input_and_preserves_siblings(tmp_path: Path) -> None:
+def test_prepare_atomically_replaces_index_input_and_preserves_siblings(
+    tmp_path: Path,
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     profile, _ = prepare_docs_index_input(contract, repo_root=root)
@@ -155,13 +160,17 @@ def test_prepare_failure_preserves_previous_index_input(tmp_path: Path) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     prepare_docs_index_input(contract, repo_root=root)
-    previous = (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8")
+    previous = (contract.staged_root / "index-input/index.md").read_text(
+        encoding="utf-8"
+    )
     (contract.retained_root / "index.md").write_text(
         "See [bad](../../sources/missing.pdf#page=0).\n", encoding="utf-8"
     )
     with pytest.raises(ValueError):
         prepare_docs_index_input(contract, repo_root=root)
-    assert (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8") == previous
+    assert (contract.staged_root / "index-input/index.md").read_text(
+        encoding="utf-8"
+    ) == previous
 
 
 def test_prepare_rolls_back_both_files_when_manifest_promotion_fails(
@@ -170,8 +179,12 @@ def test_prepare_rolls_back_both_files_when_manifest_promotion_fails(
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     prepare_docs_index_input(contract, repo_root=root)
-    previous_mirror = (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8")
-    previous_manifest = (contract.staged_root / "index-input.manifest.toml").read_text(encoding="utf-8")
+    previous_mirror = (contract.staged_root / "index-input/index.md").read_text(
+        encoding="utf-8"
+    )
+    previous_manifest = (contract.staged_root / "index-input.manifest.toml").read_text(
+        encoding="utf-8"
+    )
 
     real_replace = os.replace
     calls = {"count": 0}
@@ -186,10 +199,12 @@ def test_prepare_rolls_back_both_files_when_manifest_promotion_fails(
     with pytest.raises(OSError):
         prepare_docs_index_input(contract, repo_root=root)
 
-    assert (contract.staged_root / "index-input/index.md").read_text(encoding="utf-8") == previous_mirror
-    assert (
-        contract.staged_root / "index-input.manifest.toml"
-    ).read_text(encoding="utf-8") == previous_manifest
+    assert (contract.staged_root / "index-input/index.md").read_text(
+        encoding="utf-8"
+    ) == previous_mirror
+    assert (contract.staged_root / "index-input.manifest.toml").read_text(
+        encoding="utf-8"
+    ) == previous_manifest
     assert list(contract.staged_root.glob(".*.previous")) == []
 
 
@@ -241,7 +256,9 @@ def test_publication_exclude_is_translated_into_manifest(tmp_path: Path) -> None
     assert not (profile.input_root / "private/secret.md").exists()
 
 
-def test_malformed_source_link_blocks_prepare_before_database(tmp_path: Path, make_embedder) -> None:
+def test_malformed_source_link_blocks_prepare_before_database(
+    tmp_path: Path, make_embedder
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     (contract.retained_root / "index.md").write_text(
@@ -252,7 +269,9 @@ def test_malformed_source_link_blocks_prepare_before_database(tmp_path: Path, ma
     assert not contract.index_output.exists()
 
 
-def test_sync_indexes_and_repeated_sync_is_unchanged(tmp_path: Path, make_embedder) -> None:
+def test_sync_indexes_and_repeated_sync_is_unchanged(
+    tmp_path: Path, make_embedder
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     embedder = make_embedder()
@@ -264,7 +283,9 @@ def test_sync_indexes_and_repeated_sync_is_unchanged(tmp_path: Path, make_embedd
     assert len(embedder.calls) == calls_before
 
 
-def test_mtime_only_touch_does_not_change_semantic_identity(tmp_path: Path, make_embedder) -> None:
+def test_mtime_only_touch_does_not_change_semantic_identity(
+    tmp_path: Path, make_embedder
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     embedder = make_embedder()
@@ -277,7 +298,9 @@ def test_mtime_only_touch_does_not_change_semantic_identity(tmp_path: Path, make
     assert _index_snapshot(contract.index_output) == before
 
 
-def test_content_change_and_rename_follow_existing_sync_semantics(tmp_path: Path, make_embedder) -> None:
+def test_content_change_and_rename_follow_existing_sync_semantics(
+    tmp_path: Path, make_embedder
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     embedder = make_embedder()
@@ -290,23 +313,34 @@ def test_content_change_and_rename_follow_existing_sync_semantics(tmp_path: Path
     renamed = contract.retained_root / "renamed.md"
     retained.rename(renamed)
     report = sync_docs_index(contract, repo_root=root, embedder=embedder)
-    assert "renamed.md" in report.sync_report.sources_added or report.sync_report.sources_renamed
+    assert (
+        "renamed.md" in report.sync_report.sources_added
+        or report.sync_report.sources_renamed
+    )
 
 
-def test_same_database_chunk_uuids_remain_stable_on_repeat_sync(tmp_path: Path, make_embedder) -> None:
+def test_same_database_chunk_uuids_remain_stable_on_repeat_sync(
+    tmp_path: Path, make_embedder
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     embedder = make_embedder()
     sync_docs_index(contract, repo_root=root, embedder=embedder)
     conn = schema.connect(contract.index_output)
     try:
-        first_ids = [row["chunk_id"] for row in conn.execute("SELECT chunk_id FROM chunks ORDER BY chunk_id")]
+        first_ids = [
+            row["chunk_id"]
+            for row in conn.execute("SELECT chunk_id FROM chunks ORDER BY chunk_id")
+        ]
     finally:
         conn.close()
     sync_docs_index(contract, repo_root=root, embedder=embedder)
     conn = schema.connect(contract.index_output)
     try:
-        second_ids = [row["chunk_id"] for row in conn.execute("SELECT chunk_id FROM chunks ORDER BY chunk_id")]
+        second_ids = [
+            row["chunk_id"]
+            for row in conn.execute("SELECT chunk_id FROM chunks ORDER BY chunk_id")
+        ]
     finally:
         conn.close()
     assert first_ids == second_ids
@@ -352,18 +386,26 @@ def test_index_input_freshness_reports_leaked_artifacts(tmp_path: Path) -> None:
     leaked = contract.staged_root / "index-input/leaked.html"
     leaked.write_text("<html></html>", encoding="utf-8")
     diagnostics = docs_index_freshness_diagnostics(contract)
-    assert any("index-input leaked artifact: leaked.html" in issue for issue in diagnostics)
+    assert any(
+        "index-input leaked artifact: leaked.html" in issue for issue in diagnostics
+    )
 
 
-def test_docs_index_freshness_reports_missing_index_when_never_indexed(tmp_path: Path) -> None:
+def test_docs_index_freshness_reports_missing_index_when_never_indexed(
+    tmp_path: Path,
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     diagnostics = docs_index_freshness_diagnostics(contract)
     assert any("index-input mirror is missing" in issue for issue in diagnostics)
-    assert any("documentation index database is missing" in issue for issue in diagnostics)
+    assert any(
+        "documentation index database is missing" in issue for issue in diagnostics
+    )
 
 
-def test_search_and_doctor_report_missing_or_stale_index_input(tmp_path: Path, make_embedder) -> None:
+def test_search_and_doctor_report_missing_or_stale_index_input(
+    tmp_path: Path, make_embedder
+) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     issues = doctor_docs_index(contract)
@@ -375,7 +417,9 @@ def test_search_and_doctor_report_missing_or_stale_index_input(tmp_path: Path, m
     assert "chunk_id" not in results[0]
 
 
-def test_docs_index_cli_help_and_fixture_commands(tmp_path: Path, make_embedder) -> None:
+def test_docs_index_cli_help_and_fixture_commands(
+    tmp_path: Path, make_embedder
+) -> None:
     for command in ("index", "search", "doctor"):
         result = subprocess.run(
             [sys.executable, "-m", "tracecite", "docs", command, "--help"],
@@ -388,7 +432,9 @@ def test_docs_index_cli_help_and_fixture_commands(tmp_path: Path, make_embedder)
 
     fixture_root = tmp_path / "fixture"
     shutil.copytree(FIXTURE_ROOT, fixture_root)
-    contract = load_docs_contract(fixture_root / "tracecite.toml", repo_root=fixture_root)
+    contract = load_docs_contract(
+        fixture_root / "tracecite.toml", repo_root=fixture_root
+    )
     embedder = make_embedder()
     index_result = sync_docs_index(contract, repo_root=fixture_root, embedder=embedder)
     assert index_result.sync_report.status == "ok"
@@ -441,14 +487,29 @@ def test_docs_index_cli_help_and_fixture_commands(tmp_path: Path, make_embedder)
     assert cli._docs_doctor(doctor_args) == 0
 
 
-def test_docs_index_commands_require_evidence_extra_guidance_when_missing(capsys) -> None:
+def test_docs_index_commands_require_evidence_extra_guidance_when_missing(
+    capsys,
+) -> None:
     def _raise(*_args, **_kwargs):
         raise ModuleNotFoundError("tracecite[evidence] is required")
 
-    with patch.object(cli, "load_docs_contract", return_value=object()), patch.object(
-        cli, "sync_docs_index", side_effect=_raise
+    with (
+        patch.object(cli, "load_docs_contract", return_value=object()),
+        patch.object(cli, "sync_docs_index", side_effect=_raise),
     ):
-        assert cli.main(["docs", "index", "--docs-config", "docs/tracecite.toml", "--repo-root", "."]) == 2
+        assert (
+            cli.main(
+                [
+                    "docs",
+                    "index",
+                    "--docs-config",
+                    "docs/tracecite.toml",
+                    "--repo-root",
+                    ".",
+                ]
+            )
+            == 2
+        )
     assert "install with tracecite[evidence]" in capsys.readouterr().err
 
 

@@ -30,7 +30,9 @@ def _validate_positive_page(text: str, *, selector: str) -> int:
     return page
 
 
-def _expand_closed_range(start: int, end: int, *, available_set: set[int], selector: str) -> list[int]:
+def _expand_closed_range(
+    start: int, end: int, *, available_set: set[int], selector: str
+) -> list[int]:
     if start > end:
         raise PageSelectionSyntaxError(f"invalid page selector: {selector}")
     pages = list(range(start, end + 1))
@@ -78,13 +80,21 @@ def resolve_page_selection(
             assert max_available is not None
             if start > max_available:
                 raise PageSelectionUnavailableError(start)
-            resolved.update(_expand_closed_range(start, max_available, available_set=available_set, selector=selector))
+            resolved.update(
+                _expand_closed_range(
+                    start, max_available, available_set=available_set, selector=selector
+                )
+            )
             continue
         if term.startswith("-") and term != "-":
             end = _validate_positive_page(term[1:], selector=selector)
             if not available:
                 raise PageSelectionUnavailableError(default_page)
-            resolved.update(_expand_closed_range(1, end, available_set=available_set, selector=selector))
+            resolved.update(
+                _expand_closed_range(
+                    1, end, available_set=available_set, selector=selector
+                )
+            )
             continue
         if "-" in term:
             start_text, end_text = term.split("-", 1)
@@ -94,7 +104,11 @@ def resolve_page_selection(
             end = _validate_positive_page(end_text, selector=selector)
             if not available:
                 raise PageSelectionUnavailableError(default_page)
-            resolved.update(_expand_closed_range(start, end, available_set=available_set, selector=selector))
+            resolved.update(
+                _expand_closed_range(
+                    start, end, available_set=available_set, selector=selector
+                )
+            )
             continue
         page = _validate_positive_page(term, selector=selector)
         if not available:

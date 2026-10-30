@@ -38,9 +38,7 @@ EXAMPLE_ROOT = (
 CALLOUT_PHRASE = (
     "authoring, page-citation, indexing, search, diagnostics, and publish-only workflow"
 )
-WEBSITE_CITATION = (
-    "https://www.aemo.com.au/energy-systems/major-publications/integrated-system-plan-isp"
-)
+WEBSITE_CITATION = "https://www.aemo.com.au/energy-systems/major-publications/integrated-system-plan-isp"
 PUBLIC_2024_URL = (
     "https://www.aemo.com.au/-/media/files/major-publications/isp/2024/"
     "2024-integrated-system-plan-isp.pdf?la=en#page=10"
@@ -105,7 +103,10 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
     # would make row order (not content) differ between fresh copies.
     conn = schema.connect(database_path)
     try:
-        sources = [row["path"] for row in conn.execute("SELECT path FROM sources ORDER BY path")]
+        sources = [
+            row["path"]
+            for row in conn.execute("SELECT path FROM sources ORDER BY path")
+        ]
         chunks = conn.execute(
             "SELECT logical_key, lexical_hash, semantic_input_hash FROM chunks ORDER BY logical_key"
         ).fetchall()
@@ -125,7 +126,9 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
 
 
 def _extract_local_destination(text: str, pdf_name: str, page: int) -> str:
-    pattern = re.compile(r"\]\(([^)\s]*" + re.escape(f"{pdf_name}#page={page}") + r")\)")
+    pattern = re.compile(
+        r"\]\(([^)\s]*" + re.escape(f"{pdf_name}#page={page}") + r")\)"
+    )
     match = pattern.search(text)
     assert match, f"no local citation destination found for {pdf_name}#page={page}"
     return match.group(1)
@@ -198,7 +201,9 @@ def test_pdfs_are_tracked_through_git_lfs() -> None:
         assert line == f"{relative}: filter: lfs"
 
 
-def test_author_renders_retained_with_callout_and_verified_page_citations(tmp_path: Path) -> None:
+def test_author_renders_retained_with_callout_and_verified_page_citations(
+    tmp_path: Path,
+) -> None:
     root = _copy_example(tmp_path)
     authored_before = (root / "docs/authored/report.qmd").read_bytes()
 
@@ -279,7 +284,9 @@ def test_author_index_search_doctor_check_succeed_in_order(
     }
     for result in results:
         assert isinstance(result, dict)
-        assert set(result.keys()) >= expected_keys, f"result keys {set(result.keys())} missing from {expected_keys}"
+        assert set(result.keys()) >= expected_keys, (
+            f"result keys {set(result.keys())} missing from {expected_keys}"
+        )
 
     assert doctor_docs_index(contract) == ()
 
@@ -327,14 +334,25 @@ def test_two_fresh_copies_are_deterministic_for_sources_and_search(
         # Compare retained and public staged markdown files for byte-identity
         retained_bytes = (contract.retained_root / "report.md").read_bytes()
         public_bytes = (contract.staged_root / "public" / "report.md").read_bytes()
-        return _index_snapshot(contract.index_output), results, retained_bytes, public_bytes
+        return (
+            _index_snapshot(contract.index_output),
+            results,
+            retained_bytes,
+            public_bytes,
+        )
 
     first_snapshot, first_results, first_retained, first_public = build_fresh("fresh-a")
-    second_snapshot, second_results, second_retained, second_public = build_fresh("fresh-b")
+    second_snapshot, second_results, second_retained, second_public = build_fresh(
+        "fresh-b"
+    )
     assert first_snapshot == second_snapshot
     assert first_results == second_results
-    assert first_retained == second_retained, "retained markdown differs between fresh builds"
-    assert first_public == second_public, "public staged markdown differs between fresh builds"
+    assert first_retained == second_retained, (
+        "retained markdown differs between fresh builds"
+    )
+    assert first_public == second_public, (
+        "public staged markdown differs between fresh builds"
+    )
 
 
 def test_publish_static_is_isolated_and_matches_committed_public_snapshot(
@@ -351,12 +369,16 @@ def test_publish_static_is_isolated_and_matches_committed_public_snapshot(
 
     published = output_dir / "public" / "report.md"
     assert published.is_file()
-    assert published.read_bytes() == (EXAMPLE_ROOT / "public" / "report.md").read_bytes()
+    assert (
+        published.read_bytes() == (EXAMPLE_ROOT / "public" / "report.md").read_bytes()
+    )
     assert not (output_dir / "sources").exists()
     assert not (output_dir / "docs").exists()
 
 
-def test_quarto_rendered_html_contains_callout_and_citation_links(tmp_path: Path) -> None:
+def test_quarto_rendered_html_contains_callout_and_citation_links(
+    tmp_path: Path,
+) -> None:
     if shutil.which("quarto") is None:
         pytest.skip("quarto not installed")
     root = _copy_example(tmp_path)

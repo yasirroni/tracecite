@@ -100,11 +100,14 @@ def prepare_runtime(tmp: Path) -> tuple[Path, Path, Path, Path]:
 
     manifest.write_text(
         "schema_version = 1\n"
-        "[[source]]\npath = \"evidence/planning-note.pdf\"\n"
-        "[[source]]\npath = \"evidence/counter-note.pdf\"\n",
+        '[[source]]\npath = "evidence/planning-note.pdf"\n'
+        '[[source]]\npath = "evidence/counter-note.pdf"\n',
         encoding="utf-8",
     )
-    source_links.write_text(require_fixture("source-links.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    source_links.write_text(
+        require_fixture("source-links.toml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
     reports.mkdir(parents=True)
     for name in [
@@ -125,21 +128,36 @@ def assert_json_status(result: subprocess.CompletedProcess[str], expected: str) 
     payload = json.loads(result.stdout)
     actual = payload.get("status")
     if actual != expected:
-        raise AssertionError(f"expected status {expected!r}, got {actual!r}: {result.stdout}")
+        raise AssertionError(
+            f"expected status {expected!r}, got {actual!r}: {result.stdout}"
+        )
 
 
 def assert_issue_kind(result: subprocess.CompletedProcess[str], expected: str) -> None:
     payload = json.loads(result.stdout)
     kinds = {issue["kind"] for issue in payload["citation_issues"]}
     if kinds != {expected}:
-        raise AssertionError(f"expected only {expected!r}, got {sorted(kinds)!r}: {result.stdout}")
+        raise AssertionError(
+            f"expected only {expected!r}, got {sorted(kinds)!r}: {result.stdout}"
+        )
 
 
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="web-report-fixtures-") as tmp_name:
         tmp = Path(tmp_name)
-        sources, manifest, database, reports, source_links, model_cache = prepare_runtime(tmp)
-        common = ["--root", str(sources), "--manifest", str(manifest), "--database", str(database), "--model-cache-dir", str(model_cache)]
+        sources, manifest, database, reports, source_links, model_cache = (
+            prepare_runtime(tmp)
+        )
+        common = [
+            "--root",
+            str(sources),
+            "--manifest",
+            str(manifest),
+            "--database",
+            str(database),
+            "--model-cache-dir",
+            str(model_cache),
+        ]
 
         run_cli("sync", *common)
 
@@ -177,11 +195,22 @@ def main() -> int:
         )
         assert_json_status(fuzzy, "not-found")
         valid_text = (reports / "valid-report.md").read_text(encoding="utf-8")
-        if "comfortably above ten per cent" in valid_text or "> \"The trial reserve margin remains comfortably" in valid_text:
-            raise AssertionError("the similar unverifiable sentence must not appear as a quotation")
-        for required in ["conflict", "available sources do not establish", "planning-note-p2"]:
+        if (
+            "comfortably above ten per cent" in valid_text
+            or '> "The trial reserve margin remains comfortably' in valid_text
+        ):
+            raise AssertionError(
+                "the similar unverifiable sentence must not appear as a quotation"
+            )
+        for required in [
+            "conflict",
+            "available sources do not establish",
+            "planning-note-p2",
+        ]:
             if required not in valid_text:
-                raise AssertionError(f"valid report fixture is missing required guidance text: {required}")
+                raise AssertionError(
+                    f"valid report fixture is missing required guidance text: {required}"
+                )
 
         report_ok = run_cli(
             "verify",
@@ -200,8 +229,13 @@ def main() -> int:
             raise AssertionError(report_ok.stdout)
 
         grammar_ok = run_cli(
-            "verify", "report", str(reports / "valid-grammar.md"),
-            "--root", str(sources), "--database", str(database),
+            "verify",
+            "report",
+            str(reports / "valid-grammar.md"),
+            "--root",
+            str(sources),
+            "--database",
+            str(database),
         )
         if not json.loads(grammar_ok.stdout)["ok"]:
             raise AssertionError(grammar_ok.stdout)
@@ -225,14 +259,26 @@ def main() -> int:
             assert_issue_kind(result, kind)
 
         grammar_invalid = run_cli(
-            "verify", "report", str(reports / "invalid-grammar.md"),
-            "--root", str(sources), "--database", str(database), ok=False,
+            "verify",
+            "report",
+            str(reports / "invalid-grammar.md"),
+            "--root",
+            str(sources),
+            "--database",
+            str(database),
+            ok=False,
         )
-        if json.loads(grammar_invalid.stdout)["quote_results"][0]["status"] != "structural-error":
+        if (
+            json.loads(grammar_invalid.stdout)["quote_results"][0]["status"]
+            != "structural-error"
+        ):
             raise AssertionError(grammar_invalid.stdout)
 
         source_link_data = source_links.read_text(encoding="utf-8")
-        for required in ['schema_version = 3', 'local_path = "evidence/planning-note.pdf"']:
+        for required in [
+            "schema_version = 3",
+            'local_path = "evidence/planning-note.pdf"',
+        ]:
             if required not in source_link_data:
                 raise AssertionError(f"source-links fixture missing {required}")
 

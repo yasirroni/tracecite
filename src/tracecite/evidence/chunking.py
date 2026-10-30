@@ -65,7 +65,9 @@ def compute_semantic_input_hash(
 ) -> str:
     normalised_body = normalise_text(body)
     context = json.dumps([heading_path, symbol], sort_keys=True)
-    payload = "\x1f".join([normalisation_version, source_type, context, normalised_body])
+    payload = "\x1f".join(
+        [normalisation_version, source_type, context, normalised_body]
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -84,13 +86,10 @@ def group_units(
     current_len = 0
     for unit in units:
         unit_len = len(unit.text)
-        breaks_group = (
-            current
-            and (
-                current_len + unit_len > max_chars
-                or unit.heading_path != current[-1].heading_path
-                or unit.physical_page != current[-1].physical_page
-            )
+        breaks_group = current and (
+            current_len + unit_len > max_chars
+            or unit.heading_path != current[-1].heading_path
+            or unit.physical_page != current[-1].physical_page
         )
         if breaks_group:
             groups.append(current)
@@ -178,7 +177,9 @@ def build_chunk_candidates(
         content_types = {unit.content_type for unit in group}
         content_type = first.content_type if len(content_types) == 1 else "mixed"
 
-        physical_pages = {unit.physical_page for unit in group if unit.physical_page is not None}
+        physical_pages = {
+            unit.physical_page for unit in group if unit.physical_page is not None
+        }
         physical_page = first.physical_page if len(physical_pages) <= 1 else None
         page_range_start = min(physical_pages) if physical_pages else None
         page_range_end = max(physical_pages) if physical_pages else None

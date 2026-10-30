@@ -33,7 +33,15 @@ HASH_COLUMNS = (
     ("chunks", "lexical_hash"),
     ("assets", "sha256"),
 )
-ROW_COUNT_TABLES = ("kb_config", "sources", "pages", "chunks", "embeddings", "chunk_embeddings", "assets")
+ROW_COUNT_TABLES = (
+    "kb_config",
+    "sources",
+    "pages",
+    "chunks",
+    "embeddings",
+    "chunk_embeddings",
+    "assets",
+)
 
 
 def _quote_identifier(name: str) -> str:
@@ -51,16 +59,27 @@ def connect_read_only(database: Path) -> sqlite3.Connection:
 
 
 def _tables(conn: sqlite3.Connection) -> set[str]:
-    return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')")}
+    return {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type IN ('table','view')"
+        )
+    }
 
 
-def _sum_lengths(conn: sqlite3.Connection, table: str, column: str, tables: set[str]) -> int | None:
+def _sum_lengths(
+    conn: sqlite3.Connection, table: str, column: str, tables: set[str]
+) -> int | None:
     if table not in tables:
         return None
-    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({_quote_identifier(table)})")}
+    cols = {
+        row[1] for row in conn.execute(f"PRAGMA table_info({_quote_identifier(table)})")
+    }
     if column not in cols:
         return None
-    value = conn.execute(f"SELECT COALESCE(SUM(length({_quote_identifier(column)})), 0) FROM {_quote_identifier(table)}").fetchone()[0]
+    value = conn.execute(
+        f"SELECT COALESCE(SUM(length({_quote_identifier(column)})), 0) FROM {_quote_identifier(table)}"
+    ).fetchone()[0]
     return int(value or 0)
 
 
@@ -71,7 +90,14 @@ def _dbstat(conn: sqlite3.Connection) -> tuple[bool, list[dict[str, Any]], str |
         ).fetchall()
     except sqlite3.Error as exc:
         return False, [], str(exc)
-    return True, [{"name": row[0], "bytes": int(row[1] or 0), "pages": int(row[2] or 0)} for row in rows], None
+    return (
+        True,
+        [
+            {"name": row[0], "bytes": int(row[1] or 0), "pages": int(row[2] or 0)}
+            for row in rows
+        ],
+        None,
+    )
 
 
 def diagnose_database(database: Path) -> dict[str, Any]:
@@ -86,18 +112,28 @@ def diagnose_database(database: Path) -> dict[str, Any]:
             if table not in tables:
                 row_counts[table] = "unavailable: table not present"
             else:
-                row_counts[table] = int(conn.execute(f"SELECT COUNT(*) FROM {_quote_identifier(table)}").fetchone()[0])
+                row_counts[table] = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM {_quote_identifier(table)}"
+                    ).fetchone()[0]
+                )
         text_storage = {
-            f"{table}.{column}": value if value is not None else "unavailable: table/column not present"
+            f"{table}.{column}": value
+            if value is not None
+            else "unavailable: table/column not present"
             for table, column in TEXT_COLUMNS
             for value in [_sum_lengths(conn, table, column, tables)]
         }
         hash_by_column = {
-            f"{table}.{column}": value if value is not None else "unavailable: table/column not present"
+            f"{table}.{column}": value
+            if value is not None
+            else "unavailable: table/column not present"
             for table, column in HASH_COLUMNS
             for value in [_sum_lengths(conn, table, column, tables)]
         }
-        hash_total = sum(value for value in hash_by_column.values() if isinstance(value, int))
+        hash_total = sum(
+            value for value in hash_by_column.values() if isinstance(value, int)
+        )
         dbstat_available, dbstat_objects, dbstat_error = _dbstat(conn)
     used_bytes = page_size * (page_count - freelist_pages)
     freelist_bytes = page_size * freelist_pages
@@ -110,7 +146,9 @@ def diagnose_database(database: Path) -> dict[str, Any]:
         "freelist_pages": freelist_pages,
         "freelist_bytes": freelist_bytes,
         "used_bytes": used_bytes,
-        "reclaimable_percent": round((freelist_bytes / file_bytes * 100.0) if file_bytes else 0.0, 3),
+        "reclaimable_percent": round(
+            (freelist_bytes / file_bytes * 100.0) if file_bytes else 0.0, 3
+        ),
         "dbstat_available": dbstat_available,
         "dbstat_error": dbstat_error,
         "dbstat_objects": dbstat_objects,
@@ -136,7 +174,9 @@ def format_human(report: dict[str, Any]) -> str:
     ]
     if report["dbstat_available"]:
         for item in report["dbstat_objects"]:
-            lines.append(f"  {item['name']}: {item['bytes']} bytes ({item['pages']} pages)")
+            lines.append(
+                f"  {item['name']}: {item['bytes']} bytes ({item['pages']} pages)"
+            )
     else:
         lines.append(f"  unavailable: {report['dbstat_error']}")
     lines.append("Hash storage (diagnostic contribution, not raw source files):")
@@ -153,7 +193,9 @@ def format_human(report: dict[str, Any]) -> str:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Diagnose TraceCite SQLite database allocation without modifying it.")
+    parser = argparse.ArgumentParser(
+        description="Diagnose TraceCite SQLite database allocation without modifying it."
+    )
     parser.add_argument("database", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
     return parser.parse_args(argv)

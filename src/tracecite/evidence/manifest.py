@@ -16,7 +16,15 @@ SOURCE_TYPES = {
     ".xlsx": "workbook",
     ".xlsm": "workbook",
 }
-_TOP_LEVEL_KEYS = {"schema_version", "root", "database", "model_cache_dir", "source", "include", "exclude"}
+_TOP_LEVEL_KEYS = {
+    "schema_version",
+    "root",
+    "database",
+    "model_cache_dir",
+    "source",
+    "include",
+    "exclude",
+}
 _TABLE_KEYS = {
     "source": {"path", "origin"},
     "include": {"glob", "origin"},
@@ -39,13 +47,17 @@ def _normalise(value: str | Path) -> str:
         normalised = normalise_relative_declaration(value)
     except PathAuthorityError as exc:
         raise ManifestError(str(exc)) from exc
-    if Path(normalised).suffix.lower() not in SOURCE_TYPES and not any(ch in normalised for ch in "*?["):
+    if Path(normalised).suffix.lower() not in SOURCE_TYPES and not any(
+        ch in normalised for ch in "*?["
+    ):
         raise ManifestError(f"unsupported source extension for {value}")
     return normalised
 
 
 def _matches(path: str, pattern: str) -> bool:
-    return fnmatch.fnmatchcase(path, pattern) or ("**/" in pattern and fnmatch.fnmatchcase(path, pattern.replace("**/", "")))
+    return fnmatch.fnmatchcase(path, pattern) or (
+        "**/" in pattern and fnmatch.fnmatchcase(path, pattern.replace("**/", ""))
+    )
 
 
 @dataclass(frozen=True)
@@ -53,11 +65,15 @@ class ManifestRules:
     explicit_paths: tuple[str, ...] = ()
     include_globs: tuple[str, ...] = ()
     exclude_globs: tuple[str, ...] = ()
-    origins: Mapping[tuple[str, str], str] = field(default_factory=lambda: MappingProxyType({}))
+    origins: Mapping[tuple[str, str], str] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def selects_path(self, path: str) -> bool:
         path = str(path).replace("\\", "/")
-        selected = path in self.explicit_paths or any(_matches(path, glob) for glob in self.include_globs)
+        selected = path in self.explicit_paths or any(
+            _matches(path, glob) for glob in self.include_globs
+        )
         excluded = any(_matches(path, glob) for glob in self.exclude_globs)
         return selected and not excluded
 
@@ -89,12 +105,18 @@ def load_manifest(path: Path) -> ManifestRules:
             unknown_keys = keys - _TABLE_KEYS[name]
             missing = _REQUIRED_TABLE_KEYS[name] - keys
             if unknown_keys:
-                raise ManifestError(f"unknown field(s) in [[{name}]] entry {index}: {', '.join(sorted(unknown_keys))}")
+                raise ManifestError(
+                    f"unknown field(s) in [[{name}]] entry {index}: {', '.join(sorted(unknown_keys))}"
+                )
             if missing:
-                raise ManifestError(f"missing field(s) in [[{name}]] entry {index}: {', '.join(sorted(missing))}")
+                raise ManifestError(
+                    f"missing field(s) in [[{name}]] entry {index}: {', '.join(sorted(missing))}"
+                )
             origin = item.get("origin", "default")
             if origin not in _ORIGINS:
-                raise ManifestError(f"unsupported origin in [[{name}]] entry {index}: {origin}")
+                raise ManifestError(
+                    f"unsupported origin in [[{name}]] entry {index}: {origin}"
+                )
             identity = _normalise(item[field])
             values.append(identity)
             key = (name, identity)
@@ -119,7 +141,11 @@ def merge_manifests(paths: Sequence[Path]) -> ManifestRules:
     origins: dict[tuple[str, str], str] = {}
     for path in paths:
         rules = load_manifest(path)
-        for kind, values in (("source", rules.explicit_paths), ("include", rules.include_globs), ("exclude", rules.exclude_globs)):
+        for kind, values in (
+            ("source", rules.explicit_paths),
+            ("include", rules.include_globs),
+            ("exclude", rules.exclude_globs),
+        ):
             for value in values:
                 declared[kind][value] = None
                 origin = rules.origins.get((kind, value), "default")
@@ -146,13 +172,27 @@ def resolve_sources(root: Path, rules: ManifestRules) -> SourceSelection:
         candidates.update(root.glob(pattern))
     declared: dict[str, Path] = {}
     for path in sorted(candidates):
-        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in SOURCE_TYPES:
+        if (
+            path.is_symlink()
+            or not path.is_file()
+            or path.suffix.lower() not in SOURCE_TYPES
+        ):
             continue
         resolved = path.resolve()
         if resolved.is_relative_to(root):
             declared[resolved.relative_to(root).as_posix()] = resolved
     return SourceSelection(
-        selected={path: resolved for path, resolved in declared.items() if rules.selects_path(path)},
-        missing_explicit_paths=tuple(path for path in rules.explicit_paths if path not in declared),
-        unmatched_globs=tuple(glob for glob in rules.include_globs if not any(_matches(path, glob) for path in declared)),
+        selected={
+            path: resolved
+            for path, resolved in declared.items()
+            if rules.selects_path(path)
+        },
+        missing_explicit_paths=tuple(
+            path for path in rules.explicit_paths if path not in declared
+        ),
+        unmatched_globs=tuple(
+            glob
+            for glob in rules.include_globs
+            if not any(_matches(path, glob) for path in declared)
+        ),
     )

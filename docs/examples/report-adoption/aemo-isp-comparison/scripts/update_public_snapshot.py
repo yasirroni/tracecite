@@ -21,14 +21,19 @@ def main() -> int:
     contract = load_docs_contract(config, repo_root=ROOT)
     result = check_docs(contract, config_path=config, repo_root=ROOT)
     if not result.ok:
-        print("refusing to update public/: docs check reported issues:", file=sys.stderr)
+        print(
+            "refusing to update public/: docs check reported issues:", file=sys.stderr
+        )
         for issue in result.diagnostics:
             print(f"  - {issue}", file=sys.stderr)
         return 1
 
     staged_public = contract.staged_root / "public"
     if not staged_public.is_dir():
-        print("refusing to update public/: no public staging output found", file=sys.stderr)
+        print(
+            "refusing to update public/: no public staging output found",
+            file=sys.stderr,
+        )
         return 1
 
     destination = ROOT / "public"

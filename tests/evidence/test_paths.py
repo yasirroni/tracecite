@@ -5,7 +5,9 @@ import pytest
 from tracecite.evidence.paths import PathAuthorityError, normalise_source_path
 
 
-def test_normalise_source_path_accepts_equivalent_relative_and_report_based_paths(tmp_path):
+def test_normalise_source_path_accepts_equivalent_relative_and_report_based_paths(
+    tmp_path,
+):
     root = tmp_path / "root"
     docs = root / "docs"
     docs.mkdir(parents=True)
@@ -15,10 +17,15 @@ def test_normalise_source_path_accepts_equivalent_relative_and_report_based_path
     report_dir.mkdir()
 
     assert normalise_source_path(root, "docs/./report.md") == "docs/report.md"
-    assert normalise_source_path(root, "../docs/report.md", base=report_dir) == "docs/report.md"
+    assert (
+        normalise_source_path(root, "../docs/report.md", base=report_dir)
+        == "docs/report.md"
+    )
 
 
-def test_normalise_source_path_rejects_traversal_absolute_outside_and_symlink_escape(tmp_path):
+def test_normalise_source_path_rejects_traversal_absolute_outside_and_symlink_escape(
+    tmp_path,
+):
     root = tmp_path / "root"
     root.mkdir()
     outside = tmp_path / "outside.md"

@@ -9,11 +9,7 @@ class RepositoryTreeTests(unittest.TestCase):
         project = Path(__file__).resolve().parents[1]
         self.assertFalse((project / "examples").exists())
         report_example = (
-            project
-            / "docs"
-            / "examples"
-            / "report-adoption"
-            / "aemo-isp-comparison"
+            project / "docs" / "examples" / "report-adoption" / "aemo-isp-comparison"
         )
         self.assertTrue((report_example / "index.md").is_file())
         self.assertTrue((report_example / "docs" / "authored" / "report.qmd").is_file())
@@ -21,14 +17,13 @@ class RepositoryTreeTests(unittest.TestCase):
         self.assertTrue((workbook_example / "index.md").is_file())
         self.assertTrue(
             (
-                workbook_example
-                / "sources"
-                / "aemo"
-                / "2023-iasr-ev-workbook.xlsx"
+                workbook_example / "sources" / "aemo" / "2023-iasr-ev-workbook.xlsx"
             ).is_file()
         )
         self.assertFalse((project / "docs" / "assets" / "workbooks").exists())
-        self.assertFalse((project / "docs" / "guide" / "workbook-vector-search.md").exists())
+        self.assertFalse(
+            (project / "docs" / "guide" / "workbook-vector-search.md").exists()
+        )
 
     def test_literate_documenter_fixture_uses_canonical_docs_path(self) -> None:
         project = Path(__file__).resolve().parents[1]
@@ -76,9 +71,7 @@ class RepositoryTreeTests(unittest.TestCase):
             root = Path(directory)
             (root / "README.md").write_text("demo\n", encoding="utf-8")
             (root / "docs" / "guide" / "deep").mkdir(parents=True)
-            (root / "docs" / "guide" / "page.md").write_text(
-                "page\n", encoding="utf-8"
-            )
+            (root / "docs" / "guide" / "page.md").write_text("page\n", encoding="utf-8")
             (root / "docs" / "guide" / "deep" / "hidden.md").write_text(
                 "hidden\n", encoding="utf-8"
             )
@@ -121,7 +114,9 @@ class RepositoryTreeTests(unittest.TestCase):
             self.assertTrue(module._is_excluded(root, root / "docs" / ".superpowers"))
             self.assertTrue(module._is_excluded(root, root / ".env.example"))
             self.assertTrue(module._is_excluded(root, root / "docs" / ".gitignore"))
-            self.assertTrue(module._is_excluded(root, root / "docs" / "guide" / ".hidden"))
+            self.assertTrue(
+                module._is_excluded(root, root / "docs" / "guide" / ".hidden")
+            )
         self.assertIn("README.md", rendered)
         self.assertIn("docs/", rendered)
         self.assertIn("guide/", rendered)

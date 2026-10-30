@@ -60,16 +60,28 @@ def make_db(path: Path, *, bloat: bool = False, vectors: bool = True) -> Path:
                 "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
                 (schema.embedding_model_id(), "b" * 64, schema.utc_now()),
             )
-            embedding_id = conn.execute("SELECT embedding_id FROM embeddings").fetchone()[0]
-            conn.execute("INSERT INTO chunk_embeddings(chunk_id, embedding_id) VALUES ('c1', ?)", (embedding_id,))
-            vector_backend.SqliteVecBackend().upsert(conn, embedding_id, [float(index) / 1000.0 for index in range(schema.EMBEDDING_DIMENSIONS)])
+            embedding_id = conn.execute(
+                "SELECT embedding_id FROM embeddings"
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO chunk_embeddings(chunk_id, embedding_id) VALUES ('c1', ?)",
+                (embedding_id,),
+            )
+            vector_backend.SqliteVecBackend().upsert(
+                conn,
+                embedding_id,
+                [float(index) / 1000.0 for index in range(schema.EMBEDDING_DIMENSIONS)],
+            )
         conn.execute(
             "INSERT INTO assets(asset_id, source_pk, physical_page, asset_path, sha256, asset_type) VALUES ('asset1', ?, 1, 'imgs/generations/g/1/page.png', ?, 'page')",
             (source_pk, "d" * 64),
         )
         if bloat:
             conn.execute("CREATE TABLE transient_bloat(payload TEXT)")
-            conn.executemany("INSERT INTO transient_bloat(payload) VALUES (?)", [("x" * 2048,) for _ in range(128)])
+            conn.executemany(
+                "INSERT INTO transient_bloat(payload) VALUES (?)",
+                [("x" * 2048,) for _ in range(128)],
+            )
             conn.execute("DROP TABLE transient_bloat")
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
@@ -96,8 +108,12 @@ def test_diagnose_reports_allocation_math_hash_bytes_and_tables(tmp_path: Path, 
     report = diagnose.diagnose_database(db)
     assert report["file_bytes"] == db.stat().st_size
     assert report["freelist_bytes"] == report["page_size"] * report["freelist_pages"]
-    assert report["used_bytes"] == report["page_size"] * (report["page_count"] - report["freelist_pages"])
-    assert report["hash_storage_bytes"]["diagnostic_note"].startswith("Stored hashes are diagnostic")
+    assert report["used_bytes"] == report["page_size"] * (
+        report["page_count"] - report["freelist_pages"]
+    )
+    assert report["hash_storage_bytes"]["diagnostic_note"].startswith(
+        "Stored hashes are diagnostic"
+    )
     assert report["hash_storage_bytes"]["total_bytes"] >= 64 * 3
     assert report["text_storage_bytes"]["pages.text"] > 0
     assert report["text_storage_bytes"]["pages.layout_json"] > 0
@@ -108,7 +124,10 @@ def test_diagnose_reports_allocation_math_hash_bytes_and_tables(tmp_path: Path, 
     out = json.loads(capsys.readouterr().out)
     assert out["database"] == str(db)
     diagnose.main([str(db)])
-    assert "Hash storage (diagnostic contribution, not raw source files)" in capsys.readouterr().out
+    assert (
+        "Hash storage (diagnostic contribution, not raw source files)"
+        in capsys.readouterr().out
+    )
 
 
 def test_preview_compaction_leaves_bytes_unchanged(tmp_path: Path):
@@ -160,29 +179,39 @@ def test_zero_vectors_are_validated_as_explicit_empty_payload(tmp_path: Path):
     assert compact.vector_fingerprint(db) == fingerprint
 
 
-def test_vector_fingerprint_labels_unavailable_extension_as_failure(tmp_path: Path, monkeypatch):
+def test_vector_fingerprint_labels_unavailable_extension_as_failure(
+    tmp_path: Path, monkeypatch
+):
     compact = load_script("compact_database")
     db = make_db(tmp_path / "tracecite.sqlite")
     from tracecite.evidence import schema
 
     def raw_connection(path, *, read_only):
         assert read_only is True
-        conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, isolation_level=None)
+        conn = sqlite3.connect(
+            Path(path).resolve().as_uri() + "?mode=ro", uri=True, isolation_level=None
+        )
         conn.row_factory = sqlite3.Row
         return conn
 
     monkeypatch.setattr(schema, "connect_existing", raw_connection)
     monkeypatch.setattr(schema, "ensure_schema", lambda conn: None)
-    with pytest.raises(compact.MaintenanceError, match="sqlite-vec vector payload unavailable"):
+    with pytest.raises(
+        compact.MaintenanceError, match="sqlite-vec vector payload unavailable"
+    ):
         compact.vector_fingerprint(db)
 
 
-def test_candidate_vector_corruption_fails_validation_and_preserves_original_bytes(tmp_path: Path):
+def test_candidate_vector_corruption_fails_validation_and_preserves_original_bytes(
+    tmp_path: Path,
+):
     compact = load_script("compact_database")
     db = make_db(tmp_path / "tracecite.sqlite", bloat=True)
     original = bytes_of(db)
     hooks = compact.MaintenanceHooks(corrupt_candidate_vectors=True)
-    with pytest.raises(compact.MaintenanceError, match="candidate vector payload differs from original"):
+    with pytest.raises(
+        compact.MaintenanceError, match="candidate vector payload differs from original"
+    ):
         compact.compact_database(db, apply=True, hooks=hooks)
     assert bytes_of(db) == original
     assert compact.vector_fingerprint(db)["row_count"] == 1
@@ -223,7 +252,9 @@ def test_compaction_refuses_missing_symlink_and_non_regular(tmp_path: Path):
         ("cleanup", "cleanup failed", False),
     ],
 )
-def test_compaction_failure_paths_preserve_or_restore_original(tmp_path: Path, fail_at: str, message: str, original_preserved: bool):
+def test_compaction_failure_paths_preserve_or_restore_original(
+    tmp_path: Path, fail_at: str, message: str, original_preserved: bool
+):
     compact = load_script("compact_database")
     db = make_db(tmp_path / "tracecite.sqlite", bloat=True)
     original = bytes_of(db)
@@ -232,7 +263,10 @@ def test_compaction_failure_paths_preserve_or_restore_original(tmp_path: Path, f
         compact.compact_database(db, apply=True, hooks=hooks)
     if original_preserved:
         assert bytes_of(db) == original
-    assert not any(path.name.endswith(".tracecite-compact-candidate") for path in tmp_path.iterdir())
+    assert not any(
+        path.name.endswith(".tracecite-compact-candidate")
+        for path in tmp_path.iterdir()
+    )
 
 
 def test_compaction_json_cli_reports_before_after(tmp_path: Path, capsys):
@@ -254,9 +288,19 @@ def test_scripts_run_from_standalone_copied_core(tmp_path: Path):
     compact_path = copied / "scripts" / "compact_database.py"
     import subprocess
 
-    diagnose = subprocess.run([sys.executable, diagnose_path, db, "--json"], check=True, text=True, capture_output=True)
+    diagnose = subprocess.run(
+        [sys.executable, diagnose_path, db, "--json"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
     assert json.loads(diagnose.stdout)["file_bytes"] == db.stat().st_size
     before = db.read_bytes()
-    preview = subprocess.run([sys.executable, compact_path, db, "--json"], check=True, text=True, capture_output=True)
+    preview = subprocess.run(
+        [sys.executable, compact_path, db, "--json"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
     assert json.loads(preview.stdout)["applied"] is False
     assert db.read_bytes() == before

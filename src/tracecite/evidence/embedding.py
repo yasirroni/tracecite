@@ -41,7 +41,9 @@ class EmbeddingModel:
             return self._model
         kwargs = {"revision": self.revision, "cache_folder": str(self.cache_dir)}
         try:
-            self._model = SentenceTransformer(self.model_name, local_files_only=True, **kwargs)
+            self._model = SentenceTransformer(
+                self.model_name, local_files_only=True, **kwargs
+            )
         except (LocalEntryNotFoundError, OSError):
             self._model = SentenceTransformer(self.model_name, **kwargs)
         return self._model
@@ -51,5 +53,7 @@ class EmbeddingModel:
         if not batch:
             return []
         model = self._ensure_loaded()
-        vectors = model.encode(batch, normalize_embeddings=True, show_progress_bar=False)
+        vectors = model.encode(
+            batch, normalize_embeddings=True, show_progress_bar=False
+        )
         return [[float(value) for value in vector] for vector in vectors]

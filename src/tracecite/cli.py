@@ -30,7 +30,15 @@ from .docs import (
     sync_docs_index,
 )
 
-EVIDENCE_COMMANDS = {"sync", "search", "page", "extract-pages", "verify", "prune", "doctor"}
+EVIDENCE_COMMANDS = {
+    "sync",
+    "search",
+    "page",
+    "extract-pages",
+    "verify",
+    "prune",
+    "doctor",
+}
 
 DEFAULT_LIMIT = 10
 DEFAULT_FTS_LIMIT = 50
@@ -40,21 +48,46 @@ DEFAULT_OCR_LANG = "eng"
 
 
 def _add_evidence_common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--config", type=Path, default=argparse.SUPPRESS, help="TraceCite profile TOML.")
-    parser.add_argument("--root", type=Path, default=None, help="Source root directory.")
-    parser.add_argument("--database", type=Path, default=None, help="SQLite database path.")
+    parser.add_argument(
+        "--config", type=Path, default=argparse.SUPPRESS, help="TraceCite profile TOML."
+    )
+    parser.add_argument(
+        "--root", type=Path, default=None, help="Source root directory."
+    )
+    parser.add_argument(
+        "--database", type=Path, default=None, help="SQLite database path."
+    )
     parser.add_argument("--model-cache-dir", type=Path, default=None)
-    parser.add_argument("--manifest", dest="manifests", action="append", type=Path, default=[])
+    parser.add_argument(
+        "--manifest", dest="manifests", action="append", type=Path, default=[]
+    )
 
 
-def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    sync_parser = subparsers.add_parser("sync", help="Synchronise selected sources into the database.")
+def _add_evidence_parsers(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    sync_parser = subparsers.add_parser(
+        "sync", help="Synchronise selected sources into the database."
+    )
     _add_evidence_common_args(sync_parser)
-    sync_parser.add_argument("path", nargs="?", default=None, help="Only sync this one root-relative source path.")
-    sync_parser.add_argument("--full", action="store_true", help="Reparse and rechunk every source.")
-    sync_parser.add_argument("--reembed", action="store_true", help="Force embedding regeneration.")
-    sync_parser.add_argument("--max-chunk-chars", type=int, default=DEFAULT_MAX_CHUNK_CHARS)
-    sync_parser.add_argument("--no-assets", action="store_true", help="Skip PDF page render/crop generation.")
+    sync_parser.add_argument(
+        "path",
+        nargs="?",
+        default=None,
+        help="Only sync this one root-relative source path.",
+    )
+    sync_parser.add_argument(
+        "--full", action="store_true", help="Reparse and rechunk every source."
+    )
+    sync_parser.add_argument(
+        "--reembed", action="store_true", help="Force embedding regeneration."
+    )
+    sync_parser.add_argument(
+        "--max-chunk-chars", type=int, default=DEFAULT_MAX_CHUNK_CHARS
+    )
+    sync_parser.add_argument(
+        "--no-assets", action="store_true", help="Skip PDF page render/crop generation."
+    )
     sync_parser.add_argument("--ocr-lang", default=DEFAULT_OCR_LANG)
 
     search_parser = subparsers.add_parser("search", help="Hybrid FTS + vector search.")
@@ -72,32 +105,46 @@ def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.Argume
         help="Restrict results to one or more source types (repeatable).",
     )
 
-    page_parser = subparsers.add_parser("page", help="Retrieve retained text for one physical page or selector.")
+    page_parser = subparsers.add_parser(
+        "page", help="Retrieve retained text for one physical page or selector."
+    )
     _add_evidence_common_args(page_parser)
     page_parser.add_argument("source_path")
     page_parser.add_argument("page", nargs="?", default=None)
     page_parser.add_argument("--format", choices=["text", "json"], default="text")
 
-    extract_parser = subparsers.add_parser("extract-pages", help="Extract selected pages into a derivative PDF.")
+    extract_parser = subparsers.add_parser(
+        "extract-pages", help="Extract selected pages into a derivative PDF."
+    )
     _add_evidence_common_args(extract_parser)
     extract_parser.add_argument("source_path")
     extract_parser.add_argument("page", nargs="?", default=None)
     extract_parser.add_argument("--output-dir", type=Path, required=True)
 
-    verify_parser = subparsers.add_parser("verify", help="Verify quotes or Markdown reports.")
-    verify_subparsers = verify_parser.add_subparsers(dest="verify_command", required=True)
-    quote_parser = verify_subparsers.add_parser("quote", help="Verify a quotation against retained page text.")
+    verify_parser = subparsers.add_parser(
+        "verify", help="Verify quotes or Markdown reports."
+    )
+    verify_subparsers = verify_parser.add_subparsers(
+        dest="verify_command", required=True
+    )
+    quote_parser = verify_subparsers.add_parser(
+        "quote", help="Verify a quotation against retained page text."
+    )
     _add_evidence_common_args(quote_parser)
     quote_parser.add_argument("source_path")
     quote_parser.add_argument("page", type=int)
     quote_parser.add_argument("quote")
-    report_parser = verify_subparsers.add_parser("report", help="Verify a Markdown report's citations and quotes.")
+    report_parser = verify_subparsers.add_parser(
+        "report", help="Verify a Markdown report's citations and quotes."
+    )
     _add_evidence_common_args(report_parser)
     report_parser.add_argument("report_path", type=Path)
     report_parser.add_argument("--source-links", type=Path, default=None)
     report_parser.add_argument("--source-links-root", type=Path, default=None)
 
-    prune_parser = subparsers.add_parser("prune", help="Preview or apply removal of unselected indexed paths.")
+    prune_parser = subparsers.add_parser(
+        "prune", help="Preview or apply removal of unselected indexed paths."
+    )
     _add_evidence_common_args(prune_parser)
     prune_parser.add_argument("--apply", action="store_true", dest="apply")
     prune_parser.add_argument(
@@ -107,14 +154,20 @@ def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.Argume
         help="Explicitly select no retained paths, so every indexed source is planned for pruning.",
     )
 
-    doctor_parser = subparsers.add_parser("doctor", help="Integrity checks: relational rows, FTS, vectors, assets.")
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Integrity checks: relational rows, FTS, vectors, assets."
+    )
     _add_evidence_common_args(doctor_parser)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tracecite")
-    parser.add_argument("--config", type=Path, default=None, help="TraceCite profile TOML.")
-    parser.add_argument("--version", action="version", version=f"TraceCite {__version__}")
+    parser.add_argument(
+        "--config", type=Path, default=None, help="TraceCite profile TOML."
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"TraceCite {__version__}"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     table = subparsers.add_parser("table", help="Normalise one table")
@@ -193,7 +246,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     docs_parser = subparsers.add_parser("docs", help="Build documentation")
     docs_sub = docs_parser.add_subparsers(dest="docs_command", required=True)
-    docs_build = docs_sub.add_parser("build", help="Build a Quarto documentation project")
+    docs_build = docs_sub.add_parser(
+        "build", help="Build a Quarto documentation project"
+    )
     docs_build.add_argument("project", type=Path)
     docs_build.add_argument("--docs-config", type=Path, default=None)
     docs_build.add_argument("--repo-root", type=Path, default=Path.cwd())
@@ -212,7 +267,10 @@ def build_parser() -> argparse.ArgumentParser:
         mode.add_argument("--docs-config", type=Path, required=True)
         mode.add_argument("--repo-root", type=Path, default=Path.cwd())
     for name, help_text in (
-        ("index", "Build the index-input mirror and synchronise the documentation index"),
+        (
+            "index",
+            "Build the index-input mirror and synchronise the documentation index",
+        ),
         ("search", "Hybrid FTS + vector search over the documentation index"),
         ("doctor", "Integrity checks for the documentation index profile"),
     ):
@@ -235,7 +293,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     skills = subparsers.add_parser("skills", help="Install the bundled agent skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)
-    skills_install = skills_sub.add_parser("install", help="Copy the bundled agent skills into a skills directory")
+    skills_install = skills_sub.add_parser(
+        "install", help="Copy the bundled agent skills into a skills directory"
+    )
     skills_install.add_argument("--target", type=Path, default=Path(".agents/skills"))
     _add_evidence_parsers(subparsers)
     return parser

@@ -33,7 +33,9 @@ class SourceLinkEntry:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def load_source_links(path: Path, source_links_root: Path) -> tuple[dict[Path, list[SourceLinkEntry]], list[str]]:
+def load_source_links(
+    path: Path, source_links_root: Path
+) -> tuple[dict[Path, list[SourceLinkEntry]], list[str]]:
     with Path(path).open("rb") as handle:
         data = tomllib.load(handle)
     issues: list[str] = []
@@ -53,10 +55,14 @@ def load_source_links(path: Path, source_links_root: Path) -> tuple[dict[Path, l
         unknown = keys - _SOURCE_LINK_REQUIRED - _SOURCE_LINK_OPTIONAL
         missing = _SOURCE_LINK_REQUIRED - keys
         if unknown:
-            issues.append(f"source entry {index} has unknown field(s): {', '.join(sorted(unknown))}")
+            issues.append(
+                f"source entry {index} has unknown field(s): {', '.join(sorted(unknown))}"
+            )
             continue
         if missing:
-            issues.append(f"source entry {index} missing required field(s): {', '.join(sorted(missing))}")
+            issues.append(
+                f"source entry {index} missing required field(s): {', '.join(sorted(missing))}"
+            )
             continue
         invalid_fields = [
             field_name
@@ -64,14 +70,19 @@ def load_source_links(path: Path, source_links_root: Path) -> tuple[dict[Path, l
             if not isinstance(entry[field_name], str) or not entry[field_name].strip()
         ]
         if invalid_fields:
-            issues.extend(f"source entry {index} field {field_name} must be a non-empty string" for field_name in invalid_fields)
+            issues.extend(
+                f"source entry {index} field {field_name} must be a non-empty string"
+                for field_name in invalid_fields
+            )
             continue
         metadata = entry.get("metadata", {})
         if not isinstance(metadata, dict):
             issues.append(f"source entry {index} field metadata must be a table")
             continue
         if any(character in entry["local_path"] for character in "?#"):
-            issues.append(f"source entry {index} local_path must not contain a query or fragment")
+            issues.append(
+                f"source entry {index} local_path must not contain a query or fragment"
+            )
             continue
         try:
             local_path = normalise_source_path(source_links_root, entry["local_path"])
@@ -91,15 +102,21 @@ def load_source_links(path: Path, source_links_root: Path) -> tuple[dict[Path, l
             continue
         parsed_url = urlparse(entry["public_url"])
         if (
-            parsed_url.scheme != "https" or not parsed_url.netloc
-            or parsed_url.username is not None or parsed_url.password is not None
+            parsed_url.scheme != "https"
+            or not parsed_url.netloc
+            or parsed_url.username is not None
+            or parsed_url.password is not None
             or parsed_url.fragment
         ):
-            issues.append(f"source entry {index} public_url must be an HTTPS URL without credentials or fragment")
+            issues.append(
+                f"source entry {index} public_url must be an HTTPS URL without credentials or fragment"
+            )
             continue
         seen_paths.add(local_abs)
         seen_names.add(name)
-        registry.setdefault(local_abs, []).append(SourceLinkEntry(name, local_path, entry["public_url"], metadata))
+        registry.setdefault(local_abs, []).append(
+            SourceLinkEntry(name, local_path, entry["public_url"], metadata)
+        )
     return registry, issues
 
 
@@ -161,6 +178,8 @@ def parse_staged_markdown_destination(destination: str) -> tuple[str, str] | Non
         or not path.lower().endswith(".md")
     ):
         return None
-    if any(character.isspace() for character in anchor) or any(character in anchor for character in "()<>"):
+    if any(character.isspace() for character in anchor) or any(
+        character in anchor for character in "()<>"
+    ):
         return None
     return path, anchor

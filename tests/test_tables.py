@@ -310,7 +310,8 @@ class PublishTests(unittest.TestCase):
         )
         self.assertIn(
             "**First-row finding.** For **Solar PV**, capital cost ($/kW) is "
-            "**1250.00 \\$/kW** and status is **firm**.", rendered
+            "**1250.00 \\$/kW** and status is **firm**.",
+            rendered,
         )
         self.assertNotIn("Computed finding", rendered)
 
@@ -337,9 +338,7 @@ class PublishTests(unittest.TestCase):
         )
 
     def test_dataframe_helper_is_optional_and_data_driven(self) -> None:
-        frame = pd.DataFrame(
-            {"rank": [1], "place": ["North | South"], "tmax": [50.7]}
-        )
+        frame = pd.DataFrame({"rank": [1], "place": ["North | South"], "tmax": [50.7]})
         rendered = knowledge_table(
             frame,
             caption="Highest event.",
@@ -516,13 +515,14 @@ class RepositoryTests(unittest.TestCase):
             for path in (project / "docs" / "examples" / "python").glob("*.py")
         }
         julia_pages = {
-            path.stem
-            for path in (project / "docs" / "examples" / "julia").glob("*.jl")
+            path.stem for path in (project / "docs" / "examples" / "julia").glob("*.jl")
         }
         self.assertTrue(python_pages)
         self.assertEqual(python_pages & julia_pages, {"dirty_dataframe"})
         self.assertFalse(
-            (project / "docs" / "examples" / "julia" / "hottest_temperature.jl").exists()
+            (
+                project / "docs" / "examples" / "julia" / "hottest_temperature.jl"
+            ).exists()
         )
 
 

@@ -75,10 +75,14 @@ def _load_config(config_path: Path) -> tuple[list[Mapping], dict[str, ProjectPol
         destinations = entry.get("destinations")
         if not isinstance(source, str) or not source:
             raise ValueError(f"mapping {index}: source must be a non-empty string")
-        if not isinstance(destinations, list) or not destinations or not all(
-            isinstance(item, str) and item for item in destinations
+        if (
+            not isinstance(destinations, list)
+            or not destinations
+            or not all(isinstance(item, str) and item for item in destinations)
         ):
-            raise ValueError(f"mapping {index}: destinations must be a non-empty array of strings")
+            raise ValueError(
+                f"mapping {index}: destinations must be a non-empty array of strings"
+            )
         source_path = (ROOT / source).resolve()
         if not source_path.is_file():
             raise ValueError(f"mapping {index}: source does not exist: {source}")
@@ -89,7 +93,9 @@ def _load_config(config_path: Path) -> tuple[list[Mapping], dict[str, ProjectPol
             # legitimate distinct destinations look like duplicates.
             destination_path = ROOT / destination
             if destination_path in seen_destinations:
-                raise ValueError(f"mapping {index}: destination mapped more than once: {destination}")
+                raise ValueError(
+                    f"mapping {index}: destination mapped more than once: {destination}"
+                )
             seen_destinations.add(destination_path)
             mappings.append(Mapping(source_path, destination_path))
 
@@ -132,11 +138,17 @@ def _project_name_for(destination: Path) -> str:
 def _load_previous_manifest(project_dir: Path) -> dict:
     manifest_path = project_dir / MANIFEST_NAME
     if not manifest_path.is_file():
-        return {"schema_version": SCHEMA_VERSION, "project": project_dir.name, "files": {}}
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "project": project_dir.name,
+            "files": {},
+        }
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-def _expected_by_project(mappings: list[Mapping]) -> dict[str, dict[str, dict[str, str]]]:
+def _expected_by_project(
+    mappings: list[Mapping],
+) -> dict[str, dict[str, dict[str, str]]]:
     """Return {project_name: {destination_relative_to_project: {source, sha256}}}."""
     expected: dict[str, dict[str, dict[str, str]]] = {}
     for mapping in mappings:
@@ -175,19 +187,27 @@ def check(
         for relative, info in files.items():
             destination = project_dir / relative
             if destination.is_symlink():
-                issues.append(f"{project}: {relative} is a symlink, expected an ordinary file")
+                issues.append(
+                    f"{project}: {relative} is a symlink, expected an ordinary file"
+                )
                 continue
             if not destination.is_file():
                 issues.append(f"{project}: missing managed file {relative}")
                 continue
             if relative not in previous_files:
-                issues.append(f"{project}: unrecorded managed file {relative} (not in manifest)")
+                issues.append(
+                    f"{project}: unrecorded managed file {relative} (not in manifest)"
+                )
             if _sha256(destination) != info["sha256"]:
-                issues.append(f"{project}: {relative} is stale relative to canonical {info['source']}")
+                issues.append(
+                    f"{project}: {relative} is stale relative to canonical {info['source']}"
+                )
         for relative in sorted(set(previous_files) - set(files)):
             destination = project_dir / relative
             if destination.exists() or destination.is_symlink():
-                issues.append(f"{project}: obsolete managed file {relative} (no longer mapped)")
+                issues.append(
+                    f"{project}: obsolete managed file {relative} (no longer mapped)"
+                )
 
         allowed = set(files) | set(policy.owned) | {MANIFEST_NAME}
         for path in sorted(project_dir.rglob("*")):
@@ -209,7 +229,9 @@ def _promote_project(
     """Replace one project's managed state atomically with rollback on failure."""
     manifest_path = project_dir / MANIFEST_NAME
     affected = sorted(set(files) | set(previous_files))
-    backup_root = Path(tempfile.mkdtemp(prefix=".bootstrap-backup-", dir=project_dir.parent))
+    backup_root = Path(
+        tempfile.mkdtemp(prefix=".bootstrap-backup-", dir=project_dir.parent)
+    )
     moved: list[tuple[Path, Path]] = []
     installed: list[Path] = []
     try:
@@ -289,7 +311,9 @@ def bootstrap(mappings: list[Mapping]) -> None:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="report drift without writing")
+    parser.add_argument(
+        "--check", action="store_true", help="report drift without writing"
+    )
     args = parser.parse_args(argv)
 
     mappings, policies = _load_config(BOOTSTRAP_CONFIG)

@@ -51,16 +51,22 @@ def version(conn: sqlite3.Connection) -> str:
 
 
 class SqliteVecBackend:
-    def upsert(self, conn: sqlite3.Connection, embedding_id: int, vector: Sequence[float]) -> None:
+    def upsert(
+        self, conn: sqlite3.Connection, embedding_id: int, vector: Sequence[float]
+    ) -> None:
         packed = _sqlite_vec().serialize_float32(list(vector))
-        conn.execute(f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,))
+        conn.execute(
+            f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,)
+        )
         conn.execute(
             f"INSERT INTO {VECTOR_TABLE}(embedding_id, shard_id, vector) VALUES (?, ?, ?)",
             (embedding_id, self._shard_id(embedding_id), packed),
         )
 
     def delete(self, conn: sqlite3.Connection, embedding_id: int) -> None:
-        conn.execute(f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,))
+        conn.execute(
+            f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,)
+        )
 
     def search(
         self,
@@ -81,7 +87,9 @@ class SqliteVecBackend:
                 shard_matches = self._knn(
                     conn, packed, shard_id, self._shard_row_count(conn, shard_id)
                 )
-                matches.extend(match for match in shard_matches if match.embedding_id in allowed)
+                matches.extend(
+                    match for match in shard_matches if match.embedding_id in allowed
+                )
             return sorted(matches, key=lambda match: match.distance)[:top_k]
 
         matches = []
@@ -154,7 +162,9 @@ class SqliteVecBackend:
             issues.append(f"embeddings row {row[0]} has no vector in {VECTOR_TABLE}")
 
         vector_rows = self._row_count(conn)
-        embedding_rows = int(conn.execute("SELECT count(*) FROM embeddings").fetchone()[0])
+        embedding_rows = int(
+            conn.execute("SELECT count(*) FROM embeddings").fetchone()[0]
+        )
         if vector_rows != embedding_rows and not issues:
             issues.append(
                 f"{VECTOR_TABLE} has {vector_rows} rows but embeddings has {embedding_rows} rows"

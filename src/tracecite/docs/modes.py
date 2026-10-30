@@ -28,33 +28,59 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _repo_files(root: Path, repo_root: Path, *, exclude: Path | None = None) -> dict[str, str]:
+def _repo_files(
+    root: Path, repo_root: Path, *, exclude: Path | None = None
+) -> dict[str, str]:
     if not root.exists():
         return {}
-    return {path.relative_to(repo_root).as_posix(): _sha(path) for path in sorted(root.rglob("*")) if path.is_file() and path != exclude}
+    return {
+        path.relative_to(repo_root).as_posix(): _sha(path)
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and path != exclude
+    }
 
 
 def _staged_files(source: Path, destination: Path, repo_root: Path) -> dict[str, str]:
     if not source.exists():
         return {}
-    return {(destination / path.relative_to(source)).relative_to(repo_root).as_posix(): _sha(path) for path in sorted(source.rglob("*")) if path.is_file()}
+    return {
+        (destination / path.relative_to(source))
+        .relative_to(repo_root)
+        .as_posix(): _sha(path)
+        for path in sorted(source.rglob("*"))
+        if path.is_file()
+    }
 
 
-def _manifest(contract: DocsEvidenceContract, config_path: Path, repo_root: Path, public_root: Path) -> dict[str, object]:
+def _manifest(
+    contract: DocsEvidenceContract,
+    config_path: Path,
+    repo_root: Path,
+    public_root: Path,
+) -> dict[str, object]:
     manifest_path = contract.retained_root / ".tracecite-manifest.json"
     return {
         "schema_version": 1,
         "contract_sha256": _sha(config_path),
-        "retained": _repo_files(contract.retained_root, repo_root, exclude=manifest_path),
-        "public": _staged_files(public_root, contract.staged_root / "public", repo_root),
+        "retained": _repo_files(
+            contract.retained_root, repo_root, exclude=manifest_path
+        ),
+        "public": _staged_files(
+            public_root, contract.staged_root / "public", repo_root
+        ),
     }
 
 
 def _dump(data: dict[str, object], path: Path) -> None:
-    path.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
-def author_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_root: str | Path) -> DocsModeResult:
+def author_docs(
+    contract: DocsEvidenceContract, *, config_path: str | Path, repo_root: str | Path
+) -> DocsModeResult:
     root = Path(repo_root).resolve()
     config = Path(config_path).resolve()
     if contract.host_render_command is not None:
@@ -64,15 +90,33 @@ def author_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo
     temporary = Path(tempfile.mkdtemp(prefix=".tracecite-author-", dir=parent))
     try:
         staged_retained = temporary / "retained"
-        shutil.copytree(contract.retained_root, staged_retained, ignore=shutil.ignore_patterns(".tracecite-manifest.json"))
+        shutil.copytree(
+            contract.retained_root,
+            staged_retained,
+            ignore=shutil.ignore_patterns(".tracecite-manifest.json"),
+        )
         staged = replace(contract, retained_root=staged_retained, staged_root=temporary)
         canonical_retained = contract.retained_root
-        stage_docs(staged, target="local", repo_root=root, link_markdown_root=canonical_retained)
-        stage_docs(staged, target="public", repo_root=root, link_markdown_root=canonical_retained)
+        stage_docs(
+            staged,
+            target="local",
+            repo_root=root,
+            link_markdown_root=canonical_retained,
+        )
+        stage_docs(
+            staged,
+            target="public",
+            repo_root=root,
+            link_markdown_root=canonical_retained,
+        )
         manifest = _manifest(contract, config, root, staged.staged_root / "public")
         manifest_tmp = temporary / "manifest.json"
         _dump(manifest, manifest_tmp)
-        targets = [(contract.staged_root / "local", staged.staged_root / "local"), (contract.staged_root / "public", staged.staged_root / "public"), (contract.retained_root / ".tracecite-manifest.json", manifest_tmp)]
+        targets = [
+            (contract.staged_root / "local", staged.staged_root / "local"),
+            (contract.staged_root / "public", staged.staged_root / "public"),
+            (contract.retained_root / ".tracecite-manifest.json", manifest_tmp),
+        ]
         backups: list[tuple[Path, Path]] = []
         promoted: list[Path] = []
         try:
@@ -93,7 +137,9 @@ def author_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo
         except Exception:
             for destination in promoted:
                 if destination.exists():
-                    shutil.rmtree(destination) if destination.is_dir() else destination.unlink()
+                    shutil.rmtree(
+                        destination
+                    ) if destination.is_dir() else destination.unlink()
             for destination, backup in reversed(backups):
                 if backup.exists():
                     os.replace(backup, destination)
@@ -101,10 +147,14 @@ def author_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
-    return DocsModeResult("author", True, contract.retained_root / ".tracecite-manifest.json")
+    return DocsModeResult(
+        "author", True, contract.retained_root / ".tracecite-manifest.json"
+    )
 
 
-def check_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_root: str | Path) -> DocsModeResult:
+def check_docs(
+    contract: DocsEvidenceContract, *, config_path: str | Path, repo_root: str | Path
+) -> DocsModeResult:
     root = Path(repo_root).resolve()
     manifest_path = contract.retained_root / ".tracecite-manifest.json"
     diagnostics: list[str] = []
@@ -113,27 +163,63 @@ def check_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_
         if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
             raise ValueError("invalid schema")
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
-        return DocsModeResult("check", False, manifest_path, (f"invalid manifest: {exc}",))
+        return DocsModeResult(
+            "check", False, manifest_path, (f"invalid manifest: {exc}",)
+        )
     if manifest.get("contract_sha256") != _sha(Path(config_path).resolve()):
         diagnostics.append("contract hash mismatch")
     try:
-        temporary = Path(tempfile.mkdtemp(prefix=".tracecite-check-", dir=contract.staged_root.parent))
+        temporary = Path(
+            tempfile.mkdtemp(
+                prefix=".tracecite-check-", dir=contract.staged_root.parent
+            )
+        )
     except OSError as exc:
-        return DocsModeResult("check", False, manifest_path, (f"temporary staging setup failed: {exc}",))
+        return DocsModeResult(
+            "check", False, manifest_path, (f"temporary staging setup failed: {exc}",)
+        )
     try:
         expected_retained = temporary / "retained"
-        shutil.copytree(contract.retained_root, expected_retained, ignore=shutil.ignore_patterns(".tracecite-manifest.json"))
-        expected = replace(contract, retained_root=expected_retained, staged_root=temporary)
+        shutil.copytree(
+            contract.retained_root,
+            expected_retained,
+            ignore=shutil.ignore_patterns(".tracecite-manifest.json"),
+        )
+        expected = replace(
+            contract, retained_root=expected_retained, staged_root=temporary
+        )
         canonical_retained = contract.retained_root
-        stage_docs(expected, target="local", repo_root=root, link_markdown_root=canonical_retained)
-        stage_docs(expected, target="public", repo_root=root, link_markdown_root=canonical_retained)
-        expected_local = _staged_files(expected.staged_root / "local", contract.staged_root / "local", root)
-        expected_public = _staged_files(expected.staged_root / "public", contract.staged_root / "public", root)
-        actual_local = _staged_files(contract.staged_root / "local", contract.staged_root / "local", root)
-        actual_public = _staged_files(contract.staged_root / "public", contract.staged_root / "public", root)
+        stage_docs(
+            expected,
+            target="local",
+            repo_root=root,
+            link_markdown_root=canonical_retained,
+        )
+        stage_docs(
+            expected,
+            target="public",
+            repo_root=root,
+            link_markdown_root=canonical_retained,
+        )
+        expected_local = _staged_files(
+            expected.staged_root / "local", contract.staged_root / "local", root
+        )
+        expected_public = _staged_files(
+            expected.staged_root / "public", contract.staged_root / "public", root
+        )
+        actual_local = _staged_files(
+            contract.staged_root / "local", contract.staged_root / "local", root
+        )
+        actual_public = _staged_files(
+            contract.staged_root / "public", contract.staged_root / "public", root
+        )
         retained = _repo_files(contract.retained_root, root, exclude=manifest_path)
         manifest_retained = manifest.get("retained", {})
-        for label, actual, wanted in (("retained", retained, manifest_retained), ("local staged", actual_local, expected_local), ("public staged", actual_public, expected_public)):
+        for label, actual, wanted in (
+            ("retained", retained, manifest_retained),
+            ("local staged", actual_local, expected_local),
+            ("public staged", actual_public, expected_public),
+        ):
             if actual != wanted:
                 for path in sorted(set(actual) - set(wanted)):
                     diagnostics.append(f"{label} extra: {path}")

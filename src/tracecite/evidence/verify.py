@@ -23,9 +23,13 @@ class QuoteVerification:
     source_path: str | None = None
 
 
-def verify_quote(conn, source_path: str, physical_page: int, quote: str) -> QuoteVerification:
+def verify_quote(
+    conn, source_path: str, physical_page: int, quote: str
+) -> QuoteVerification:
     if not quote.strip():
-        return QuoteVerification("structural-error", physical_page, quote, source_path=source_path)
+        return QuoteVerification(
+            "structural-error", physical_page, quote, source_path=source_path
+        )
     row = conn.execute(
         """
         SELECT pages.text FROM pages
@@ -35,12 +39,16 @@ def verify_quote(conn, source_path: str, physical_page: int, quote: str) -> Quot
         (source_path, physical_page),
     ).fetchone()
     if row is None:
-        return QuoteVerification("not-found", physical_page, quote, source_path=source_path)
+        return QuoteVerification(
+            "not-found", physical_page, quote, source_path=source_path
+        )
     page_text = row["text"]
     if quote in page_text:
         return QuoteVerification("exact", physical_page, quote, source_path=source_path)
     if normalise_text(quote) in normalise_text(page_text):
-        return QuoteVerification("normalised", physical_page, quote, source_path=source_path)
+        return QuoteVerification(
+            "normalised", physical_page, quote, source_path=source_path
+        )
     return QuoteVerification("not-found", physical_page, quote, source_path=source_path)
 
 
@@ -68,12 +76,16 @@ class ReportVerification:
 
     @property
     def ok(self) -> bool:
-        return not self.citation_issues and not self.source_link_issues and all(
-            q.status in {"exact", "normalised"} for q in self.quote_results
+        return (
+            not self.citation_issues
+            and not self.source_link_issues
+            and all(q.status in {"exact", "normalised"} for q in self.quote_results)
         )
 
 
-def _parse_definitions(lines: list[str]) -> tuple[dict[str, ReferenceDefinition], list[CitationIssue], set[str]]:
+def _parse_definitions(
+    lines: list[str],
+) -> tuple[dict[str, ReferenceDefinition], list[CitationIssue], set[str]]:
     out: dict[str, ReferenceDefinition] = {}
     issues: list[CitationIssue] = []
     invalid_keys: set[str] = set()
@@ -82,16 +94,28 @@ def _parse_definitions(lines: list[str]) -> tuple[dict[str, ReferenceDefinition]
         if not like:
             continue
         key = like.group("key")
-        parsed = parse_source_link_destination(line[like.end():].strip())
+        parsed = parse_source_link_destination(line[like.end() :].strip())
         if parsed is None:
-            issues.append(CitationIssue(key, "malformed-page", "reference definition must end with #page=<positive integer>"))
+            issues.append(
+                CitationIssue(
+                    key,
+                    "malformed-page",
+                    "reference definition must end with #page=<positive integer>",
+                )
+            )
             invalid_keys.add(key)
             continue
         path, page = parsed
         existing = out.get(key)
         if existing is not None:
-            kind = "duplicate-definition" if (existing.path, existing.page) == (path, page) else "ambiguous-definition"
-            issues.append(CitationIssue(key, kind, "duplicate reference definition label"))
+            kind = (
+                "duplicate-definition"
+                if (existing.path, existing.page) == (path, page)
+                else "ambiguous-definition"
+            )
+            issues.append(
+                CitationIssue(key, kind, "duplicate reference definition label")
+            )
             invalid_keys.add(key)
             continue
         out[key] = ReferenceDefinition(key, page, path)
@@ -99,11 +123,20 @@ def _parse_definitions(lines: list[str]) -> tuple[dict[str, ReferenceDefinition]
 
 
 def _row_for_definition(conn, defn: ReferenceDefinition, report_path: Path, root: Path):
-    source_path = normalise_source_path(root, defn.path, base=report_path.resolve().parent)
+    source_path = normalise_source_path(
+        root, defn.path, base=report_path.resolve().parent
+    )
     return source_row_for_path(conn, source_path)
 
 
-def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Path | None = None, source_links_root: Path | None = None) -> ReportVerification:
+def verify_report(
+    conn,
+    report_path: Path,
+    root: Path,
+    *,
+    source_links_path: Path | None = None,
+    source_links_root: Path | None = None,
+) -> ReportVerification:
     report_path = Path(report_path)
     root = Path(root).resolve()
     lines = _prose_lines(report_path.read_text(encoding="utf-8").splitlines())
@@ -118,25 +151,43 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
         if key in invalid_definition_keys:
             continue
         if definition is None:
-            result.citation_issues.append(CitationIssue(key, "missing-definition", "no reference definition found"))
+            result.citation_issues.append(
+                CitationIssue(
+                    key, "missing-definition", "no reference definition found"
+                )
+            )
             continue
         if definition.page <= 0:
-            result.citation_issues.append(CitationIssue(key, "bad-page", "page must be positive"))
+            result.citation_issues.append(
+                CitationIssue(key, "bad-page", "page must be positive")
+            )
             continue
         try:
             source_row = _row_for_definition(conn, definition, report_path, root)
         except PathAuthorityError as exc:
-            result.citation_issues.append(CitationIssue(key, "path-outside-root", str(exc)))
+            result.citation_issues.append(
+                CitationIssue(key, "path-outside-root", str(exc))
+            )
             continue
         if source_row is None:
-            result.citation_issues.append(CitationIssue(key, "unindexed-path", f"{definition.path} is not indexed"))
+            result.citation_issues.append(
+                CitationIssue(
+                    key, "unindexed-path", f"{definition.path} is not indexed"
+                )
+            )
             continue
         page_row = conn.execute(
             "SELECT physical_page FROM pages WHERE source_pk = ? AND physical_page = ?",
             (source_row["source_pk"], definition.page),
         ).fetchone()
         if page_row is None:
-            result.citation_issues.append(CitationIssue(key, "page-not-indexed", f"page {definition.page} is not indexed for {source_row['path']}"))
+            result.citation_issues.append(
+                CitationIssue(
+                    key,
+                    "page-not-indexed",
+                    f"page {definition.page} is not indexed for {source_row['path']}",
+                )
+            )
     paragraph_keys: list[str] = []
     paragraph_break_pending = False
     index = 0
@@ -158,10 +209,16 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
             viable: list[tuple[str, object, ReferenceDefinition]] = []
             for key in dict.fromkeys(paragraph_keys):
                 definition = result.definitions.get(key)
-                if definition is None or key in invalid_definition_keys or definition.page <= 0:
+                if (
+                    definition is None
+                    or key in invalid_definition_keys
+                    or definition.page <= 0
+                ):
                     continue
                 try:
-                    source_row = _row_for_definition(conn, definition, report_path, root)
+                    source_row = _row_for_definition(
+                        conn, definition, report_path, root
+                    )
                 except PathAuthorityError:
                     continue
                 if source_row is None:
@@ -173,11 +230,15 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
                 if page_row is not None:
                     viable.append((key, source_row, definition))
             if not quote.strip() or len(viable) != 1:
-                result.quote_results.append(QuoteVerification("structural-error", 0, quote))
+                result.quote_results.append(
+                    QuoteVerification("structural-error", 0, quote)
+                )
             else:
                 key, source_row, definition = viable[0]
                 best = verify_quote(conn, source_row["path"], definition.page, quote)
-                best = QuoteVerification(best.status, best.physical_page, best.quote, key, source_row["path"])
+                best = QuoteVerification(
+                    best.status, best.physical_page, best.quote, key, source_row["path"]
+                )
                 result.quote_results.append(best)
             index += 1
             continue
@@ -186,7 +247,9 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
             index += 1
             continue
         citations = [m.group("key") for m in _CITATION_RE.finditer(line)]
-        if re.match(r"^\s{0,3}(?:#{1,6}\s|[-*_](?:\s*[-*_]){2,}\s*$|(?:[-+*]|\d+[.)])\s+)", line):
+        if re.match(
+            r"^\s{0,3}(?:#{1,6}\s|[-*_](?:\s*[-*_]){2,}\s*$|(?:[-+*]|\d+[.)])\s+)", line
+        ):
             paragraph_keys = []
         elif paragraph_break_pending:
             paragraph_keys = citations
@@ -211,13 +274,19 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
             source_abs = (root / source_row["path"]).resolve()
             entries = registry.get(source_abs, [])
             if not entries:
-                result.source_link_issues.append(f"no source-link entry for {source_row['path']} in {source_links_path}")
+                result.source_link_issues.append(
+                    f"no source-link entry for {source_row['path']} in {source_links_path}"
+                )
             elif len(entries) > 1:
-                result.source_link_issues.append(f"{source_row['path']} has {len(entries)} ambiguous entries in {source_links_path}")
+                result.source_link_issues.append(
+                    f"{source_row['path']} has {len(entries)} ambiguous entries in {source_links_path}"
+                )
             else:
                 entry_abs = (registry_root / entries[0].local_path).resolve()
                 if entry_abs != source_abs:
-                    result.source_link_issues.append(f"{entries[0].local_path} in {source_links_path} does not agree with the database")
+                    result.source_link_issues.append(
+                        f"{entries[0].local_path} in {source_links_path} does not agree with the database"
+                    )
     return result
 
 

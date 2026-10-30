@@ -8,11 +8,20 @@ from tracecite.evidence import sync as sync_module
 from conftest import build_markdown, build_pdf, write_manifest, FakeEmbedder
 
 
-def test_search_pdf_results_expose_page_assets_without_losing_existing_fields(corpus_dir, manifest_path, database_path, monkeypatch, capsys):
+def test_search_pdf_results_expose_page_assets_without_losing_existing_fields(
+    corpus_dir, manifest_path, database_path, monkeypatch, capsys
+):
     build_pdf(corpus_dir / "figure.pdf", [["Figure report text"], ["Second page"]])
     write_manifest(manifest_path, {"figure.pdf": "figure.pdf"})
-    monkeypatch.setattr(sync_module, "EmbeddingModel", lambda *args, **kwargs: FakeEmbedder())
-    assert sync_module.sync(corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()).status == "ok"
+    monkeypatch.setattr(
+        sync_module, "EmbeddingModel", lambda *args, **kwargs: FakeEmbedder()
+    )
+    assert (
+        sync_module.sync(
+            corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
+        ).status
+        == "ok"
+    )
     capsys.readouterr()
 
     exit_code = cli.main(["search", "--database", str(database_path), "report"])
@@ -31,14 +40,28 @@ def test_search_pdf_results_expose_page_assets_without_losing_existing_fields(co
     assert "heading_path" in result
 
 
-def test_search_markdown_results_keep_page_asset_fields_null_or_empty(corpus_dir, manifest_path, database_path, monkeypatch, capsys):
-    build_markdown(corpus_dir / "note.md", "# Heading\n\nThis note mentions hydrogen storage and grids.\n")
+def test_search_markdown_results_keep_page_asset_fields_null_or_empty(
+    corpus_dir, manifest_path, database_path, monkeypatch, capsys
+):
+    build_markdown(
+        corpus_dir / "note.md",
+        "# Heading\n\nThis note mentions hydrogen storage and grids.\n",
+    )
     write_manifest(manifest_path, {"note.md": "note.md"})
-    monkeypatch.setattr(sync_module, "EmbeddingModel", lambda *args, **kwargs: FakeEmbedder())
-    assert sync_module.sync(corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()).status == "ok"
+    monkeypatch.setattr(
+        sync_module, "EmbeddingModel", lambda *args, **kwargs: FakeEmbedder()
+    )
+    assert (
+        sync_module.sync(
+            corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
+        ).status
+        == "ok"
+    )
     capsys.readouterr()
 
-    exit_code = cli.main(["search", "--database", str(database_path), "hydrogen storage"])
+    exit_code = cli.main(
+        ["search", "--database", str(database_path), "hydrogen storage"]
+    )
     captured = capsys.readouterr()
 
     assert exit_code == 0

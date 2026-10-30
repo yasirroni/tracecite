@@ -35,7 +35,9 @@ def normalise_relative_declaration(value: str | Path) -> str:
     return "/".join(parts)
 
 
-def normalise_source_path(root: Path, value: str | Path, *, base: Path | None = None) -> str:
+def normalise_source_path(
+    root: Path, value: str | Path, *, base: Path | None = None
+) -> str:
     root = Path(root).resolve()
     text = _lexical_posix(value)
     if text == "":
@@ -57,11 +59,19 @@ def normalise_source_path(root: Path, value: str | Path, *, base: Path | None = 
         candidate = (Path(base).resolve() if base is not None else root) / Path(*parts)
 
     resolved_parent = candidate.parent.resolve()
-    resolved = (resolved_parent / candidate.name).resolve() if candidate.exists() else resolved_parent / candidate.name
+    resolved = (
+        (resolved_parent / candidate.name).resolve()
+        if candidate.exists()
+        else resolved_parent / candidate.name
+    )
     try:
         relative = resolved.relative_to(root)
     except ValueError as exc:
-        message = "symlink resolves outside root" if candidate.is_symlink() else "source path is outside root"
+        message = (
+            "symlink resolves outside root"
+            if candidate.is_symlink()
+            else "source path is outside root"
+        )
         raise PathAuthorityError(f"{message}: {value}") from exc
     if candidate.is_symlink() and candidate.resolve() != resolved:
         raise PathAuthorityError(f"symlink resolves outside root: {value}")
@@ -78,5 +88,7 @@ def source_row_for_path(conn, path: str):
         return row
     collapsed = posixpath.normpath(normalised)
     if collapsed != normalised:
-        return conn.execute("SELECT * FROM sources WHERE path = ?", (collapsed,)).fetchone()
+        return conn.execute(
+            "SELECT * FROM sources WHERE path = ?", (collapsed,)
+        ).fetchone()
     return None

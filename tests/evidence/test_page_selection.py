@@ -23,17 +23,35 @@ from tracecite.evidence.page_selection import (
         ("all", [2, 4, 6], [2, 4, 6]),
     ],
 )
-def test_resolve_page_selection_supports_full_selector_grammar(selector, available_pages, expected):
+def test_resolve_page_selection_supports_full_selector_grammar(
+    selector, available_pages, expected
+):
     assert resolve_page_selection(selector, available_pages) == expected
 
 
-@pytest.mark.parametrize("selector, available_pages", [("", [1, 2, 3]), (" ", [1, 2, 3]), ("1--2", [1, 2, 3]), ("1--2", []), ("0", [1, 2, 3]), ("-0", [1, 2, 3]), ("3-2", [1, 2, 3]), ("all,5", [1, 2, 3]), ("5,all", [1, 2, 3])])
+@pytest.mark.parametrize(
+    "selector, available_pages",
+    [
+        ("", [1, 2, 3]),
+        (" ", [1, 2, 3]),
+        ("1--2", [1, 2, 3]),
+        ("1--2", []),
+        ("0", [1, 2, 3]),
+        ("-0", [1, 2, 3]),
+        ("3-2", [1, 2, 3]),
+        ("all,5", [1, 2, 3]),
+        ("5,all", [1, 2, 3]),
+    ],
+)
 def test_resolve_page_selection_rejects_invalid_syntax(selector, available_pages):
     with pytest.raises(PageSelectionSyntaxError):
         resolve_page_selection(selector, available_pages)
 
 
-@pytest.mark.parametrize("selector, available_pages", [(None, [2, 3]), ("97-99", [97, 99]), ("97-", [97, 99]), ("-99", [1, 2, 4, 5])])
+@pytest.mark.parametrize(
+    "selector, available_pages",
+    [(None, [2, 3]), ("97-99", [97, 99]), ("97-", [97, 99]), ("-99", [1, 2, 4, 5])],
+)
 def test_resolve_page_selection_rejects_unavailable_pages(selector, available_pages):
     with pytest.raises(PageSelectionUnavailableError):
         resolve_page_selection(selector, available_pages)

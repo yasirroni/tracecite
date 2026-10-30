@@ -28,7 +28,9 @@ def _asset_payload(database_path: Path, asset_row) -> dict:
     try:
         bbox = json.loads(asset_row["bbox_json"]) if asset_row["bbox_json"] else None
     except ValueError as exc:
-        raise PageOutputError(f"invalid asset bbox json: {asset_row['asset_path']}") from exc
+        raise PageOutputError(
+            f"invalid asset bbox json: {asset_row['asset_path']}"
+        ) from exc
     return {
         "asset_path": asset_row["asset_path"],
         "resolved_path": str(resolved_path),
@@ -43,7 +45,9 @@ def _asset_payload(database_path: Path, asset_row) -> dict:
     }
 
 
-def page_assets_for(conn, database_path: Path, source_pk: int, physical_page: int) -> tuple[dict | None, list[dict]]:
+def page_assets_for(
+    conn, database_path: Path, source_pk: int, physical_page: int
+) -> tuple[dict | None, list[dict]]:
     rows = conn.execute(
         "SELECT * FROM assets WHERE source_pk = ? AND physical_page = ? ORDER BY asset_type, asset_path",
         (source_pk, physical_page),
@@ -60,7 +64,9 @@ def page_assets_for(conn, database_path: Path, source_pk: int, physical_page: in
 
 
 def page_json_payload(conn, database_path: Path, source_row, page_row) -> dict:
-    page_render, figure_crops = page_assets_for(conn, database_path, source_row["source_pk"], page_row["physical_page"])
+    page_render, figure_crops = page_assets_for(
+        conn, database_path, source_row["source_pk"], page_row["physical_page"]
+    )
     return {
         "source_path": source_row["path"],
         "physical_page": page_row["physical_page"],

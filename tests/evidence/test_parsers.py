@@ -15,7 +15,12 @@ FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
 def test_markdown_parser_against_static_fixture():
     result = markdown_parser.parse(FIXTURES_DIR / "sample-report.md")
     heading_texts = [u.text for u in result.units if u.content_type == "heading"]
-    assert heading_texts == ["Sample Synthetic Report", "Overview", "Findings", "Conclusion"]
+    assert heading_texts == [
+        "Sample Synthetic Report",
+        "Overview",
+        "Findings",
+        "Conclusion",
+    ]
 
     findings_units = [u for u in result.units if u.heading_path[-1:] == ["Findings"]]
     assert any("synthetic storage capacity" in u.text for u in findings_units)
@@ -40,7 +45,12 @@ def test_pdf_parser_heading_and_body_content_types(tmp_path):
 
     pdf_path = build_pdf(
         tmp_path / "doc.pdf",
-        [["Overview", "A short synthetic body paragraph used only for this parser unit test."]],
+        [
+            [
+                "Overview",
+                "A short synthetic body paragraph used only for this parser unit test.",
+            ]
+        ],
     )
     result = pdf_parser.parse(pdf_path)
     content_types = {u.content_type for u in result.units}
@@ -61,7 +71,9 @@ def test_pdf_parser_ocr_fallback_for_no_text_layer_page(tmp_path):
 
     pdf_path = build_pdf_with_image_only_page(
         tmp_path / "scan.pdf",
-        leading_pages=[["Intro", "This is a normal text page used only as a non-OCR control."]],
+        leading_pages=[
+            ["Intro", "This is a normal text page used only as a non-OCR control."]
+        ],
     )
     result = pdf_parser.parse(pdf_path)
     assert len(result.pages) == 2
@@ -119,7 +131,9 @@ def test_pdf_parser_figure_crop_nearby_text_association(tmp_path):
     document = pymupdf.open()
     try:
         page = document.new_page()
-        page.insert_text((72, 90), "Figure 1: Illustrative capacity chart shown below.", fontsize=11)
+        page.insert_text(
+            (72, 90), "Figure 1: Illustrative capacity chart shown below.", fontsize=11
+        )
         page.insert_image(pymupdf.Rect(72, 110, 372, 260), stream=image_bytes)
         pdf_path = tmp_path / "figure.pdf"
         document.save(pdf_path)

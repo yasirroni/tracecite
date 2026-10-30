@@ -94,7 +94,9 @@ class DocumentationInvariantTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             docs = Path(directory) / "docs"
             docs.mkdir(parents=True)
-            (docs / "page.py").write_text("# %%\nprint('missing label')\n", encoding="utf-8")
+            (docs / "page.py").write_text(
+                "# %%\nprint('missing label')\n", encoding="utf-8"
+            )
             self.assertEqual(python_code_cell_labels(docs), [None])
 
     def test_quarto_fails_on_executable_errors(self) -> None:

@@ -20,7 +20,9 @@ def _require(value, flag: str):
 
 def _connect(database: Path, *, read_only: bool):
     try:
-        return schema.connect_existing(_require(database, "--database"), read_only=read_only)
+        return schema.connect_existing(
+            _require(database, "--database"), read_only=read_only
+        )
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         return None
@@ -105,7 +107,9 @@ def _fts_rows(conn, query, fts_limit, source_types=None):
             "Vector retrieval still uses the original query.",
             file=sys.stderr,
         )
-        return conn.execute(statement, [fallback_query, *type_params, fts_limit]).fetchall()
+        return conn.execute(
+            statement, [fallback_query, *type_params, fts_limit]
+        ).fetchall()
 
 
 def active_embedding_model(conn, model_cache_dir: Path):
@@ -113,10 +117,14 @@ def active_embedding_model(conn, model_cache_dir: Path):
     from . import sync as sync_module
 
     config = schema.load_config(conn)
-    return sync_module.EmbeddingModel(config.embedding_model, config.embedding_revision, model_cache_dir)
+    return sync_module.EmbeddingModel(
+        config.embedding_model, config.embedding_revision, model_cache_dir
+    )
 
 
-def hybrid_search(conn, query, limit, fts_limit, vector_limit, embedder, *, source_types=None):
+def hybrid_search(
+    conn, query, limit, fts_limit, vector_limit, embedder, *, source_types=None
+):
     from . import vector_backend
 
     fts_rows = _fts_rows(conn, query, fts_limit, source_types)
@@ -144,7 +152,9 @@ def hybrid_search(conn, query, limit, fts_limit, vector_limit, embedder, *, sour
     allowed_ids = [row["embedding_id"] for row in allowed_rows]
 
     backend = vector_backend.SqliteVecBackend()
-    vector_matches = backend.search(conn, query_vector, vector_limit, allowed_embedding_ids=allowed_ids)
+    vector_matches = backend.search(
+        conn, query_vector, vector_limit, allowed_embedding_ids=allowed_ids
+    )
 
     vector_rank: dict[str, int] = {}
     if vector_matches:
@@ -172,11 +182,15 @@ def hybrid_search(conn, query, limit, fts_limit, vector_limit, embedder, *, sour
         fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
         provenance[chunk_id].add("vector")
 
-    ranked_chunk_ids = sorted(fused_scores, key=lambda cid: fused_scores[cid], reverse=True)[:limit]
+    ranked_chunk_ids = sorted(
+        fused_scores, key=lambda cid: fused_scores[cid], reverse=True
+    )[:limit]
 
     results = []
     for position, chunk_id in enumerate(ranked_chunk_ids, start=1):
-        chunk = conn.execute("SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)).fetchone()
+        chunk = conn.execute(
+            "SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)
+        ).fetchone()
         source_row = conn.execute(
             "SELECT * FROM sources WHERE source_pk = ?", (chunk["source_pk"],)
         ).fetchone()
@@ -185,13 +199,23 @@ def hybrid_search(conn, query, limit, fts_limit, vector_limit, embedder, *, sour
             "source_path": source_row["path"],
             "source_type": source_row["source_type"],
             "source_sha256": source_row["sha256"],
-            "heading_path": json.loads(chunk["heading_path"]) if chunk["heading_path"] else [],
+            "heading_path": json.loads(chunk["heading_path"])
+            if chunk["heading_path"]
+            else [],
             "passage": chunk["body"],
             "physical_page": chunk["physical_page"],
-            "page_offsets": {"start": chunk["page_start_offset"], "end": chunk["page_end_offset"]},
-            "page_range": {"start": chunk["page_range_start"], "end": chunk["page_range_end"]},
+            "page_offsets": {
+                "start": chunk["page_start_offset"],
+                "end": chunk["page_end_offset"],
+            },
+            "page_range": {
+                "start": chunk["page_range_start"],
+                "end": chunk["page_range_end"],
+            },
             "line_range": {"start": chunk["line_start"], "end": chunk["line_end"]},
-            "locator": json.loads(chunk["locator_json"]) if chunk["locator_json"] else {},
+            "locator": json.loads(chunk["locator_json"])
+            if chunk["locator_json"]
+            else {},
             "content_type": chunk["content_type"],
             "provenance": sorted(provenance[chunk_id]),
             "fused_score": fused_scores[chunk_id],
@@ -210,7 +234,9 @@ def cmd_search(args: argparse.Namespace) -> int:
         return 2
     try:
         schema.ensure_schema(conn)
-        model_cache_dir = args.model_cache_dir or Path(args.database).resolve().parent / "model-cache"
+        model_cache_dir = (
+            args.model_cache_dir or Path(args.database).resolve().parent / "model-cache"
+        )
         results = hybrid_search(
             conn,
             args.query,
@@ -220,11 +246,16 @@ def cmd_search(args: argparse.Namespace) -> int:
             active_embedding_model(conn, model_cache_dir),
             source_types=args.source_types,
         )
-        source_pks = {row["path"]: row["source_pk"] for row in conn.execute("SELECT path, source_pk FROM sources")}
+        source_pks = {
+            row["path"]: row["source_pk"]
+            for row in conn.execute("SELECT path, source_pk FROM sources")
+        }
         for result in results:
             page = result["physical_page"]
             result["page_render"], result["figure_crops"] = (
-                page_assets_for(conn, args.database, source_pks[result["source_path"]], page)
+                page_assets_for(
+                    conn, args.database, source_pks[result["source_path"]], page
+                )
                 if page is not None
                 else (None, [])
             )
@@ -242,7 +273,11 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 def cmd_page(args: argparse.Namespace) -> int:
     from .page_output import PageAssetMissingError, PageOutputError, page_json_payload
-    from .page_selection import PageSelectionSyntaxError, PageSelectionUnavailableError, resolve_page_selection
+    from .page_selection import (
+        PageSelectionSyntaxError,
+        PageSelectionUnavailableError,
+        resolve_page_selection,
+    )
     from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
     conn = _connect(args.database, read_only=True)
@@ -254,7 +289,9 @@ def cmd_page(args: argparse.Namespace) -> int:
         try:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
-            print(json.dumps({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"error": "path-error", "detail": str(exc)}), file=sys.stderr
+            )
             return 2
         source_row = source_row_for_path(conn, source_path)
         if source_row is None:
@@ -276,10 +313,19 @@ def cmd_page(args: argparse.Namespace) -> int:
         except PageSelectionUnavailableError as exc:
             print(f"not-found: {source_path} page {exc.page}", file=sys.stderr)
             return 1
-        selected_rows = {row["physical_page"]: row for row in rows if row["physical_page"] in selected_pages}
+        selected_rows = {
+            row["physical_page"]: row
+            for row in rows
+            if row["physical_page"] in selected_pages
+        }
         if args.format == "json":
             try:
-                payload = [page_json_payload(conn, args.database, source_row, selected_rows[page]) for page in selected_pages]
+                payload = [
+                    page_json_payload(
+                        conn, args.database, source_row, selected_rows[page]
+                    )
+                    for page in selected_pages
+                ]
             except PageAssetMissingError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
@@ -301,7 +347,11 @@ def cmd_page(args: argparse.Namespace) -> int:
 
 
 def cmd_extract_pages(args: argparse.Namespace) -> int:
-    from .page_extraction import PageExtractionError, PageExtractionMissingError, extract_pages
+    from .page_extraction import (
+        PageExtractionError,
+        PageExtractionMissingError,
+        extract_pages,
+    )
 
     conn = _connect(args.database, read_only=True)
     if conn is None:
@@ -310,7 +360,9 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
         schema.ensure_schema(conn)
         root = Path(args.root or Path.cwd()).resolve()
         try:
-            result = extract_pages(conn, root, args.source_path, args.page, args.output_dir)
+            result = extract_pages(
+                conn, root, args.source_path, args.page, args.output_dir
+            )
         except PageExtractionMissingError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -345,7 +397,9 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
         try:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
-            print(json.dumps({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
+            print(
+                json.dumps({"error": "path-error", "detail": str(exc)}), file=sys.stderr
+            )
             return 2
         if source_row_for_path(conn, source_path) is None:
             result = verify.QuoteVerification("not-found", args.page, args.quote)
@@ -376,12 +430,18 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
     try:
         schema.ensure_schema(conn)
         result = verify.verify_report(
-            conn, args.report_path, args.root or Path.cwd(), source_links_path=args.source_links, source_links_root=args.source_links_root
+            conn,
+            args.report_path,
+            args.root or Path.cwd(),
+            source_links_path=args.source_links,
+            source_links_root=args.source_links_root,
         )
         print(
             json.dumps(
                 {
-                    "citation_issues": [issue.__dict__ for issue in result.citation_issues],
+                    "citation_issues": [
+                        issue.__dict__ for issue in result.citation_issues
+                    ],
                     "quote_results": [
                         {
                             "status": q.status,
@@ -428,10 +488,16 @@ def cmd_prune(args: argparse.Namespace) -> int:
     prune_all = args.prune_all
     selects_any = bool(rules.explicit_paths or rules.include_globs)
     if prune_all and (selects_any or rules.exclude_globs):
-        print("prune --all cannot be combined with source/include/exclude rules", file=sys.stderr)
+        print(
+            "prune --all cannot be combined with source/include/exclude rules",
+            file=sys.stderr,
+        )
         return 2
     if not prune_all and not selects_any:
-        print("prune requires at least one positive source/include rule; excludes only refine it", file=sys.stderr)
+        print(
+            "prune requires at least one positive source/include rule; excludes only refine it",
+            file=sys.stderr,
+        )
         return 2
     conn = _connect(args.database, read_only=True)
     if conn is None:
@@ -486,6 +552,15 @@ def cmd_prune(args: argparse.Namespace) -> int:
 def dispatch(args: argparse.Namespace) -> int:
     args = _resolve_runtime_args(args)
     if args.command == "verify":
-        return {"quote": cmd_verify_quote, "report": cmd_verify_report}[args.verify_command](args)
-    handlers = {"sync": cmd_sync, "search": cmd_search, "page": cmd_page, "extract-pages": cmd_extract_pages, "prune": cmd_prune, "doctor": cmd_doctor}
+        return {"quote": cmd_verify_quote, "report": cmd_verify_report}[
+            args.verify_command
+        ](args)
+    handlers = {
+        "sync": cmd_sync,
+        "search": cmd_search,
+        "page": cmd_page,
+        "extract-pages": cmd_extract_pages,
+        "prune": cmd_prune,
+        "doctor": cmd_doctor,
+    }
     return handlers[args.command](args)

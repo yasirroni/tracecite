@@ -58,7 +58,9 @@ def _normalise_part(base_part: str, target: str) -> str:
     if target.startswith("/"):
         resolved = posixpath.normpath(target.lstrip("/"))
     else:
-        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(base_part), target))
+        resolved = posixpath.normpath(
+            posixpath.join(posixpath.dirname(base_part), target)
+        )
     if resolved == ".." or resolved.startswith("../"):
         raise ValueError(f"workbook relationship escapes the OOXML package: {target}")
     return resolved
@@ -117,7 +119,11 @@ def _inline_string(cell: ET.Element) -> str:
 def _stored_value(cell: ET.Element, shared_strings: list[str]) -> tuple[str, bool]:
     cell_type = cell.attrib.get("t")
     value_element = cell.find(_tag("v"))
-    raw = value_element.text if value_element is not None and value_element.text is not None else ""
+    raw = (
+        value_element.text
+        if value_element is not None and value_element.text is not None
+        else ""
+    )
 
     if cell_type == "inlineStr":
         value = _inline_string(cell)
@@ -184,13 +190,19 @@ def _row_number(row: ET.Element, cells: list[_Cell], fallback: int) -> int:
 
 
 def _unit_text(sheet: _Sheet, row_number: int, cells: list[_Cell]) -> str:
-    cell_range = cells[0].reference if len(cells) == 1 else f"{cells[0].reference}:{cells[-1].reference}"
-    heading = f'Worksheet {json.dumps(sheet.name, ensure_ascii=False)}, row {row_number}, cells {cell_range}'
+    cell_range = (
+        cells[0].reference
+        if len(cells) == 1
+        else f"{cells[0].reference}:{cells[-1].reference}"
+    )
+    heading = f"Worksheet {json.dumps(sheet.name, ensure_ascii=False)}, row {row_number}, cells {cell_range}"
     values = "\n".join(f"{cell.reference} = {cell.rendered}" for cell in cells)
     return f"{heading}\n{values}"
 
 
-def _split_row(sheet: _Sheet, row_number: int, cells: list[_Cell], max_unit_chars: int) -> list[list[_Cell]]:
+def _split_row(
+    sheet: _Sheet, row_number: int, cells: list[_Cell], max_unit_chars: int
+) -> list[list[_Cell]]:
     parts: list[list[_Cell]] = []
     current: list[_Cell] = []
     for cell in cells:
@@ -239,7 +251,11 @@ def _sheet_units(
                 ):
                     start_cell = part[0].reference
                     end_cell = part[-1].reference
-                    cell_range = start_cell if start_cell == end_cell else f"{start_cell}:{end_cell}"
+                    cell_range = (
+                        start_cell
+                        if start_cell == end_cell
+                        else f"{start_cell}:{end_cell}"
+                    )
                     units.append(
                         ParsedChunkUnit(
                             text=_unit_text(sheet, row_number, part),
@@ -317,4 +333,3 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                 )
             )
     return ParseResult(pages=pages, units=units)
-

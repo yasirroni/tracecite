@@ -129,9 +129,7 @@ class DiscoveryTests(unittest.TestCase):
         julia = (root / "julia.jl").resolve()
         python.write_text("", encoding="utf-8")
         julia.write_text("", encoding="utf-8")
-        selection = docs.select_build_variant(
-            root, (python, julia), only="python"
-        )
+        selection = docs.select_build_variant(root, (python, julia), only="python")
         self.assertEqual(selection.profile, "python")
 
     def test_requested_language_absent_is_an_error(self) -> None:
@@ -180,9 +178,7 @@ class BuildTests(unittest.TestCase):
         source = root / "index.md"
         source.write_text("# Index\n", encoding="utf-8")
         (root / "_quarto.yml").write_text(
-            "project:\n"
-            "  render: [index.md]\n"
-            f"  output-dir: {output_dir}\n",
+            f"project:\n  render: [index.md]\n  output-dir: {output_dir}\n",
             encoding="utf-8",
         )
         return root, source
@@ -219,9 +215,10 @@ class BuildTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / "index.md").write_text("# Index\n", encoding="utf-8")
-            with patch.object(docs_build.subprocess, "run") as run, patch.object(
-                docs_build, "export_embedding_site"
-            ) as export:
+            with (
+                patch.object(docs_build.subprocess, "run") as run,
+                patch.object(docs_build, "export_embedding_site") as export,
+            ):
                 result = docs.build_docs(root, inspection=True)
             self.assertEqual(result.selection.variant, "prose")
             self.assertEqual(
@@ -358,9 +355,7 @@ class BuildTests(unittest.TestCase):
         retained = source.with_name("index.html.md")
         retained.write_text("retained\n", encoding="utf-8")
         with patch.object(docs_build.subprocess, "run"):
-            result = docs.build_docs(
-                root, inspection=False, check_retained=True
-            )
+            result = docs.build_docs(root, inspection=False, check_retained=True)
         self.assertEqual(result.changed_retained, ())
 
     def test_freshness_reports_changed_retained_markdown(self) -> None:
@@ -372,27 +367,29 @@ class BuildTests(unittest.TestCase):
             retained.write_text("after\n", encoding="utf-8")
 
         with patch.object(docs_build.subprocess, "run", side_effect=render):
-            result = docs.build_docs(
-                root, inspection=False, check_retained=True
-            )
+            result = docs.build_docs(root, inspection=False, check_retained=True)
         self.assertEqual(result.changed_retained, (Path("index.html.md"),))
 
     def test_inspection_can_be_disabled(self) -> None:
         root, _ = self._project()
-        with patch.object(docs_build.subprocess, "run") as run, patch.object(
-            docs_build, "export_embedding_site"
-        ) as export:
+        with (
+            patch.object(docs_build.subprocess, "run") as run,
+            patch.object(docs_build, "export_embedding_site") as export,
+        ):
             docs.build_docs(root, inspection=False)
         run.assert_called_once()
         export.assert_not_called()
 
     def test_export_receives_strict_render_and_profile_controls(self) -> None:
         root, _ = self._project()
-        with patch.object(docs_build.subprocess, "run"), patch.object(
-            docs_build,
-            "export_embedding_site",
-            return_value=None,
-        ) as export:
+        with (
+            patch.object(docs_build.subprocess, "run"),
+            patch.object(
+                docs_build,
+                "export_embedding_site",
+                return_value=None,
+            ) as export,
+        ):
             docs.build_docs(
                 root,
                 inspection=True,
@@ -419,9 +416,13 @@ class BuildTests(unittest.TestCase):
         retained = source.with_name("index.html.md")
         retained.write_text("retained\n", encoding="utf-8")
         (root / "_quarto-python.yml").write_text("{}\n", encoding="utf-8")
-        with patch.object(docs_build.shutil, "which", return_value="/bin/tool"), patch.object(
-            docs_build.subprocess, "run"
-        ), patch.object(docs_build, "export_embedding_site", return_value=None) as export:
+        with (
+            patch.object(docs_build.shutil, "which", return_value="/bin/tool"),
+            patch.object(docs_build.subprocess, "run"),
+            patch.object(
+                docs_build, "export_embedding_site", return_value=None
+            ) as export,
+        ):
             docs.build_docs(root, only="python")
         self.assertEqual(export.call_args.kwargs["project_profile"], "python")
 
@@ -448,11 +449,19 @@ class CliTests(unittest.TestCase):
             from tracecite.cli import main
 
             self.assertEqual(
-                main([
-                    "docs", "build", "docs", "--only", "python",
-                    "--no-embedding-site", "--no-render-embedding-site",
-                    "--strict-tables", "--check-retained",
-                ]),
+                main(
+                    [
+                        "docs",
+                        "build",
+                        "docs",
+                        "--only",
+                        "python",
+                        "--no-embedding-site",
+                        "--no-render-embedding-site",
+                        "--strict-tables",
+                        "--check-retained",
+                    ]
+                ),
                 0,
             )
         build.assert_called_once_with(

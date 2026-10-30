@@ -21,7 +21,12 @@ def _make_corpus(tmp_path: Path):
     corpus_dir.mkdir()
     build_pdf(
         corpus_dir / "doc.pdf",
-        [["Report", "This report contains a distinctive sentence about renewable energy storage capacity."]],
+        [
+            [
+                "Report",
+                "This report contains a distinctive sentence about renewable energy storage capacity.",
+            ]
+        ],
     )
     manifest_path = tmp_path / "manifest.toml"
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
@@ -64,7 +69,10 @@ def _source_paths(database_path: Path) -> list[str]:
     conn = schema.connect(database_path)
     try:
         schema.ensure_schema(conn)
-        return [row["path"] for row in conn.execute("SELECT path FROM sources ORDER BY path").fetchall()]
+        return [
+            row["path"]
+            for row in conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
+        ]
     finally:
         conn.close()
 
@@ -93,17 +101,20 @@ def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
 def test_cli_verify_quote_exit_codes_and_json_contract(tmp_path, capsys, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    assert cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    ) == 0
+    assert (
+        cli.main(
+            [
+                "sync",
+                "--root",
+                str(corpus_dir),
+                "--manifest",
+                str(manifest_path),
+                "--database",
+                str(database_path),
+            ]
+        )
+        == 0
+    )
     capsys.readouterr()
 
     cases = [
@@ -137,25 +148,88 @@ def test_cli_verify_quote_exit_codes_and_json_contract(tmp_path, capsys, monkeyp
         assert payload["source_path"] == "doc.pdf"
 
 
-def test_cli_page_and_quote_normalise_paths_and_reject_escapes(tmp_path, capsys, monkeypatch):
+def test_cli_page_and_quote_normalise_paths_and_reject_escapes(
+    tmp_path, capsys, monkeypatch
+):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     outside = tmp_path / "outside.pdf"
     outside.write_text("outside", encoding="utf-8")
     (corpus_dir / "escape.pdf").symlink_to(outside)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    assert cli.main(["sync", "--root", str(corpus_dir), "--manifest", str(manifest_path), "--database", str(database_path)]) == 0
+    assert (
+        cli.main(
+            [
+                "sync",
+                "--root",
+                str(corpus_dir),
+                "--manifest",
+                str(manifest_path),
+                "--database",
+                str(database_path),
+            ]
+        )
+        == 0
+    )
 
-    assert cli.main(["page", "--root", str(corpus_dir), "--database", str(database_path), "./doc.pdf", "1"]) == 0
+    assert (
+        cli.main(
+            [
+                "page",
+                "--root",
+                str(corpus_dir),
+                "--database",
+                str(database_path),
+                "./doc.pdf",
+                "1",
+            ]
+        )
+        == 0
+    )
     assert "renewable energy storage" in capsys.readouterr().out
-    assert cli.main(["page", "--root", str(corpus_dir), "--database", str(database_path), "subdir\\..\\doc.pdf", "1"]) == 0
+    assert (
+        cli.main(
+            [
+                "page",
+                "--root",
+                str(corpus_dir),
+                "--database",
+                str(database_path),
+                "subdir\\..\\doc.pdf",
+                "1",
+            ]
+        )
+        == 0
+    )
     assert "renewable energy storage" in capsys.readouterr().out
-    assert cli.main([
-        "verify", "quote", "--root", str(corpus_dir), "--database", str(database_path),
-        "./doc.pdf", "1", "This report contains a distinctive sentence about renewable energy storage capacity."
-    ]) == 0
+    assert (
+        cli.main(
+            [
+                "verify",
+                "quote",
+                "--root",
+                str(corpus_dir),
+                "--database",
+                str(database_path),
+                "./doc.pdf",
+                "1",
+                "This report contains a distinctive sentence about renewable energy storage capacity.",
+            ]
+        )
+        == 0
+    )
 
     for bad_path in ["../outside.pdf", str(outside), "escape.pdf"]:
-        exit_code = cli.main(["page", "--root", str(corpus_dir), "--database", str(database_path), bad_path, "1"])
+        exit_code = cli.main(
+            [
+                "page",
+                "--root",
+                str(corpus_dir),
+                "--database",
+                str(database_path),
+                bad_path,
+                "1",
+            ]
+        )
         captured = capsys.readouterr()
         assert exit_code == 2
         assert "path-error" in captured.err
@@ -202,7 +276,9 @@ def test_cli_search_returns_json(tmp_path, capsys, monkeypatch):
     assert "renewable energy storage" in captured.out
 
 
-def test_cli_search_percentage_query_keeps_json_on_stdout(tmp_path, capsys, monkeypatch):
+def test_cli_search_percentage_query_keeps_json_on_stdout(
+    tmp_path, capsys, monkeypatch
+):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     captured_queries = []
 
@@ -211,18 +287,23 @@ def test_cli_search_percentage_query_keeps_json_on_stdout(tmp_path, capsys, monk
             captured_queries.extend(texts)
             return super().embed(texts)
 
-    monkeypatch.setattr(sync_module, "EmbeddingModel", lambda *args, **kwargs: CapturingEmbedder())
-    assert cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    ) == 0
+    monkeypatch.setattr(
+        sync_module, "EmbeddingModel", lambda *args, **kwargs: CapturingEmbedder()
+    )
+    assert (
+        cli.main(
+            [
+                "sync",
+                "--root",
+                str(corpus_dir),
+                "--manifest",
+                str(manifest_path),
+                "--database",
+                str(database_path),
+            ]
+        )
+        == 0
+    )
     capsys.readouterr()
 
     query = "10%, 50%, and 90%"
@@ -256,7 +337,9 @@ def test_module_invocation_contract_via_subprocess():
     assert "usage: tracecite" in result.stdout
 
 
-def test_prune_preview_uses_globs_and_vanished_checkout_without_mutating(tmp_path, capsys):
+def test_prune_preview_uses_globs_and_vanished_checkout_without_mutating(
+    tmp_path, capsys
+):
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "checkout/docs/kept.md")
     _insert_source(database_path, "checkout/docs/pruned.md")
@@ -265,7 +348,9 @@ def test_prune_preview_uses_globs_and_vanished_checkout_without_mutating(tmp_pat
         'schema_version = 1\n\n[[include]]\nglob = "checkout/docs/kept.md"\n',
     )
 
-    exit_code = cli.main(["prune", "--database", str(database_path), "--manifest", str(manifest_path)])
+    exit_code = cli.main(
+        ["prune", "--database", str(database_path), "--manifest", str(manifest_path)]
+    )
 
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
@@ -278,17 +363,35 @@ def test_prune_preview_uses_globs_and_vanished_checkout_without_mutating(tmp_pat
         "database_committed": False,
         "cleanup_warnings": [],
     }
-    assert _source_paths(database_path) == ["checkout/docs/kept.md", "checkout/docs/pruned.md"]
+    assert _source_paths(database_path) == [
+        "checkout/docs/kept.md",
+        "checkout/docs/pruned.md",
+    ]
 
 
-def test_cli_sync_prints_structured_missing_and_unmatched_warnings(tmp_path, capsys, monkeypatch):
+def test_cli_sync_prints_structured_missing_and_unmatched_warnings(
+    tmp_path, capsys, monkeypatch
+):
     root = tmp_path / "sources"
     root.mkdir()
     manifest_path = tmp_path / "manifest.toml"
-    manifest_path.write_text('schema_version = 1\n[[source]]\npath = "missing.pdf"\n[[include]]\nglob = "reports/*.md"\n', encoding="utf-8")
+    manifest_path.write_text(
+        'schema_version = 1\n[[source]]\npath = "missing.pdf"\n[[include]]\nglob = "reports/*.md"\n',
+        encoding="utf-8",
+    )
     database_path = tmp_path / "tracecite.sqlite"
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    exit_code = cli.main(["sync", "--root", str(root), "--manifest", str(manifest_path), "--database", str(database_path)])
+    exit_code = cli.main(
+        [
+            "sync",
+            "--root",
+            str(root),
+            "--manifest",
+            str(manifest_path),
+            "--database",
+            str(database_path),
+        ]
+    )
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "selected-missing: ['missing.pdf']" in out
@@ -339,14 +442,29 @@ def test_prune_apply_rolls_back_on_failure(tmp_path, capsys, monkeypatch):
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "docs/keep.md")
     _insert_source(database_path, "docs/remove.md")
-    manifest_path = _write_manifest(tmp_path / "manifest.toml", 'schema_version = 1\n[[source]]\npath = "docs/keep.md"\n')
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[source]]\npath = "docs/keep.md"\n',
+    )
 
     def fail_touch_config(conn):
         raise RuntimeError("injected prune failure")
 
     monkeypatch.setattr(sync_module.schema, "touch_config", fail_touch_config)
 
-    assert cli.main(["prune", "--database", str(database_path), "--manifest", str(manifest_path), "--apply"]) == 2
+    assert (
+        cli.main(
+            [
+                "prune",
+                "--database",
+                str(database_path),
+                "--manifest",
+                str(manifest_path),
+                "--apply",
+            ]
+        )
+        == 2
+    )
     assert "injected prune failure" in capsys.readouterr().err
     assert _source_paths(database_path) == ["docs/keep.md", "docs/remove.md"]
 
@@ -358,7 +476,14 @@ def test_prune_requires_nonempty_effective_rules(tmp_path, capsys):
 
     for args in (
         ["prune", "--database", str(database_path), "--manifest", str(empty_manifest)],
-        ["prune", "--database", str(database_path), "--manifest", str(empty_manifest), "--apply"],
+        [
+            "prune",
+            "--database",
+            str(database_path),
+            "--manifest",
+            str(empty_manifest),
+            "--apply",
+        ],
     ):
         assert cli.main(args) == 2
         captured = capsys.readouterr()
@@ -378,11 +503,21 @@ def test_prune_rejects_exclude_only_and_zero_match_selection(tmp_path, capsys):
         'schema_version = 1\n[[include]]\nglob = "other/*.md"\n',
     )
 
-    assert cli.main(["prune", "--database", str(database_path), "--manifest", str(exclude_only)]) == 2
+    assert (
+        cli.main(
+            ["prune", "--database", str(database_path), "--manifest", str(exclude_only)]
+        )
+        == 2
+    )
     assert "positive source/include" in capsys.readouterr().err
     assert _source_paths(database_path) == ["docs/remove.md"]
 
-    assert cli.main(["prune", "--database", str(database_path), "--manifest", str(zero_match)]) == 2
+    assert (
+        cli.main(
+            ["prune", "--database", str(database_path), "--manifest", str(zero_match)]
+        )
+        == 2
+    )
     assert "matched zero indexed sources" in capsys.readouterr().err
     assert _source_paths(database_path) == ["docs/remove.md"]
 
@@ -410,7 +545,9 @@ def test_read_commands_reject_missing_database_without_creation(tmp_path, capsys
     database_path = tmp_path / "missing-parent" / "missing.sqlite"
     report = tmp_path / "report.md"
     report.write_text("# Report\n", encoding="utf-8")
-    manifest = _write_manifest(tmp_path / "manifest.toml", 'schema_version = 1\n[[include]]\nglob = "*.md"\n')
+    manifest = _write_manifest(
+        tmp_path / "manifest.toml", 'schema_version = 1\n[[include]]\nglob = "*.md"\n'
+    )
 
     commands = [
         ["search", "--database", str(database_path), "query"],
@@ -419,7 +556,14 @@ def test_read_commands_reject_missing_database_without_creation(tmp_path, capsys
         ["verify", "report", "--database", str(database_path), str(report)],
         ["doctor", "--database", str(database_path)],
         ["prune", "--database", str(database_path), "--manifest", str(manifest)],
-        ["prune", "--database", str(database_path), "--manifest", str(manifest), "--apply"],
+        [
+            "prune",
+            "--database",
+            str(database_path),
+            "--manifest",
+            str(manifest),
+            "--apply",
+        ],
     ]
 
     for command in commands:
@@ -434,12 +578,16 @@ def test_cli_verify_report_emits_citation_binding(tmp_path, capsys):
     root = tmp_path / "sources"
     root.mkdir()
     source_path = root / "doc.md"
-    source_path.write_text("Evidence sentence retained on page one.\n", encoding="utf-8")
+    source_path.write_text(
+        "Evidence sentence retained on page one.\n", encoding="utf-8"
+    )
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "doc.md")
     conn = schema.connect(database_path)
     try:
-        source_pk = conn.execute("SELECT source_pk FROM sources WHERE path = 'doc.md'").fetchone()[0]
+        source_pk = conn.execute(
+            "SELECT source_pk FROM sources WHERE path = 'doc.md'"
+        ).fetchone()[0]
         conn.execute(
             """
             INSERT INTO pages (

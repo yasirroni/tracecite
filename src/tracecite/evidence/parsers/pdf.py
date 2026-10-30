@@ -53,7 +53,11 @@ class RenderedAsset:
 
 def _looks_like_heading(text: str) -> bool:
     stripped = text.strip()
-    return bool(stripped) and len(stripped) <= HEADING_MAX_CHARS and not stripped.endswith((".", ",", ";"))
+    return (
+        bool(stripped)
+        and len(stripped) <= HEADING_MAX_CHARS
+        and not stripped.endswith((".", ",", ";"))
+    )
 
 
 def _blocks_for_page(page: pymupdf.Page) -> list[dict]:
@@ -192,14 +196,21 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
             extraction_method = NAME
 
             if len(page_text.strip()) < MIN_EXTRACTED_TEXT_CHARS:
-                ocr_text, ocr_method = _ocr_fallback_text(page, lang=ocr_lang, dpi=OCR_DPI)
+                ocr_text, ocr_method = _ocr_fallback_text(
+                    page, lang=ocr_lang, dpi=OCR_DPI
+                )
                 ocr_text = ocr_text.strip()
                 if len(ocr_text) > len(page_text.strip()):
                     page_rect = page.rect
                     blocks = [
                         {
                             "text": ocr_text,
-                            "bbox": [page_rect.x0, page_rect.y0, page_rect.x1, page_rect.y1],
+                            "bbox": [
+                                page_rect.x0,
+                                page_rect.y0,
+                                page_rect.x1,
+                                page_rect.y1,
+                            ],
                             "heading_path": [],
                             "content_type": "body",
                             "start_offset": 0,
@@ -209,7 +220,9 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                     page_text = ocr_text
                     extraction_method = ocr_method
 
-            section_candidates = [b["text"] for b in blocks if b["content_type"] == "heading"]
+            section_candidates = [
+                b["text"] for b in blocks if b["content_type"] == "heading"
+            ]
 
             pages.append(
                 ParsedPage(
@@ -244,13 +257,17 @@ def _block_units(physical_page: int, blocks: list[dict]) -> list[ParsedChunkUnit
     ]
 
 
-def units_from_page_layout(physical_page: int, layout_json: str | None) -> list[ParsedChunkUnit]:
+def units_from_page_layout(
+    physical_page: int, layout_json: str | None
+) -> list[ParsedChunkUnit]:
     """Rebuild chunk-input units from retained ``pages.layout_json``.
 
     A chunker- or normalisation-only change rechunks from this layout
     without reopening the PDF.
     """
-    return _block_units(physical_page, json.loads(layout_json)["blocks"] if layout_json else [])
+    return _block_units(
+        physical_page, json.loads(layout_json)["blocks"] if layout_json else []
+    )
 
 
 def render_page(path: Path, physical_page: int, zoom: float = 2.0) -> RenderedAsset:
@@ -279,7 +296,9 @@ def render_figure_crops(path: Path, physical_page: int) -> list[RenderedAsset]:
             info = document.extract_image(xref)
             rects = page.get_image_rects(xref)
             bbox = tuple(rects[0]) if rects else None
-            nearby_text = _nearby_text_for_bbox(blocks, bbox) if bbox is not None else None
+            nearby_text = (
+                _nearby_text_for_bbox(blocks, bbox) if bbox is not None else None
+            )
             rendered.append(
                 RenderedAsset(
                     physical_page=physical_page,

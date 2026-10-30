@@ -137,8 +137,14 @@ class AssetGeneration:
         return mapping
 
 
-def load_manifest_rules(manifest_paths: Path | Sequence[Path]) -> manifest_module.ManifestRules:
-    paths = list(manifest_paths) if isinstance(manifest_paths, (list, tuple)) else [manifest_paths]
+def load_manifest_rules(
+    manifest_paths: Path | Sequence[Path],
+) -> manifest_module.ManifestRules:
+    paths = (
+        list(manifest_paths)
+        if isinstance(manifest_paths, (list, tuple))
+        else [manifest_paths]
+    )
     return manifest_module.merge_manifests(paths)
 
 
@@ -179,7 +185,12 @@ def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
         return None
     if stat.S_ISLNK(current.st_mode):
         return None
-    current_identity = (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
+    current_identity = (
+        current.st_dev,
+        current.st_ino,
+        current.st_size,
+        current.st_mtime_ns,
+    )
     if current_identity != identity_after:
         return None
     return digest.hexdigest(), after.st_size, after.st_mtime_ns
@@ -229,7 +240,12 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
     if stat.S_ISLNK(current.st_mode):
         snapshot_path.unlink(missing_ok=True)
         return None
-    current_identity = (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
+    current_identity = (
+        current.st_dev,
+        current.st_ino,
+        current.st_size,
+        current.st_mtime_ns,
+    )
     if current_identity != identity_after:
         snapshot_path.unlink(missing_ok=True)
         return None
@@ -266,7 +282,9 @@ class _SourcePlan:
         return self.snapshot_path or self.abs_path
 
 
-def _match_chunks(existing_rows: list[sqlite3.Row], candidates: list[chunking.ChunkCandidate]):
+def _match_chunks(
+    existing_rows: list[sqlite3.Row], candidates: list[chunking.ChunkCandidate]
+):
     """Match candidates to existing chunks by logical key, then by a semantic hash
     unique on both sides; the remaining candidates are new and the remaining
     rows are deleted.
@@ -292,7 +310,9 @@ def _match_chunks(existing_rows: list[sqlite3.Row], candidates: list[chunking.Ch
         else:
             remaining_candidates.append(candidate)
 
-    remaining_existing = [row for row in existing_rows if row["chunk_id"] not in used_existing_ids]
+    remaining_existing = [
+        row for row in existing_rows if row["chunk_id"] not in used_existing_ids
+    ]
 
     hash_to_existing: dict[str, list[sqlite3.Row]] = defaultdict(list)
     for row in remaining_existing:
@@ -314,7 +334,9 @@ def _match_chunks(existing_rows: list[sqlite3.Row], candidates: list[chunking.Ch
         else:
             still_remaining_existing.append(row)
 
-    new_candidates = [c for c in remaining_candidates if id(c) not in consumed_candidate_ids]
+    new_candidates = [
+        c for c in remaining_candidates if id(c) not in consumed_candidate_ids
+    ]
     to_delete_chunk_ids = [row["chunk_id"] for row in still_remaining_existing]
     return matched, to_delete_chunk_ids, new_candidates
 
@@ -327,11 +349,14 @@ def _config_matches(row: sqlite3.Row, options: SyncOptions, source_type: str) ->
         and row["parser_version"] == parser_version
         and row["chunker_version"] == options.chunker_version
         and row["normalisation_version"] == options.normalisation_version
-        and json.loads(row["chunker_config"]).get("max_chunk_chars") == options.max_chunk_chars
+        and json.loads(row["chunker_config"]).get("max_chunk_chars")
+        == options.max_chunk_chars
     )
 
 
-def _chunks_missing_active_embedding(conn: sqlite3.Connection, source_pk: int, model_id: str):
+def _chunks_missing_active_embedding(
+    conn: sqlite3.Connection, source_pk: int, model_id: str
+):
     return conn.execute(
         """
         SELECT c.chunk_id AS chunk_id, c.semantic_input_hash AS semantic_input_hash, c.body AS body
@@ -347,7 +372,9 @@ def _chunks_missing_active_embedding(conn: sqlite3.Connection, source_pk: int, m
     ).fetchall()
 
 
-def _validate_embedding_dimensions(vectors: list[list[float]], expected_dimensions: int) -> None:
+def _validate_embedding_dimensions(
+    vectors: list[list[float]], expected_dimensions: int
+) -> None:
     for index, vector in enumerate(vectors):
         if len(vector) != expected_dimensions:
             raise SyncError(
@@ -406,15 +433,25 @@ def sync(
         )
 
         if embedder is None:
-            cache_dir = model_cache_dir or (Path(database_path).resolve().parent / "model-cache")
-            embedder = EmbeddingModel(options.embedding_model, options.embedding_revision, cache_dir)
+            cache_dir = model_cache_dir or (
+                Path(database_path).resolve().parent / "model-cache"
+            )
+            embedder = EmbeddingModel(
+                options.embedding_model, options.embedding_revision, cache_dir
+            )
 
-        existing_sources = {row["path"]: row for row in conn.execute("SELECT * FROM sources").fetchall()}
+        existing_sources = {
+            row["path"]: row for row in conn.execute("SELECT * FROM sources").fetchall()
+        }
         present_paths = set(selection.selected)
-        selected_existing_paths = {path for path in existing_sources if rules.selects_path(path)}
+        selected_existing_paths = {
+            path for path in existing_sources if rules.selects_path(path)
+        }
         indexed_unselected_paths = set(existing_sources) - selected_existing_paths
         missing_selected_paths = selected_existing_paths - present_paths
-        never_indexed_missing_paths = set(selection.missing_explicit_paths) - set(existing_sources)
+        never_indexed_missing_paths = set(selection.missing_explicit_paths) - set(
+            existing_sources
+        )
         added_ids = present_paths - set(existing_sources)
         continuing_ids = present_paths & set(existing_sources)
 
@@ -450,14 +487,26 @@ def sync(
                     renames[gone_list[0]] = added_list[0]
                     new_id = added_list[0]
                     size_bytes, mtime_ns = added_stats[new_id]
-                    rename_rechecks[new_id] = (sources_dir / new_id, file_hash, size_bytes, mtime_ns)
+                    rename_rechecks[new_id] = (
+                        sources_dir / new_id,
+                        file_hash,
+                        size_bytes,
+                        mtime_ns,
+                    )
 
         renamed_new_ids = set(renames.values())
         true_added_ids = added_ids - renamed_new_ids
 
         report = SyncReport()
-        report.selected_missing_paths.extend(sorted((missing_selected_paths | never_indexed_missing_paths) - set(renames.keys())))
-        report.indexed_unselected_paths.extend(sorted(indexed_unselected_paths - set(renames.keys())))
+        report.selected_missing_paths.extend(
+            sorted(
+                (missing_selected_paths | never_indexed_missing_paths)
+                - set(renames.keys())
+            )
+        )
+        report.indexed_unselected_paths.extend(
+            sorted(indexed_unselected_paths - set(renames.keys()))
+        )
         report.unmatched_globs.extend(selection.unmatched_globs)
 
         # ---- build per-source plans needing (re)parsing or rechunking ----
@@ -516,7 +565,9 @@ def sync(
                 and mtime_ns == row["mtime_ns"]
             )
             if fast_unchanged:
-                missing_rows = _chunks_missing_active_embedding(conn, source_pk, options.model_id)
+                missing_rows = _chunks_missing_active_embedding(
+                    conn, source_pk, options.model_id
+                )
                 if not missing_rows:
                     report.sources_unchanged.append(source_path)
                     continue
@@ -542,19 +593,26 @@ def sync(
                     report.sources_unchanged.append(source_path)
                     continue
 
-            needs_full_reparse = content_changed or row["parser_name"] != options.parser_name(
-                source_type
-            ) or row["parser_version"] != options.parser_version(source_type) or options.full
+            needs_full_reparse = (
+                content_changed
+                or row["parser_name"] != options.parser_name(source_type)
+                or row["parser_version"] != options.parser_version(source_type)
+                or options.full
+            )
 
             action = "reparse" if needs_full_reparse else "rechunk"
             snapshot = None
             if action == "reparse":
                 snapshot = _capture_source_snapshot(abs_path, snapshot_root)
-                if snapshot is None or (
-                    snapshot.sha256,
-                    snapshot.size_bytes,
-                    snapshot.mtime_ns,
-                ) != captured:
+                if (
+                    snapshot is None
+                    or (
+                        snapshot.sha256,
+                        snapshot.size_bytes,
+                        snapshot.mtime_ns,
+                    )
+                    != captured
+                ):
                     return SyncReport(status="aborted-source-changed")
                 observed_states[source_path] = (
                     abs_path,
@@ -603,7 +661,11 @@ def sync(
                 units: list[ParsedChunkUnit] = []
                 for page_row in page_rows:
                     if plan.source_type == "pdf":
-                        units.extend(pdf_parser.units_from_page_layout(page_row["physical_page"], page_row["layout_json"]))
+                        units.extend(
+                            pdf_parser.units_from_page_layout(
+                                page_row["physical_page"], page_row["layout_json"]
+                            )
+                        )
                     else:
                         units.extend(units_from_layout(page_row["layout_json"]))
                 plan.units = units
@@ -623,7 +685,9 @@ def sync(
             existing_rows = conn.execute(
                 "SELECT * FROM chunks WHERE source_pk = ?", (plan.source_pk,)
             ).fetchall()
-            matched, to_delete_ids, new_candidates = _match_chunks(existing_rows, candidates)
+            matched, to_delete_ids, new_candidates = _match_chunks(
+                existing_rows, candidates
+            )
 
             diff = {
                 "matched": [],
@@ -631,7 +695,9 @@ def sync(
                 "new": [],
             }
             for row, candidate in matched:
-                hash_changed = row["semantic_input_hash"] != candidate.semantic_input_hash
+                hash_changed = (
+                    row["semantic_input_hash"] != candidate.semantic_input_hash
+                )
                 diff["matched"].append((row["chunk_id"], candidate, hash_changed))
                 if hash_changed or options.reembed:
                     pending_embeddings[candidate.semantic_input_hash] = candidate.body
@@ -682,8 +748,14 @@ def sync(
         generation_root = _asset_generation_root(database_path, generation)
         try:
             for plan in plans:
-                if plan.action in ("add", "reparse") and plan.source_type == "pdf" and options.generate_assets:
-                    asset_generation, assets = _render_assets(database_path, plan, generation)
+                if (
+                    plan.action in ("add", "reparse")
+                    and plan.source_type == "pdf"
+                    and options.generate_assets
+                ):
+                    asset_generation, assets = _render_assets(
+                        database_path, plan, generation
+                    )
                     asset_generations[plan.source_path] = asset_generation
                     rendered_assets[plan.source_path] = assets
         except Exception:
@@ -692,17 +764,28 @@ def sync(
 
         # ==== single write transaction ====
         _asset_event("begin-immediate")
-        for abs_path, expected_hash, expected_size, expected_mtime in rename_rechecks.values():
+        for (
+            abs_path,
+            expected_hash,
+            expected_size,
+            expected_mtime,
+        ) in rename_rechecks.values():
             captured = _capture_stable_file_state(abs_path)
             if captured is None:
                 shutil.rmtree(generation_root, ignore_errors=True)
                 return SyncReport(status="aborted-source-changed")
             file_hash, size_bytes, mtime_ns = captured
             _asset_event("rename-final-state-captured")
-            if (file_hash, size_bytes, mtime_ns) != (expected_hash, expected_size, expected_mtime):
+            if (file_hash, size_bytes, mtime_ns) != (
+                expected_hash,
+                expected_size,
+                expected_mtime,
+            ):
                 shutil.rmtree(generation_root, ignore_errors=True)
                 return SyncReport(status="aborted-source-changed")
-            if not _source_matches(abs_path, (expected_hash, expected_size, expected_mtime)):
+            if not _source_matches(
+                abs_path, (expected_hash, expected_size, expected_mtime)
+            ):
                 shutil.rmtree(generation_root, ignore_errors=True)
                 return SyncReport(status="aborted-source-changed")
         if any(
@@ -768,14 +851,25 @@ def sync(
                         ),
                     )
                     plan.source_pk = conn.execute(
-                        "SELECT source_pk FROM sources WHERE path = ?", (plan.source_path,)
+                        "SELECT source_pk FROM sources WHERE path = ?",
+                        (plan.source_path,),
                     ).fetchone()["source_pk"]
                     asset_generation = asset_generations.get(plan.source_path)
                     if asset_generation is not None:
-                        path_mapping = asset_generation.finalize_new_source(plan.source_pk)
+                        path_mapping = asset_generation.finalize_new_source(
+                            plan.source_pk
+                        )
                         rendered_assets[plan.source_path] = [
-                            (physical_page, path_mapping.get(asset_path, asset_path), render, asset_type, sha256)
-                            for physical_page, asset_path, render, asset_type, sha256 in rendered_assets.get(plan.source_path, [])
+                            (
+                                physical_page,
+                                path_mapping.get(asset_path, asset_path),
+                                render,
+                                asset_type,
+                                sha256,
+                            )
+                            for physical_page, asset_path, render, asset_type, sha256 in rendered_assets.get(
+                                plan.source_path, []
+                            )
                         ]
                     assert plan.source_pk is not None
 
@@ -817,10 +911,15 @@ def sync(
                     report.chunks_updated += 1
                     if hash_changed or options.reembed:
                         embedding_id = _ensure_embedding(
-                            conn, backend, options.model_id, candidate.semantic_input_hash, hash_to_vector
+                            conn,
+                            backend,
+                            options.model_id,
+                            candidate.semantic_input_hash,
+                            hash_to_vector,
                         )
                         conn.execute(
-                            "DELETE FROM chunk_embeddings WHERE chunk_id = ?", (chunk_id,)
+                            "DELETE FROM chunk_embeddings WHERE chunk_id = ?",
+                            (chunk_id,),
                         )
                         conn.execute(
                             "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
@@ -861,7 +960,11 @@ def sync(
                     )
                     report.chunks_added += 1
                     embedding_id = _ensure_embedding(
-                        conn, backend, options.model_id, candidate.semantic_input_hash, hash_to_vector
+                        conn,
+                        backend,
+                        options.model_id,
+                        candidate.semantic_input_hash,
+                        hash_to_vector,
                     )
                     conn.execute(
                         "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
@@ -870,7 +973,9 @@ def sync(
 
                 # pages + source metadata for add/reparse; assets regenerated only then
                 if plan.action in ("add", "reparse"):
-                    conn.execute("DELETE FROM pages WHERE source_pk = ?", (plan.source_pk,))
+                    conn.execute(
+                        "DELETE FROM pages WHERE source_pk = ?", (plan.source_pk,)
+                    )
                     for page in plan.pages:
                         conn.execute(
                             """
@@ -887,7 +992,9 @@ def sync(
                                 page.extraction_method,
                                 page.extraction_status,
                                 json.dumps(page.section_candidates),
-                                json.dumps(page.layout) if page.layout is not None else None,
+                                json.dumps(page.layout)
+                                if page.layout is not None
+                                else None,
                             ),
                         )
 
@@ -921,7 +1028,12 @@ def sync(
                         )
 
                     if plan.source_type == "pdf" and options.generate_assets:
-                        _persist_assets(conn, plan, rendered_assets.get(plan.source_path, []), database_path)
+                        _persist_assets(
+                            conn,
+                            plan,
+                            rendered_assets.get(plan.source_path, []),
+                            database_path,
+                        )
                 else:
                     conn.execute(
                         """
@@ -985,7 +1097,9 @@ def sync(
             raise
 
         if options.cleanup_asset_generations:
-            report.cleanup_warnings.extend(cleanup_asset_generations(conn, database_path))
+            report.cleanup_warnings.extend(
+                cleanup_asset_generations(conn, database_path)
+            )
 
         return report
     finally:
@@ -1000,22 +1114,34 @@ def plan_prune(conn: sqlite3.Connection, selected_paths: Collection[str]) -> Pru
     return PrunePlan(tuple(row["path"] for row in rows if row["path"] not in selected))
 
 
-def _canonical_asset_parts(database_path: Path, stored_asset_path: str, *, validate_filesystem: bool = True) -> tuple[str, ...]:
+def _canonical_asset_parts(
+    database_path: Path, stored_asset_path: str, *, validate_filesystem: bool = True
+) -> tuple[str, ...]:
     if validate_filesystem:
         resolved = schema.resolve_asset_path(database_path, stored_asset_path)
     else:
-        resolved = Path(database_path).resolve().parent.joinpath(*stored_asset_path.split("/"))
+        resolved = (
+            Path(database_path).resolve().parent.joinpath(*stored_asset_path.split("/"))
+        )
     try:
         relative = resolved.relative_to(Path(database_path).resolve().parent)
     except ValueError as exc:
-        raise ValueError(f"asset identifier escapes database asset root: {stored_asset_path!r}") from exc
+        raise ValueError(
+            f"asset identifier escapes database asset root: {stored_asset_path!r}"
+        ) from exc
     return relative.parts
 
 
 def _prune_asset_target(
-    database_path: Path, source_pk: int, stored_asset_path: str, *, validate_filesystem: bool = True
+    database_path: Path,
+    source_pk: int,
+    stored_asset_path: str,
+    *,
+    validate_filesystem: bool = True,
 ) -> _PruneAssetTarget:
-    parts = _canonical_asset_parts(database_path, stored_asset_path, validate_filesystem=validate_filesystem)
+    parts = _canonical_asset_parts(
+        database_path, stored_asset_path, validate_filesystem=validate_filesystem
+    )
     if len(parts) < 5 or parts[:2] != ("imgs", "generations"):
         raise ValueError(
             "asset identifier must have shape "
@@ -1026,27 +1152,41 @@ def _prune_asset_target(
         raise ValueError(
             f"asset identifier source association does not match source_pk {source_pk}: {stored_asset_path!r}"
         )
-    source_dir = schema.imgs_dir(database_path) / "generations" / generation / stored_source_pk
-    return _PruneAssetTarget(generation=generation, source_pk=source_pk, source_dir=source_dir)
+    source_dir = (
+        schema.imgs_dir(database_path) / "generations" / generation / stored_source_pk
+    )
+    return _PruneAssetTarget(
+        generation=generation, source_pk=source_pk, source_dir=source_dir
+    )
 
 
-def validate_prune_plan(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) -> set[_PruneAssetTarget]:
+def validate_prune_plan(
+    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+) -> set[_PruneAssetTarget]:
     """Return the asset directories the plan would remove, or raise if any stored asset path is unsafe."""
     targets: set[_PruneAssetTarget] = set()
     targets_by_source: dict[int, set[_PruneAssetTarget]] = defaultdict(set)
     for path in plan.paths:
-        row = conn.execute("SELECT source_pk FROM sources WHERE path = ?", (path,)).fetchone()
+        row = conn.execute(
+            "SELECT source_pk FROM sources WHERE path = ?", (path,)
+        ).fetchone()
         if row is None:
             continue
         source_pk = row["source_pk"]
-        asset_rows = conn.execute("SELECT asset_path FROM assets WHERE source_pk = ?", (row["source_pk"],)).fetchall()
+        asset_rows = conn.execute(
+            "SELECT asset_path FROM assets WHERE source_pk = ?", (row["source_pk"],)
+        ).fetchall()
         for asset_row in asset_rows:
-            target = _prune_asset_target(database_path, source_pk, asset_row["asset_path"])
+            target = _prune_asset_target(
+                database_path, source_pk, asset_row["asset_path"]
+            )
             targets.add(target)
             targets_by_source[source_pk].add(target)
     for source_pk, source_targets in targets_by_source.items():
         if len(source_targets) > 1:
-            raise ValueError(f"asset identifiers for source_pk {source_pk} span multiple generation/source directories")
+            raise ValueError(
+                f"asset identifiers for source_pk {source_pk} span multiple generation/source directories"
+            )
     return targets
 
 
@@ -1119,18 +1259,32 @@ def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
     quarantine_fd = _quarantine_fd_at(generations_fd)
     quarantine_name = f"{generation}-{uuid.uuid4().hex}"
     try:
-        os.rename(generation, quarantine_name, src_dir_fd=generations_fd, dst_dir_fd=quarantine_fd)
+        os.rename(
+            generation,
+            quarantine_name,
+            src_dir_fd=generations_fd,
+            dst_dir_fd=quarantine_fd,
+        )
         try:
-            mode = os.stat(quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False).st_mode
+            mode = os.stat(
+                quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False
+            ).st_mode
             if stat.S_ISLNK(mode):
                 os.unlink(quarantine_name, dir_fd=quarantine_fd)
             elif stat.S_ISDIR(mode):
                 _rmtree_dir_at(quarantine_fd, quarantine_name)
             else:
-                raise ValueError(f"quarantined asset generation is not a directory: {generation}")
+                raise ValueError(
+                    f"quarantined asset generation is not a directory: {generation}"
+                )
         except Exception:
             try:
-                os.rename(quarantine_name, generation, src_dir_fd=quarantine_fd, dst_dir_fd=generations_fd)
+                os.rename(
+                    quarantine_name,
+                    generation,
+                    src_dir_fd=quarantine_fd,
+                    dst_dir_fd=generations_fd,
+                )
             except Exception:
                 pass
             raise
@@ -1142,7 +1296,9 @@ def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
         pass
 
 
-def _remove_source_entry_at(generations_fd: int, generation: str, source_pk: str, source_dir: Path) -> None:
+def _remove_source_entry_at(
+    generations_fd: int, generation: str, source_pk: str, source_dir: Path
+) -> None:
     try:
         generation_fd = _open_dir_at(generations_fd, generation)
     except FileNotFoundError:
@@ -1153,7 +1309,9 @@ def _remove_source_entry_at(generations_fd: int, generation: str, source_pk: str
         raise
     try:
         try:
-            mode = os.stat(source_pk, dir_fd=generation_fd, follow_symlinks=False).st_mode
+            mode = os.stat(
+                source_pk, dir_fd=generation_fd, follow_symlinks=False
+            ).st_mode
         except FileNotFoundError:
             return
         if stat.S_ISLNK(mode):
@@ -1164,18 +1322,32 @@ def _remove_source_entry_at(generations_fd: int, generation: str, source_pk: str
         quarantine_fd = _quarantine_fd_at(generations_fd)
         quarantine_name = f"{generation}-{source_pk}-{uuid.uuid4().hex}"
         try:
-            os.rename(source_pk, quarantine_name, src_dir_fd=generation_fd, dst_dir_fd=quarantine_fd)
+            os.rename(
+                source_pk,
+                quarantine_name,
+                src_dir_fd=generation_fd,
+                dst_dir_fd=quarantine_fd,
+            )
             try:
-                mode = os.stat(quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False).st_mode
+                mode = os.stat(
+                    quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False
+                ).st_mode
                 if stat.S_ISLNK(mode):
                     os.unlink(quarantine_name, dir_fd=quarantine_fd)
                 elif stat.S_ISDIR(mode):
                     _rmtree_dir_at(quarantine_fd, quarantine_name)
                 else:
-                    raise ValueError(f"quarantined asset path is not a directory: {source_dir}")
+                    raise ValueError(
+                        f"quarantined asset path is not a directory: {source_dir}"
+                    )
             except Exception:
                 try:
-                    os.rename(quarantine_name, source_pk, src_dir_fd=quarantine_fd, dst_dir_fd=generation_fd)
+                    os.rename(
+                        quarantine_name,
+                        source_pk,
+                        src_dir_fd=quarantine_fd,
+                        dst_dir_fd=generation_fd,
+                    )
                 except Exception:
                     pass
                 raise
@@ -1214,9 +1386,13 @@ def _safe_remove_asset_generation(database_path: Path, generation_dir: Path) -> 
     try:
         generation = generation_dir.relative_to(generations_root).parts
     except ValueError as exc:
-        raise ValueError(f"asset generation escapes image root: {generation_dir}") from exc
+        raise ValueError(
+            f"asset generation escapes image root: {generation_dir}"
+        ) from exc
     if len(generation) != 1:
-        raise ValueError(f"asset generation cleanup expects a generation directory: {generation_dir}")
+        raise ValueError(
+            f"asset generation cleanup expects a generation directory: {generation_dir}"
+        )
 
     def action(generations_fd: int) -> None:
         _remove_generation_entry_at(generations_fd, generation[0])
@@ -1231,11 +1407,15 @@ def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None
     try:
         source_dir.relative_to(generations_root)
     except ValueError as exc:
-        raise ValueError(f"pruned asset directory escapes image root: {source_dir}") from exc
+        raise ValueError(
+            f"pruned asset directory escapes image root: {source_dir}"
+        ) from exc
 
     relative_parts = source_dir.relative_to(generations_root).parts
     if len(relative_parts) != 2:
-        raise ValueError(f"pruned asset directory must be a generation/source directory: {source_dir}")
+        raise ValueError(
+            f"pruned asset directory must be a generation/source directory: {source_dir}"
+        )
     generation, source_pk = relative_parts
 
     def action(generations_fd: int) -> None:
@@ -1244,13 +1424,17 @@ def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None
     _with_generations_fd(database_path, action)
 
 
-def apply_prune(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) -> list[str]:
+def apply_prune(
+    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+) -> list[str]:
     backend = vector_backend.SqliteVecBackend()
     conn.execute("BEGIN IMMEDIATE")
     try:
         pruned_asset_targets = validate_prune_plan(conn, database_path, plan)
         for path in plan.paths:
-            row = conn.execute("SELECT source_pk FROM sources WHERE path = ?", (path,)).fetchone()
+            row = conn.execute(
+                "SELECT source_pk FROM sources WHERE path = ?", (path,)
+            ).fetchone()
             if row is None:
                 continue
             conn.execute("DELETE FROM sources WHERE source_pk = ?", (row["source_pk"],))
@@ -1259,7 +1443,9 @@ def apply_prune(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) 
         ).fetchall()
         for row in orphan_rows:
             backend.delete(conn, row["embedding_id"])
-            conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (row["embedding_id"],))
+            conn.execute(
+                "DELETE FROM embeddings WHERE embedding_id = ?", (row["embedding_id"],)
+            )
         schema.touch_config(conn)
         conn.execute("COMMIT")
     except Exception:
@@ -1271,7 +1457,12 @@ def apply_prune(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) 
         raise
     leaks: list[str] = []
     referenced_dirs = {
-        _prune_asset_target(database_path, row["source_pk"], row["asset_path"], validate_filesystem=False).source_dir
+        _prune_asset_target(
+            database_path,
+            row["source_pk"],
+            row["asset_path"],
+            validate_filesystem=False,
+        ).source_dir
         for row in conn.execute("SELECT source_pk, asset_path FROM assets").fetchall()
     }
     for target in sorted(pruned_asset_targets, key=lambda item: str(item.source_dir)):
@@ -1324,7 +1515,9 @@ def _asset_generation_root(database_path: Path, generation: str) -> Path:
     return schema.resolve_asset_path(database_path, f"imgs/generations/{generation}")
 
 
-def _render_assets(database_path: Path, plan: _SourcePlan, generation: str) -> tuple[AssetGeneration, list[tuple[int, Path, object, str]]]:
+def _render_assets(
+    database_path: Path, plan: _SourcePlan, generation: str
+) -> tuple[AssetGeneration, list[tuple[int, Path, object, str]]]:
     generation_root = _asset_generation_root(database_path, generation)
     staging_dir = None
     if plan.source_pk is None:
@@ -1356,14 +1549,28 @@ def _render_assets(database_path: Path, plan: _SourcePlan, generation: str) -> t
     return generation_obj, rendered
 
 
-def _persist_assets(conn: sqlite3.Connection, plan: _SourcePlan, rendered_assets, database_path: Path) -> None:
+def _persist_assets(
+    conn: sqlite3.Connection, plan: _SourcePlan, rendered_assets, database_path: Path
+) -> None:
     assert plan.source_pk is not None
     conn.execute("DELETE FROM assets WHERE source_pk = ?", (plan.source_pk,))
     for physical_page, asset_path, render, asset_type, sha256 in rendered_assets:
-        _insert_asset(conn, plan.source_pk, plan.source_path, physical_page, asset_path, render, asset_type, sha256, database_path)
+        _insert_asset(
+            conn,
+            plan.source_pk,
+            plan.source_path,
+            physical_page,
+            asset_path,
+            render,
+            asset_type,
+            sha256,
+            database_path,
+        )
 
 
-def referenced_asset_generations(conn: sqlite3.Connection, database_path: Path) -> set[Path]:
+def referenced_asset_generations(
+    conn: sqlite3.Connection, database_path: Path
+) -> set[Path]:
     rows = conn.execute("SELECT asset_path FROM assets").fetchall()
     database_parent = Path(database_path).resolve().parent
     referenced: set[Path] = set()
@@ -1374,12 +1581,16 @@ def referenced_asset_generations(conn: sqlite3.Connection, database_path: Path) 
             validate_filesystem=False,
         )
         if len(parts) < 3 or parts[:2] != ("imgs", "generations"):
-            raise ValueError(f"asset identifier has the wrong generation root: {row['asset_path']!r}")
+            raise ValueError(
+                f"asset identifier has the wrong generation root: {row['asset_path']!r}"
+            )
         referenced.add(database_parent.joinpath(*parts[:3]))
     return referenced
 
 
-def cleanup_asset_generations(conn: sqlite3.Connection, database_path: Path) -> list[str]:
+def cleanup_asset_generations(
+    conn: sqlite3.Connection, database_path: Path
+) -> list[str]:
     leaks: list[str] = []
     root = schema.imgs_dir(database_path) / "generations"
     if not root.exists():
@@ -1392,19 +1603,37 @@ def cleanup_asset_generations(conn: sqlite3.Connection, database_path: Path) -> 
             try:
                 _safe_remove_asset_generation(database_path, generation)
             except Exception as exc:
-                leaks.append(f"failed to remove invalid asset generation symlink {generation}: {exc}")
+                leaks.append(
+                    f"failed to remove invalid asset generation symlink {generation}: {exc}"
+                )
             continue
         if generation not in referenced:
             try:
                 _safe_remove_asset_generation(database_path, generation)
             except Exception as exc:
-                leaks.append(f"failed to remove unreferenced asset generation {generation}: {exc}")
+                leaks.append(
+                    f"failed to remove unreferenced asset generation {generation}: {exc}"
+                )
     return leaks
 
 
-def _insert_asset(conn, source_pk: int, source_path: str, physical_page, asset_path: Path, render, asset_type: str, sha256: str, database_path: Path) -> None:
+def _insert_asset(
+    conn,
+    source_pk: int,
+    source_path: str,
+    physical_page,
+    asset_path: Path,
+    render,
+    asset_type: str,
+    sha256: str,
+    database_path: Path,
+) -> None:
     asset_id = f"{source_path}:{asset_path.stem}"
-    asset_identifier = asset_path.resolve().relative_to(Path(database_path).resolve().parent).as_posix()
+    asset_identifier = (
+        asset_path.resolve()
+        .relative_to(Path(database_path).resolve().parent)
+        .as_posix()
+    )
     schema.resolve_asset_path(database_path, asset_identifier)
     # NOTE: ocr_text and visual_description are always NULL; OCR fallback
     # writes page and chunk text only.
@@ -1438,7 +1667,9 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
     fts_count = conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0]
     chunks_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
     if fts_count != chunks_count:
-        issues.append(f"chunks_fts has {fts_count} rows but chunks has {chunks_count} rows")
+        issues.append(
+            f"chunks_fts has {fts_count} rows but chunks has {chunks_count} rows"
+        )
 
     orphan_chunk_embeddings = conn.execute(
         """
@@ -1453,13 +1684,19 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
     backend = vector_backend.SqliteVecBackend()
     issues.extend(backend.integrity_check(conn))
 
-    for row in conn.execute("SELECT asset_id, asset_path, sha256 FROM assets").fetchall():
+    for row in conn.execute(
+        "SELECT asset_id, asset_path, sha256 FROM assets"
+    ).fetchall():
         asset_path = schema.resolve_asset_path(database_path, row["asset_path"])
         if not asset_path.is_file():
-            issues.append(f"asset {row['asset_id']} references missing file {row['asset_path']}")
+            issues.append(
+                f"asset {row['asset_id']} references missing file {row['asset_path']}"
+            )
             continue
         actual = file_sha256(asset_path)
         if actual != row["sha256"]:
-            issues.append(f"asset {row['asset_id']} hash mismatch: expected {row['sha256']}, got {actual}")
+            issues.append(
+                f"asset {row['asset_id']} hash mismatch: expected {row['sha256']}, got {actual}"
+            )
 
     return issues

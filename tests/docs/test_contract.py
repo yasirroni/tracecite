@@ -26,15 +26,18 @@ def test_existing_docs_public_api_remains_importable() -> None:
     assert BuildVariant is not None
     assert BuildSelection is not None
     assert DocsBuildResult is not None
-    assert all(callable(name) for name in (
-        discover_render_inputs,
-        classify_render_inputs,
-        select_build_variant,
-        snapshot_retained_markdown,
-        changed_retained_markdown,
-        stage_retained_markdown,
-        build_docs,
-    ))
+    assert all(
+        callable(name)
+        for name in (
+            discover_render_inputs,
+            classify_render_inputs,
+            select_build_variant,
+            snapshot_retained_markdown,
+            changed_retained_markdown,
+            stage_retained_markdown,
+            build_docs,
+        )
+    )
 
 
 def test_contract_has_exact_schema_fields(tmp_path: Path) -> None:
@@ -62,4 +65,5 @@ def test_contract_rejects_unknown_host_fields(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="unknown"):
         from tracecite.docs.config import load_docs_contract
+
         load_docs_contract(config, repo_root=tmp_path)

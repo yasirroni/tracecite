@@ -76,7 +76,10 @@ def _should_skip_retained_path(path: Path, retained_root: Path) -> bool:
     relative = path.relative_to(retained_root)
     return (
         not path.is_file()
-        or any(part in _EXCLUDED_DIR_NAMES or part.startswith(".tracecite") for part in relative.parts)
+        or any(
+            part in _EXCLUDED_DIR_NAMES or part.startswith(".tracecite")
+            for part in relative.parts
+        )
         or path.suffix.lower() in _EXCLUDED_SUFFIXES
         or path.name.endswith("_files")
     )
@@ -91,9 +94,13 @@ def _mirror_exclude_globs(contract: DocsEvidenceContract) -> tuple[str, ...]:
             continue
         relative = target.relative_to(retained).as_posix()
         if not relative or relative == ".":
-            raise ValueError(f"publication_exclude cannot exclude the entire retained root: {exclude}")
+            raise ValueError(
+                f"publication_exclude cannot exclude the entire retained root: {exclude}"
+            )
         if ".." in relative.split("/"):
-            raise ValueError(f"publication_exclude cannot be represented safely in the mirror: {exclude}")
+            raise ValueError(
+                f"publication_exclude cannot be represented safely in the mirror: {exclude}"
+            )
         globs.add(f"{relative}/**" if target.is_dir() else relative)
     for name in sorted(_EXCLUDED_DIR_NAMES):
         globs.add(f"**/{name}/**")
@@ -108,7 +115,8 @@ def _retained_markdown_paths(contract: DocsEvidenceContract) -> list[Path]:
     return [
         path
         for path in sorted(retained.rglob("*.md"))
-        if not _should_skip_retained_path(path, retained) and not is_publication_excluded(path, contract)
+        if not _should_skip_retained_path(path, retained)
+        and not is_publication_excluded(path, contract)
     ]
 
 
@@ -163,8 +171,13 @@ def _snapshot_retained(retained_root: Path) -> dict[Path, bytes]:
 def _assert_retained_unchanged(retained_root: Path, before: dict[Path, bytes]) -> None:
     after = _snapshot_retained(retained_root)
     if before != after:
-        changed = sorted(set(before) ^ set(after) | {path for path in before if before.get(path) != after.get(path)})
-        raise RuntimeError(f"retained Markdown was mutated during index-input preparation: {changed[0]}")
+        changed = sorted(
+            set(before) ^ set(after)
+            | {path for path in before if before.get(path) != after.get(path)}
+        )
+        raise RuntimeError(
+            f"retained Markdown was mutated during index-input preparation: {changed[0]}"
+        )
 
 
 def _atomic_promote_pair(replacements: tuple[tuple[Path, Path], ...]) -> None:
@@ -188,7 +201,9 @@ def _atomic_promote_pair(replacements: tuple[tuple[Path, Path], ...]) -> None:
     except Exception:
         for _temp, destination in replacements:
             if destination.exists():
-                shutil.rmtree(destination) if destination.is_dir() else destination.unlink()
+                shutil.rmtree(
+                    destination
+                ) if destination.is_dir() else destination.unlink()
         for destination, backup in backups:
             os.replace(backup, destination)
         raise
@@ -221,7 +236,9 @@ def prepare_docs_index_input(
 
     contract.staged_root.parent.mkdir(parents=True, exist_ok=True)
     contract.staged_root.mkdir(parents=True, exist_ok=True)
-    temporary = Path(tempfile.mkdtemp(prefix=".index-input-", dir=contract.staged_root.parent))
+    temporary = Path(
+        tempfile.mkdtemp(prefix=".index-input-", dir=contract.staged_root.parent)
+    )
     temp_input = temporary / INDEX_INPUT_NAME
     temp_manifest = temporary / MANIFEST_NAME
     tables_normalized = 0
@@ -319,7 +336,9 @@ def search_docs_index(
         conn.close()
 
 
-def _index_input_freshness(contract: DocsEvidenceContract, profile: DocsIndexProfile) -> tuple[str, ...]:
+def _index_input_freshness(
+    contract: DocsEvidenceContract, profile: DocsIndexProfile
+) -> tuple[str, ...]:
     diagnostics: list[str] = []
     if not profile.input_root.is_dir():
         diagnostics.append("index-input mirror is missing")
@@ -359,7 +378,9 @@ def _index_input_freshness(contract: DocsEvidenceContract, profile: DocsIndexPro
     return tuple(diagnostics)
 
 
-def _manifest_freshness(contract: DocsEvidenceContract, profile: DocsIndexProfile) -> tuple[str, ...]:
+def _manifest_freshness(
+    contract: DocsEvidenceContract, profile: DocsIndexProfile
+) -> tuple[str, ...]:
     if not profile.manifest_path.is_file():
         return ()
     expected = _render_manifest(_mirror_exclude_globs(contract))
@@ -368,7 +389,9 @@ def _manifest_freshness(contract: DocsEvidenceContract, profile: DocsIndexProfil
     except OSError as exc:
         return (f"index-input manifest is unreadable: {exc}",)
     if actual != expected:
-        return ("index-input manifest is stale or does not match the current docs contract",)
+        return (
+            "index-input manifest is stale or does not match the current docs contract",
+        )
     return ()
 
 
@@ -387,7 +410,10 @@ def _database_freshness(profile: DocsIndexProfile) -> tuple[str, ...]:
     conn = schema.connect_existing(profile.database_path, read_only=True)
     try:
         schema.ensure_schema(conn)
-        rows = {row["path"]: row["sha256"] for row in conn.execute("SELECT path, sha256 FROM sources")}
+        rows = {
+            row["path"]: row["sha256"]
+            for row in conn.execute("SELECT path, sha256 FROM sources")
+        }
     finally:
         conn.close()
     diagnostics: list[str] = []
@@ -397,7 +423,9 @@ def _database_freshness(profile: DocsIndexProfile) -> tuple[str, ...]:
         diagnostics.append(f"documentation index database has stale source: {path}")
     for path in sorted(set(discovered) & set(rows)):
         if file_sha256(discovered[path]) != rows[path]:
-            diagnostics.append(f"documentation index database is stale relative to mirror: {path}")
+            diagnostics.append(
+                f"documentation index database is stale relative to mirror: {path}"
+            )
     return tuple(diagnostics)
 
 

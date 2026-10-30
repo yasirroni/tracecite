@@ -140,4 +140,3 @@ def parse(path, config: dict | None = None) -> ParseResult:
         layout={"units": layout_units},
     )
     return ParseResult(pages=[page], units=units)
-

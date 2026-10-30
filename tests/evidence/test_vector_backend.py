@@ -19,7 +19,9 @@ def conn(tmp_path):
     connection.close()
 
 
-def _insert_embedding(conn: sqlite3.Connection, model_id: str, semantic_hash: str) -> int:
+def _insert_embedding(
+    conn: sqlite3.Connection, model_id: str, semantic_hash: str
+) -> int:
     cursor = conn.execute(
         "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
         (model_id, semantic_hash, schema.utc_now()),
@@ -96,7 +98,10 @@ def test_backend_search_scans_shards_for_filtered_and_unfiltered_results(conn):
         backend.upsert(conn, embedding_id, [value] + [0.0] * (dims - 1))
 
     filtered = backend.search(conn, query, top_k=2, allowed_embedding_ids=allowed_ids)
-    assert [match.embedding_id for match in filtered] == [second_shard_id, allowed_ids[0]]
+    assert [match.embedding_id for match in filtered] == [
+        second_shard_id,
+        allowed_ids[0],
+    ]
 
     unfiltered = backend.search(conn, query, top_k=1)
     assert [match.embedding_id for match in unfiltered] == [second_shard_id]
@@ -110,6 +115,8 @@ def test_schema_v1_database_requires_rebuild_and_resync(tmp_path):
     connection.close()
 
     connection = schema.connect(database_path)
-    with pytest.raises(schema.IncompatibleDatabaseError, match="fresh.*database|re-sync"):
+    with pytest.raises(
+        schema.IncompatibleDatabaseError, match="fresh.*database|re-sync"
+    ):
         schema.ensure_schema(connection)
     connection.close()
