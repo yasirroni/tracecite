@@ -262,7 +262,7 @@ def test_module_invocation_contract_via_subprocess():
 
     workspace_python = Path(sys.executable)
 
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")}
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "PYTHON_COLORS": "0"}
     result = subprocess.run(
         [
             str(workspace_python),

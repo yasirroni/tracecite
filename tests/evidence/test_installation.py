@@ -34,5 +34,6 @@ def test_console_script_is_tracecite_only():
         text=True,
         capture_output=True,
         check=True,
+        env={**os.environ, "PYTHON_COLORS": "0"},
     )
     assert "usage: tracecite" in result.stdout

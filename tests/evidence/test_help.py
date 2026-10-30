@@ -35,7 +35,7 @@ with contextlib.redirect_stdout(buf):
             raise
 print(json.dumps({'stdout': buf.getvalue(), 'modules': sorted(sys.modules)}))
 """
-    env = {**os.environ, "PYTHONPATH": str(SRC)}
+    env = {**os.environ, "PYTHONPATH": str(SRC), "PYTHON_COLORS": "0"}
     result = subprocess.run(
         [sys.executable, "-c", code, main_module, *args],
         text=True,
