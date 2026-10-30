@@ -224,6 +224,22 @@ The generated copy includes `_tracecite/tables.jsonl` and `_tracecite/manifest.j
 
 The copied Markdown is deliberately redundant: it keeps the original table for audit and appends the normalised representation for inspection. Normal indexing can consume `tables.jsonl` or the `NormalisedTable` objects directly without writing the copied site.
 
+### Install the agent skills
+
+TraceCite bundles three agent skills: `using-tracecite`, `writing-evidence-backed-reports`, and `routing-documentation-source-links`. Copy them into the project's `.agents/skills/` directory:
+
+```sh
+tracecite skills install
+```
+
+`--target` installs them into another skills directory, for example Claude Code's personal skills:
+
+```sh
+tracecite skills install --target ~/.claude/skills
+```
+
+Running the command again replaces the copies with the skills from the installed TraceCite version.
+
 ## Contributing
 
 ### Environment

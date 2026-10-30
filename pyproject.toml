@@ -36,6 +36,9 @@ tracecite = "tracecite.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+tracecite = ["skills/**/*"]
+
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.11"

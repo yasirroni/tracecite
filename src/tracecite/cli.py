@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
 import sys
 
 from . import __version__
@@ -237,6 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--pandoc")
     check.add_argument("--allow-pipe-fallback", action="store_true")
     check.add_argument("--debug-tables", action="store_true")
+
+    skills = subparsers.add_parser("skills", help="Install the bundled agent skills")
+    skills_sub = skills.add_subparsers(dest="skills_command", required=True)
+    skills_install = skills_sub.add_parser("install", help="Copy the bundled agent skills into a skills directory")
+    skills_install.add_argument("--target", type=Path, default=Path(".agents/skills"))
     _add_evidence_parsers(subparsers)
     return parser
 
@@ -266,6 +272,8 @@ def main(argv: list[str] | None = None) -> int:
             return _docs_build(args)
         if args.command == "check":
             return _check(args)
+        if args.command == "skills":
+            return _skills_install(args)
         if args.command in EVIDENCE_COMMANDS:
             return _evidence(args)
     except ModuleNotFoundError as error:
@@ -561,6 +569,21 @@ def _check(args: argparse.Namespace) -> int:
                     )
     print(f"Checked {len(paths)} file(s), {tables} table(s), {failures} failure(s)")
     return 1 if failures else 0
+
+
+def _skills_install(args: argparse.Namespace) -> int:
+    for skill in sorted((Path(__file__).parent / "skills").iterdir()):
+        if not skill.is_dir():
+            continue
+        destination = args.target / skill.name
+        if destination.resolve() == skill.resolve():
+            print(f"Skipped {skill.name}: {destination} is the bundled source")
+            continue
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(skill, destination)
+        print(f"Installed {skill.name} -> {destination}")
+    return 0
 
 
 def _write_output(text: str, path: Path | None) -> None:
