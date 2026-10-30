@@ -236,6 +236,13 @@ source .venv/bin/activate
 uv pip install -e ".[evidence,test]"
 ```
 
+`requirements.txt` pins the runtime and evidence dependencies to the latest versions that `pyproject.toml` allows. Install it for a reproducible environment, and refresh it with [`pru`](https://github.com/yasirroni/pru). Installing `-e ".[evidence]"` in the same command keeps the upgrades within the `pyproject.toml` bounds:
+
+```sh
+uv pip install -r requirements.txt
+pru -r requirements.txt upgrade_requirements --cmd 'uv pip install --upgrade -e ".[evidence]"'
+```
+
 To build the whole `docs/`, Julia environment is needed.
 
 ```sh
