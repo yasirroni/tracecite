@@ -228,22 +228,25 @@ tracecite search "electric vehicle charging" \
 `tracecite page` and `tracecite extract-pages` retrieve physical PDF pages; they reject a workbook path with a clear error rather than misinterpreting a worksheet index as a page number:
 
 ```sh
-tracecite page 2024-integrated-system-plan.pdf 10 --database evidence.sqlite
+tracecite page report-adoption/aemo-isp-comparison/sources/aemo/2024-integrated-system-plan.pdf 10 \
+  --database .tracecite/source-type-example.sqlite
 ```
 
 ```text
 Executive summary
 
 However, to meet government policy objectives, the ISP forecasts that the remaining coal fleet will
+
 close two to three times faster than those announcements. In Step Change, the most likely
 ```
 
 ```sh
-tracecite page 2023-iasr-ev-workbook.xlsx 1 --database evidence.sqlite
+tracecite page workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx 1 \
+  --database .tracecite/source-type-example.sqlite
 ```
 
 ```text
-source is not a pdf: 2023-iasr-ev-workbook.xlsx
+source is not a pdf: workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx
 ```
 
 (exit code 2)
