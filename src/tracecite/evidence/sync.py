@@ -25,6 +25,7 @@ transaction (status ``"aborted-source-changed"``) so callers can retry.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -1089,11 +1090,9 @@ def sync(
                 shutil.rmtree(generation_root, ignore_errors=True)
             return SyncReport(status="aborted-source-changed")
         except Exception:
-            try:
+            with contextlib.suppress(sqlite3.Error):
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
-            except Exception:
-                pass
             shutil.rmtree(generation_root, ignore_errors=True)
             raise
 
@@ -1279,15 +1278,13 @@ def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
                     f"quarantined asset generation is not a directory: {generation}"
                 )
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.rename(
                     quarantine_name,
                     generation,
                     src_dir_fd=quarantine_fd,
                     dst_dir_fd=generations_fd,
                 )
-            except Exception:
-                pass
             raise
     finally:
         os.close(quarantine_fd)
@@ -1342,15 +1339,13 @@ def _remove_source_entry_at(
                         f"quarantined asset path is not a directory: {source_dir}"
                     )
             except Exception:
-                try:
+                with contextlib.suppress(OSError):
                     os.rename(
                         quarantine_name,
                         source_pk,
                         src_dir_fd=quarantine_fd,
                         dst_dir_fd=generation_fd,
                     )
-                except Exception:
-                    pass
                 raise
         finally:
             os.close(quarantine_fd)
@@ -1450,11 +1445,9 @@ def apply_prune(
         schema.touch_config(conn)
         conn.execute("COMMIT")
     except Exception:
-        try:
+        with contextlib.suppress(sqlite3.Error):
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
-        except Exception:
-            pass
         raise
     leaks: list[str] = []
     referenced_dirs = {
@@ -1472,11 +1465,11 @@ def apply_prune(
             continue
         try:
             _safe_remove_pruned_asset_dir(asset_dir, database_path)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             leaks.append(f"failed to remove pruned asset directory {asset_dir}: {exc}")
     try:
         leaks.extend(cleanup_asset_generations(conn, database_path))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         leaks.append(f"failed to clean unreferenced asset generations: {exc}")
     return leaks
 
@@ -1603,7 +1596,7 @@ def cleanup_asset_generations(
         if generation.is_symlink():
             try:
                 _safe_remove_asset_generation(database_path, generation)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 leaks.append(
                     f"failed to remove invalid asset generation symlink {generation}: {exc}"
                 )
@@ -1611,7 +1604,7 @@ def cleanup_asset_generations(
         if generation not in referenced:
             try:
                 _safe_remove_asset_generation(database_path, generation)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 leaks.append(
                     f"failed to remove unreferenced asset generation {generation}: {exc}"
                 )

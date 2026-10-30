@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate the writing-evidence-backed-reports synthetic fixture package.
 
 The validator deliberately shells out to the installed TraceCite CLI instead
@@ -37,6 +36,7 @@ def run_cli(*args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=180,
         env=os.environ.copy(),
+        check=False,
     )
     if ok and result.returncode != 0:
         raise AssertionError(

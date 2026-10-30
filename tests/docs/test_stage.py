@@ -375,7 +375,7 @@ def test_markdown_to_html_routing_local_and_public_with_and_without_anchor(
 def test_markdown_routing_leaves_unrelated_and_unsupported_candidates_untouched(
     tmp_path: Path,
 ) -> None:
-    config_path, _, original = _markdown_fixture(tmp_path)
+    config_path, _, _ = _markdown_fixture(tmp_path)
     contract = load_docs_contract(config_path, repo_root=tmp_path)
     result = stage_docs(contract, target="public", repo_root=tmp_path)
     staged = (result.staged_root / "index.md").read_text(encoding="utf-8")

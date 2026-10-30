@@ -544,7 +544,7 @@ def _sort_value(value: str) -> tuple[int, Any]:
     text = value.strip()
     if _ISO_DATE_RE.match(text):
         try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(text)
             return (1, parsed.timestamp())
         except ValueError:
             try:

@@ -383,7 +383,7 @@ def _load_project_config(
         raise FileNotFoundError(f"Quarto profile config does not exist: {profile_path}")
     profile = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
     if not isinstance(profile, dict):
-        raise ValueError(f"Quarto profile config must be a mapping: {profile_path}")
+        raise ValueError(f"Quarto profile config must be a mapping: {profile_path}")  # noqa: TRY004
     return _deep_merge(base, profile)
 
 

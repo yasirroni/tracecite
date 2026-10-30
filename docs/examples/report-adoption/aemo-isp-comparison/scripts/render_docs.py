@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Render the authored Quarto report into TraceCite's retained Markdown root.
 
 Run from the example's own root (this is the host-owned render hook that

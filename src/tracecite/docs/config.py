@@ -88,7 +88,7 @@ def load_docs_contract(
 
     excludes = docs.get("publication_exclude")
     if not isinstance(excludes, list):
-        raise ValueError("publication_exclude must be an array")
+        raise ValueError("publication_exclude must be an array")  # noqa: TRY004
     publication_exclude = tuple(
         _path(value, name="publication_exclude", repo_root=root) for value in excludes
     )

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Publish the committed public snapshot and static assets, stdlib-only.
 
 Runs under ``python3 -S`` with no TraceCite installation, source PDFs,

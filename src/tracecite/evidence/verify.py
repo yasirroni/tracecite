@@ -312,7 +312,7 @@ def _prose_lines(lines: list[str]) -> list[str]:
             fence_marker = fence.group("marker")[0]
             fence_length = len(fence.group("marker"))
             continue
-        if line.startswith("    ") or line.startswith("\t"):
+        if line.startswith(("    ", "\t")):
             continue
         while in_comment or "<!--" in line:
             if in_comment:

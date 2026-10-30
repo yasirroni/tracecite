@@ -154,7 +154,7 @@ local_path = "sources/report.pdf"
 publc_url = "https://example.invalid/report.pdf"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("unknown field" in issue and "publc_url" in issue for issue in issues)
 
 
@@ -168,7 +168,7 @@ local_path = "sources/report.pdf"
 public_url = "https://example.invalid/report.pdf"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any(
         "missing required field" in issue and "name" in issue for issue in issues
     )
@@ -193,7 +193,7 @@ local_path = "sources/report2.pdf"
 public_url = "https://example.invalid/report2.pdf"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("duplicate source-link name" in issue for issue in issues)
 
 
@@ -215,7 +215,7 @@ local_path = "./sources/report.pdf"
 public_url = "https://example.invalid/report2.pdf"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("duplicate" in issue and "local_path" in issue for issue in issues)
 
 
@@ -232,7 +232,7 @@ local_path = "sources/report.txt"
 public_url = "https://example.invalid/report.txt"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any(".pdf or .md" in issue for issue in issues)
 
 
@@ -252,7 +252,7 @@ local_path = "{local_path}"
 public_url = "https://example.invalid/report.pdf"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("query or fragment" in issue for issue in issues)
 
 
@@ -279,7 +279,7 @@ public_url = "https://example.invalid/report.pdf"
 metadata = ["not", "a", "table"]
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("metadata must be a table" in issue for issue in issues)
 
 
@@ -336,7 +336,7 @@ local_path = "sources/report.pdf"
 public_url = "https://example.invalid/report.pdf"
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("non-empty string" in issue and "name" in issue for issue in issues)
 
 
@@ -348,7 +348,7 @@ def test_malformed_candidate_entry_reports_table_error(tmp_path: Path) -> None:
 source = ["not-a-table"]
 """,
     )
-    registry, issues = load_source_links(registry_path, tmp_path)
+    _, issues = load_source_links(registry_path, tmp_path)
     assert any("must be a table" in issue for issue in issues)
 
 

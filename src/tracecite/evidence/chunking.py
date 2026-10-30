@@ -65,8 +65,8 @@ def compute_semantic_input_hash(
 ) -> str:
     normalised_body = normalise_text(body)
     context = json.dumps([heading_path, symbol], sort_keys=True)
-    payload = "\x1f".join(
-        [normalisation_version, source_type, context, normalised_body]
+    payload = (
+        f"{normalisation_version}\x1f{source_type}\x1f{context}\x1f{normalised_body}"
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

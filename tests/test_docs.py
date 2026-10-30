@@ -324,9 +324,11 @@ class BuildTests(unittest.TestCase):
 
     def test_missing_quarto_is_reported(self) -> None:
         root, _ = self._project()
-        with patch.object(docs_build.shutil, "which", return_value=None):
-            with self.assertRaisesRegex(FileNotFoundError, "Quarto"):
-                docs.build_docs(root, inspection=False)
+        with (
+            patch.object(docs_build.shutil, "which", return_value=None),
+            self.assertRaisesRegex(FileNotFoundError, "Quarto"),
+        ):
+            docs.build_docs(root, inspection=False)
 
     def test_non_default_output_directory_is_used(self) -> None:
         root, source = self._project("published")
@@ -429,9 +431,11 @@ class BuildTests(unittest.TestCase):
     def test_quarto_failure_is_propagated(self) -> None:
         root, _ = self._project()
         failure = subprocess.CalledProcessError(17, ["quarto", "render"])
-        with patch.object(docs_build.subprocess, "run", side_effect=failure):
-            with self.assertRaises(subprocess.CalledProcessError) as raised:
-                docs.build_docs(root, inspection=False)
+        with (
+            patch.object(docs_build.subprocess, "run", side_effect=failure),
+            self.assertRaises(subprocess.CalledProcessError) as raised,
+        ):
+            docs.build_docs(root, inspection=False)
         self.assertEqual(raised.exception.returncode, 17)
 
 

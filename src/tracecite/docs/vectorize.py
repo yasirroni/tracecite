@@ -402,7 +402,7 @@ def _database_freshness(profile: DocsIndexProfile) -> tuple[str, ...]:
 
     try:
         rules = manifest.load_manifest(profile.manifest_path)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # An unparsable manifest is already reported by _manifest_freshness;
         # there is no usable source selection to compare the database against.
         return ()

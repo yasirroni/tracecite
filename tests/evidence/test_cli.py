@@ -332,6 +332,7 @@ def test_module_invocation_contract_via_subprocess():
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,
         env=env,
     )
     assert result.returncode == 0, result.stderr

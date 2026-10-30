@@ -125,27 +125,11 @@ def test_config_inline_rules_manifest_union_duplicates_and_all_scalar_overrides(
     )
     calls = []
 
-    class Report:
-        status = "ok"
-        sources_added = []
-        sources_reparsed = []
-        sources_rechunked = []
-        sources_renamed = []
-        selected_missing_paths = []
-        unmatched_globs = []
-        indexed_unselected_paths = []
-        cleanup_warnings = []
-        sources_unchanged = []
-        chunks_added = 0
-        chunks_updated = 0
-        chunks_deleted = 0
-        embeddings_generated = 0
-
     def fake_sync(root, manifests, database, *, model_cache_dir, **kwargs):
         calls.append(
             (Path(root), tuple(manifests), Path(database), Path(model_cache_dir))
         )
-        return Report()
+        return sync_module.SyncReport()
 
     monkeypatch.setattr(sync_module, "sync", fake_sync)
     override_db = tmp_path / "override.sqlite"

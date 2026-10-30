@@ -25,6 +25,7 @@ def _run(fixture_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         cwd=fixture_root,
         capture_output=True,
         text=True,
+        check=False,
     )
 
 
@@ -246,6 +247,7 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "")
@@ -283,6 +285,7 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
+            check=False,
         )
         self.assertEqual(
             result.returncode,

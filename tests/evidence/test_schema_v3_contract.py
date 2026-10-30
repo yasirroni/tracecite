@@ -45,7 +45,7 @@ def test_search_and_tables_expose_paths_not_source_ids(
     try:
         source = conn.execute("SELECT * FROM sources").fetchone()
         assert source["path"] == "doc.pdf"
-        assert "source_id" not in source.keys()
+        assert "source_id" not in source
     finally:
         conn.close()
 

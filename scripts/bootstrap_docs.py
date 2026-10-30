@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Bootstrap ordinary-file copies of canonical docs/ into derived doc projects.
 
 Repository-only tool: this lives in ``scripts/`` and is never part of the

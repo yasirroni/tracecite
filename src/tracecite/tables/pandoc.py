@@ -256,12 +256,10 @@ def _nested_block_lists(node: dict[str, Any]) -> Iterable[list[dict[str, Any]]]:
         yield value
     elif kind in {"BulletList", "OrderedList"}:
         items = value if kind == "BulletList" else value[1]
-        for item in items:
-            yield item
+        yield from items
     elif kind == "DefinitionList":
         for _term, definitions in value:
-            for definition in definitions:
-                yield definition
+            yield from definitions
 
 
 def _attr(value: Any) -> tuple[str, list[str], list[tuple[str, str]]]:

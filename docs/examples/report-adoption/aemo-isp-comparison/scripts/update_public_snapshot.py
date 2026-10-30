@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Copy validated public staging output into the committed public/ snapshot.
 
 Refuses to run unless ``docs check`` reports the local/public staging, the

@@ -742,8 +742,6 @@ def test_embedding_failure_leaves_database_unchanged(
     one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
 ):
     class BoomEmbedder:
-        calls: list = []
-
         def embed(self, texts):
             raise RuntimeError("simulated embedding backend failure")
 
@@ -846,10 +844,7 @@ def test_bad_embedding_dimension_rejected_before_database_writes(
     one_pdf_corpus, manifest_path, corpus_dir, database_path
 ):
     class BadDimensionEmbedder:
-        calls: list[list[str]] = []
-
         def embed(self, texts):
-            self.calls.append(list(texts))
             return [[1.0, 2.0, 3.0] for _ in texts]
 
     with pytest.raises(SyncError, match="embedding dimension"):

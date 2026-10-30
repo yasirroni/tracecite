@@ -232,7 +232,7 @@ def check_docs(
         if recorded_public != expected_public:
             diagnostics.append("public staged manifest is stale")
         diagnostics.extend(docs_index_freshness_diagnostics(contract))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         diagnostics.append(f"staging expectation failed: {exc}")
     finally:
         if temporary.exists():
