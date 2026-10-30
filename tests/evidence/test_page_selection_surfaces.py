@@ -25,7 +25,8 @@ def test_both_parser_surfaces_accept_extract_pages_command(tmp_path):
     assert evidence_args.page is None
 
 
-def test_both_parser_surfaces_show_optional_page_selector_in_help(capsys):
+def test_both_parser_surfaces_show_optional_page_selector_in_help(capsys, monkeypatch):
+    monkeypatch.setenv("PYTHON_COLORS", "0")
     with pytest.raises(SystemExit):
         build_root_parser().parse_args(["page", "--help"])
     root_help = capsys.readouterr().out

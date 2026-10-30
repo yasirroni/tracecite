@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import subprocess
 import sys
 import unittest
@@ -39,6 +40,7 @@ class EvidenceImportTests(unittest.TestCase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=True,
+                env={**os.environ, "PYTHON_COLORS": "0"},
             )
             self.assertIn(f"usage: tracecite {command}", result.stdout)
 
