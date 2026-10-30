@@ -113,6 +113,7 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   ├── tracecite/
 │   │   ├── docs/
 │   │   ├── evidence/
+│   │   ├── skills/
 │   │   ├── tables/
 │   │   ├── __init__.py
 │   │   ├── __main__.py
