@@ -145,37 +145,83 @@ Those records are useful when a caller needs individual rows to stand alone sema
 
 `tracecite search` accepts a repeatable `--source-type` option (`pdf`, `markdown`, `workbook`) that restricts results to the named type or types. The filter is applied before lexical and vector candidates are fused and truncated to `--limit`, not as a filter on the already-truncated result list, so a filtered query re-ranks within the matching type rather than merely hiding non-matching rows from an unfiltered ranking.
 
-The following run indexes the two `docs/examples/report-adoption/aemo-isp-comparison/` ISP PDFs together with the `docs/examples/workbook-vector-search/` EV workbook in one database, then queries `"electric vehicle charging"`. Unfiltered, the top five results mix both source types:
+The following example indexes the two `docs/examples/report-adoption/aemo-isp-comparison/` ISP PDFs and the `docs/examples/workbook-vector-search/` EV workbook in one database, with the model and chunk size of the workbook example:
 
-| Rank | Source type | Source | Provenance |
+```sh
+mkdir -p .tracecite
+
+cat > .tracecite/source-type-example.toml <<'TOML'
+schema_version = 1
+
+[[source]]
+path = "report-adoption/aemo-isp-comparison/sources/aemo/2024-integrated-system-plan.pdf"
+
+[[source]]
+path = "report-adoption/aemo-isp-comparison/sources/aemo/2026-integrated-system-plan.pdf"
+
+[[source]]
+path = "workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"
+TOML
+
+tracecite sync \
+  --root docs/examples \
+  --manifest .tracecite/source-type-example.toml \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --max-chunk-chars 2400
+```
+
+Without a filter, the top five results for `"electric vehicle charging"` mix both source types:
+
+```sh
+tracecite search "electric vehicle charging" \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --limit 5
+```
+
+| Rank | Source type | Source | Locator | Provenance |
+|---:|---|---|---|---|
+| 1 | pdf | `2026-integrated-system-plan.pdf` | page 41 | lexical, vector |
+| 2 | workbook | `2023-iasr-ev-workbook.xlsx` | `BEV_PHEV_Profile_kW (Weekend)`, `B2:AT9` | lexical, vector |
+| 3 | workbook | `2023-iasr-ev-workbook.xlsx` | `BEV_PHEV_Profile_kW (Weekday)`, `B2:AT8` | lexical, vector |
+| 4 | workbook | `2023-iasr-ev-workbook.xlsx` | `Context and Use`, `B2:C20` | lexical |
+| 5 | pdf | `2024-integrated-system-plan.pdf` | page 43 | vector |
+
+Restricting the same query to PDFs returns three PDF results:
+
+```sh
+tracecite search "electric vehicle charging" \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --source-type pdf \
+  --limit 3
+```
+
+| Rank | Source | Locator | Provenance |
 |---:|---|---|---|
-| 1 | pdf | `2026-integrated-system-plan.pdf` | lexical, vector |
-| 2 | workbook | `2023-iasr-ev-workbook.xlsx` | lexical, vector |
-| 3 | workbook | `2023-iasr-ev-workbook.xlsx` | lexical, vector |
-| 4 | workbook | `2023-iasr-ev-workbook.xlsx` | lexical, vector |
-| 5 | pdf | `2024-integrated-system-plan.pdf` | vector |
+| 1 | `2026-integrated-system-plan.pdf` | page 41 | lexical, vector |
+| 2 | `2024-integrated-system-plan.pdf` | page 43 | vector |
+| 3 | `2024-integrated-system-plan.pdf` | page 69 | vector |
+
+Page 69 of the 2024 ISP is not in the unfiltered top five; without the filter it ranks sixth.
+The unfiltered top five holds only two PDF results, so the third PDF result comes from filtering the candidates before the list is truncated.
+
+Restricting the query to workbooks returns worksheet locators only:
 
 ```sh
-tracecite search "electric vehicle charging" --database evidence.sqlite --source-type pdf --limit 3
+tracecite search "electric vehicle charging" \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --source-type workbook \
+  --limit 3
 ```
 
-```text
-1  pdf  2026-integrated-system-plan.pdf  page 41  lexical, vector
-2  pdf  2024-integrated-system-plan.pdf  page 43  vector
-3  pdf  2024-integrated-system-plan.pdf  page 69  vector
-```
-
-Rank 2 and rank 3 were not in the unfiltered top five at all — restricting to `pdf` surfaced the next-best PDF matches instead of merely dropping the workbook rows from the same fixed-size list.
-
-```sh
-tracecite search "electric vehicle charging" --database evidence.sqlite --source-type workbook --limit 3
-```
-
-```text
-1  workbook  2023-iasr-ev-workbook.xlsx  sheet "BEV_PHEV_Profile_kW (Weekend)"  lexical, vector
-2  workbook  2023-iasr-ev-workbook.xlsx  sheet "Context and Use"                lexical, vector
-3  workbook  2023-iasr-ev-workbook.xlsx  sheet "BEV_PHEV_Profile_kW (Weekday)"  lexical, vector
-```
+| Rank | Worksheet | Bounding range | Provenance |
+|---:|---|---|---|
+| 1 | `BEV_PHEV_Profile_kW (Weekend)` | `B2:AT9` | lexical, vector |
+| 2 | `BEV_PHEV_Profile_kW (Weekday)` | `B2:AT8` | lexical, vector |
+| 3 | `Context and Use` | `B2:C20` | lexical |
 
 ## PDF page selection does not apply to workbooks
 

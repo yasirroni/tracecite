@@ -67,7 +67,7 @@ The bounding range is a convenient envelope; only the listed exact ranges contri
 
 ## Run a literal query
 
-A query that copies exact workbook wording is retrieved through lexical search rather than semantic search:
+A query that copies exact workbook wording can also match through the lexical index:
 
 ```sh
 tracecite search "Articulated Truck" \

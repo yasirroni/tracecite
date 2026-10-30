@@ -45,6 +45,7 @@ docs/
     examples/                      published tutorials and complete workflows
     examples/python/               executable Python pages
     examples/julia/                executable Julia pages
+    examples/workbook-vector-search/  workbook page and its local source workbook
     examples/report-adoption/      self-contained evidence-backed report example
     guide/architecture.md          written documentation
     guide/architecture.html.md     committed generated evidence
@@ -67,6 +68,10 @@ Quarto render.
 See `docs/examples/report-adoption/aemo-isp-comparison/` for a complete, real
 adoption example covering author, check, index, search, doctor, and
 publish-only modes together.
+
+See `docs/examples/workbook-vector-search/` for a semantic workbook-search
+example whose page and local `.xlsx` source are owned by the same example
+workspace.
 
 ## Three separate operations
 
@@ -135,6 +140,113 @@ Source formats produce different retrieval units and locators.
 
 The table-normalisation API separately produces table-level and row-level retrieval text while preserving the original table as evidence.
 Those records are useful when a caller needs individual rows to stand alone semantically rather than embedding one large raw table.
+
+## Restrict search to one source type
+
+`tracecite search` accepts a repeatable `--source-type` option (`pdf`, `markdown`, `workbook`) that restricts results to the named type or types. The filter is applied before lexical and vector candidates are fused and truncated to `--limit`, not as a filter on the already-truncated result list, so a filtered query re-ranks within the matching type rather than merely hiding non-matching rows from an unfiltered ranking.
+
+The following example indexes the two `docs/examples/report-adoption/aemo-isp-comparison/` ISP PDFs and the `docs/examples/workbook-vector-search/` EV workbook in one database, with the model and chunk size of the workbook example:
+
+```sh
+mkdir -p .tracecite
+
+cat > .tracecite/source-type-example.toml <<'TOML'
+schema_version = 1
+
+[[source]]
+path = "report-adoption/aemo-isp-comparison/sources/aemo/2024-integrated-system-plan.pdf"
+
+[[source]]
+path = "report-adoption/aemo-isp-comparison/sources/aemo/2026-integrated-system-plan.pdf"
+
+[[source]]
+path = "workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"
+TOML
+
+tracecite sync \
+  --root docs/examples \
+  --manifest .tracecite/source-type-example.toml \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --max-chunk-chars 2400
+```
+
+Without a filter, the top five results for `"electric vehicle charging"` mix both source types:
+
+```sh
+tracecite search "electric vehicle charging" \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --limit 5
+```
+
+| Rank | Source type | Source | Locator | Provenance |
+|---:|---|---|---|---|
+| 1 | pdf | `2026-integrated-system-plan.pdf` | page 41 | lexical, vector |
+| 2 | workbook | `2023-iasr-ev-workbook.xlsx` | `BEV_PHEV_Profile_kW (Weekend)`, `B2:AT9` | lexical, vector |
+| 3 | workbook | `2023-iasr-ev-workbook.xlsx` | `BEV_PHEV_Profile_kW (Weekday)`, `B2:AT8` | lexical, vector |
+| 4 | workbook | `2023-iasr-ev-workbook.xlsx` | `Context and Use`, `B2:C20` | lexical |
+| 5 | pdf | `2024-integrated-system-plan.pdf` | page 43 | vector |
+
+Restricting the same query to PDFs returns three PDF results:
+
+```sh
+tracecite search "electric vehicle charging" \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --source-type pdf \
+  --limit 3
+```
+
+| Rank | Source | Locator | Provenance |
+|---:|---|---|---|
+| 1 | `2026-integrated-system-plan.pdf` | page 41 | lexical, vector |
+| 2 | `2024-integrated-system-plan.pdf` | page 43 | vector |
+| 3 | `2024-integrated-system-plan.pdf` | page 69 | vector |
+
+Page 69 of the 2024 ISP is not in the unfiltered top five; without the filter it ranks sixth.
+The unfiltered top five holds only two PDF results, so the third PDF result comes from filtering the candidates before the list is truncated.
+
+Restricting the query to workbooks returns worksheet locators only:
+
+```sh
+tracecite search "electric vehicle charging" \
+  --database .tracecite/source-type-example.sqlite \
+  --model-cache-dir .tracecite/model-cache \
+  --source-type workbook \
+  --limit 3
+```
+
+| Rank | Worksheet | Bounding range | Provenance |
+|---:|---|---|---|
+| 1 | `BEV_PHEV_Profile_kW (Weekend)` | `B2:AT9` | lexical, vector |
+| 2 | `BEV_PHEV_Profile_kW (Weekday)` | `B2:AT8` | lexical, vector |
+| 3 | `Context and Use` | `B2:C20` | lexical |
+
+## PDF page selection does not apply to workbooks
+
+`tracecite page` and `tracecite extract-pages` retrieve physical PDF pages; they reject a workbook path with a clear error rather than misinterpreting a worksheet index as a page number:
+
+```sh
+tracecite page 2024-integrated-system-plan.pdf 10 --database evidence.sqlite
+```
+
+```text
+Executive summary
+
+However, to meet government policy objectives, the ISP forecasts that the remaining coal fleet will
+close two to three times faster than those announcements. In Step Change, the most likely
+```
+
+```sh
+tracecite page 2023-iasr-ev-workbook.xlsx 1 --database evidence.sqlite
+```
+
+```text
+source is not a pdf: 2023-iasr-ev-workbook.xlsx
+```
+
+(exit code 2)
 
 ## Written and retained representations
 

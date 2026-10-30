@@ -164,12 +164,14 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   ├── test_docs.py
 │   ├── test_evidence_imports.py
 │   ├── test_repository_tree.py
+│   ├── test_skills.py
 │   ├── test_tables.py
 │   └── test_version.py
 ├── LICENSE
 ├── Project.toml
 ├── pyproject.toml
 ├── README.md
+├── requirements.txt
 └── uv.lock
 ```
 :::

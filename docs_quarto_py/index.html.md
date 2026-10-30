@@ -38,11 +38,12 @@ The normal documentation site contains only the original table. An optional embe
 - Native Pandoc pipe, grid, and multiline table parsing through Pandoc's AST.
 - HTML table conversion for Literate.jl, Documenter.jl, PrettyTables, and notebook HTML MIME output.
 - Explicit diagnostics for spans, duplicate ranks, mixed units, declared ordering, empty headers, and malformed structures.
-- Four tutorials: what TraceCite does, the optional Julia route, ranked-result normalisation and inspection, and Quarto code visibility.
+- Four executable tutorials: what TraceCite does, the optional Julia route, ranked-result normalisation and inspection, and Quarto code visibility.
+- Two source-backed examples under `docs/examples/`: semantic workbook retrieval and an end-to-end AEMO report-adoption workflow.
 - The Python-only build includes the ranked-results tutorial in
   `examples/python/hottest_temperature.py`.
 - A complete `--keep-embedding-markdown` website copy that can be rendered by a second Quarto run.
-- No `.qmd` requirement: executable pages are percent-format `.py` and `.jl`; prose pages are `.md`.
+- No project-wide `.qmd` requirement: executable tutorials use percent-format `.py` and `.jl`, prose pages use `.md`, and the report-adoption example uses one `.qmd` source to demonstrate an external Quarto authoring workflow.
 
 ## Build the documentation and inspection sites
 
