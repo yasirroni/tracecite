@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 import fnmatch
 import tomllib
 from types import MappingProxyType
 
-from .paths import PathAuthorityError, normalise_relative_glob_declaration, normalise_relative_source_declaration
+from .paths import PathAuthorityError, normalise_relative_declaration
 
 
-SUPPORTED_EXTENSIONS = {".pdf", ".md", ".xlsx", ".xlsm"}
+SOURCE_TYPES = {
+    ".pdf": "pdf",
+    ".md": "markdown",
+    ".xlsx": "workbook",
+    ".xlsm": "workbook",
+}
 _TOP_LEVEL_KEYS = {"schema_version", "root", "database", "model_cache_dir", "source", "include", "exclude"}
 _TABLE_KEYS = {
     "source": {"path", "origin"},
@@ -31,20 +36,16 @@ class ManifestError(ValueError):
 
 def _normalise(value: str | Path) -> str:
     try:
-        normalised = normalise_relative_glob_declaration(value) if any(ch in str(value) for ch in "*?[") else normalise_relative_source_declaration(value)
+        normalised = normalise_relative_declaration(value)
     except PathAuthorityError as exc:
         raise ManifestError(str(exc)) from exc
-    if Path(normalised).suffix.lower() not in SUPPORTED_EXTENSIONS and not any(ch in normalised for ch in "*?["):
+    if Path(normalised).suffix.lower() not in SOURCE_TYPES and not any(ch in normalised for ch in "*?["):
         raise ManifestError(f"unsupported source extension for {value}")
     return normalised
 
 
 def _matches(path: str, pattern: str) -> bool:
-    if fnmatch.fnmatchcase(path, pattern):
-        return True
-    if "**/" in pattern and fnmatch.fnmatchcase(path, pattern.replace("**/", "")):
-        return True
-    return False
+    return fnmatch.fnmatchcase(path, pattern) or ("**/" in pattern and fnmatch.fnmatchcase(path, pattern.replace("**/", "")))
 
 
 @dataclass(frozen=True)
@@ -53,10 +54,6 @@ class ManifestRules:
     include_globs: tuple[str, ...] = ()
     exclude_globs: tuple[str, ...] = ()
     origins: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.origins, MappingProxyType):
-            object.__setattr__(self, "origins", MappingProxyType(dict(self.origins)))
 
     def selects_path(self, path: str) -> bool:
         path = str(path).replace("\\", "/")
@@ -67,11 +64,9 @@ class ManifestRules:
 
 @dataclass(frozen=True)
 class SourceSelection:
-    available_paths: tuple[str, ...]
-    selected_existing_paths: tuple[str, ...]
+    selected: dict[str, Path]
     missing_explicit_paths: tuple[str, ...]
     unmatched_globs: tuple[str, ...]
-    excluded_paths: tuple[str, ...]
 
 
 def load_manifest(path: Path) -> ManifestRules:
@@ -110,71 +105,54 @@ def load_manifest(path: Path) -> ManifestRules:
     explicit = table_values("source", "path")
     includes = table_values("include", "glob")
     excludes = table_values("exclude", "glob")
-    return ManifestRules(_unique(explicit), _unique(includes), _unique(excludes), MappingProxyType(dict(origins)))
+    return ManifestRules(
+        tuple(dict.fromkeys(explicit)),
+        tuple(dict.fromkeys(includes)),
+        tuple(dict.fromkeys(excludes)),
+        MappingProxyType(origins),
+    )
 
 
 def merge_manifests(paths: Sequence[Path]) -> ManifestRules:
-    explicit: list[str] = []
-    includes: list[str] = []
-    excludes: list[str] = []
-    seen_explicit: set[str] = set()
-    seen_include: set[str] = set()
-    seen_exclude: set[str] = set()
+    """Union manifests in order; a ``local`` origin wins over ``default`` for the same declaration."""
+    declared: dict[str, dict[str, None]] = {"source": {}, "include": {}, "exclude": {}}
     origins: dict[tuple[str, str], str] = {}
-
-    def add(kind: str, value: str, target: list[str], seen: set[str], origin: str) -> None:
-        key = (kind, value)
-        if value not in seen:
-            target.append(value); seen.add(value)
-        if origins.get(key) != "local" or origin == "local":
-            origins[key] = origin
-
     for path in paths:
         rules = load_manifest(path)
-        for item in rules.explicit_paths:
-            add("source", item, explicit, seen_explicit, rules.origins.get(("source", item), "default"))
-        for item in rules.include_globs:
-            add("include", item, includes, seen_include, rules.origins.get(("include", item), "default"))
-        for item in rules.exclude_globs:
-            add("exclude", item, excludes, seen_exclude, rules.origins.get(("exclude", item), "default"))
-    return ManifestRules(tuple(explicit), tuple(includes), tuple(excludes), MappingProxyType(dict(origins)))
+        for kind, values in (("source", rules.explicit_paths), ("include", rules.include_globs), ("exclude", rules.exclude_globs)):
+            for value in values:
+                declared[kind][value] = None
+                origin = rules.origins.get((kind, value), "default")
+                if origins.get((kind, value)) != "local" or origin == "local":
+                    origins[(kind, value)] = origin
+    return ManifestRules(
+        tuple(declared["source"]),
+        tuple(declared["include"]),
+        tuple(declared["exclude"]),
+        MappingProxyType(origins),
+    )
 
 
-def _unique(values: tuple[str, ...]) -> tuple[str, ...]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values:
-        if value not in seen:
-            out.append(value)
-            seen.add(value)
-    return tuple(out)
+def resolve_sources(root: Path, rules: ManifestRules) -> SourceSelection:
+    """Scan the declared paths and globs once under ``root``.
 
-
-def _discover_declared(root: Path, rules: ManifestRules) -> tuple[str, ...]:
+    ``selected`` maps each existing, non-symlink, supported file that the
+    rules select to its resolved path. Missing explicit paths and include
+    globs that match no file are judged before exclusions apply.
+    """
     root = Path(root).resolve()
-    candidates: set[Path] = set()
-    candidates.update(root / path for path in rules.explicit_paths)
+    candidates = {root / path for path in rules.explicit_paths}
     for pattern in rules.include_globs:
         candidates.update(root.glob(pattern))
-    paths: list[str] = []
+    declared: dict[str, Path] = {}
     for path in sorted(candidates):
-        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in SOURCE_TYPES:
             continue
         resolved = path.resolve()
-        try:
-            relative = resolved.relative_to(root).as_posix()
-        except ValueError:
-            continue
-        paths.append(relative)
-    return tuple(sorted(set(paths)))
-
-
-def resolve_sources(root: Path, rules: ManifestRules, *, indexed_paths: Collection[str] = ()) -> SourceSelection:
-    root = Path(root)
-    discovered = _discover_declared(root, rules)
-    excluded = tuple(sorted(path for path in discovered if any(_matches(path, glob) for glob in rules.exclude_globs)))
-    available = tuple(sorted(path for path in discovered if rules.selects_path(path)))
-    missing = tuple(path for path in rules.explicit_paths if path not in discovered)
-    unmatched = tuple(glob for glob in rules.include_globs if not any(_matches(path, glob) for path in discovered))
-    selected_existing = tuple(sorted(path for path in indexed_paths if rules.selects_path(path)))
-    return SourceSelection(available, selected_existing, missing, unmatched, excluded)
+        if resolved.is_relative_to(root):
+            declared[resolved.relative_to(root).as_posix()] = resolved
+    return SourceSelection(
+        selected={path: resolved for path, resolved in declared.items() if rules.selects_path(path)},
+        missing_explicit_paths=tuple(path for path in rules.explicit_paths if path not in declared),
+        unmatched_globs=tuple(glob for glob in rules.include_globs if not any(_matches(path, glob) for path in declared)),
+    )

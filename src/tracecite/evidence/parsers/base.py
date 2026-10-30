@@ -6,6 +6,7 @@ into stored chunks; parsers never write to the database directly.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 
 
 @dataclass(frozen=True)
@@ -35,8 +36,6 @@ class ParsedChunkUnit:
     physical_page: int | None = None
     page_start_offset: int | None = None
     page_end_offset: int | None = None
-    page_range_start: int | None = None
-    page_range_end: int | None = None
     line_start: int | None = None
     line_end: int | None = None
     locator: dict = field(default_factory=dict)
@@ -46,3 +45,21 @@ class ParsedChunkUnit:
 class ParseResult:
     pages: list[ParsedPage]
     units: list[ParsedChunkUnit]
+
+
+def units_from_layout(layout_json: str | None) -> list[ParsedChunkUnit]:
+    """Rebuild Markdown or workbook chunk-input units from retained ``pages.layout_json``."""
+    layout = json.loads(layout_json) if layout_json else {}
+    return [
+        ParsedChunkUnit(
+            text=entry["text"],
+            logical_key=entry["logical_key"],
+            heading_path=entry["heading_path"],
+            symbol=None,
+            content_type=entry["content_type"],
+            line_start=entry.get("line_start"),
+            line_end=entry.get("line_end"),
+            locator=entry.get("locator", {}),
+        )
+        for entry in layout.get("units", [])
+    ]

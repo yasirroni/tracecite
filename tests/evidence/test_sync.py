@@ -337,8 +337,7 @@ def test_ambiguous_same_hash_paths_not_misclassified_as_rename(
     shared_pages = [["Notice", "This boilerplate notice paragraph is identical across both documents today."]]
     path_a = build_pdf(corpus_dir / "a.pdf", shared_pages)
     path_b = corpus_dir / "b.pdf"
-    shutil.copyfile(path_a, path_b)  # byte-identical, not just visually identical
-    assert sync_module.hash_file(path_a) == sync_module.hash_file(path_b)
+    shutil.copyfile(path_a, path_b)
 
     write_manifest(manifest_path, {"doc.pdf": "a.pdf", "b.pdf": "b.pdf"})
     embedder = make_embedder()

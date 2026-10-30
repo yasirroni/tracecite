@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 import sys
 
-from . import config as config_module
+from . import config as config_module, schema
 
 RRF_K = 60
 
@@ -18,30 +18,25 @@ def _require(value, flag: str):
     return value
 
 
-def _connect_existing_or_report(schema_module, database: Path, *, read_only: bool):
+def _connect(database: Path, *, read_only: bool):
     try:
-        return schema_module.connect_existing(_require(database, "--database"), read_only=read_only)
+        return schema.connect_existing(_require(database, "--database"), read_only=read_only)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         return None
 
 
-def _rules_have_selection(rules) -> bool:
-    return bool(rules.explicit_paths or rules.include_globs)
-
-
 def _resolve_runtime_args(args: argparse.Namespace) -> argparse.Namespace:
-    profile_path = getattr(args, "config", None)
-    profile = config_module.load_profile(profile_path) if profile_path is not None else None
-    if getattr(args, "root", None) is None and profile is not None:
+    if args.config is None:
+        return args
+    profile = config_module.load_profile(args.config)
+    if args.root is None:
         args.root = profile.root
-    if getattr(args, "database", None) is None and profile is not None:
+    if args.database is None:
         args.database = profile.database
-    if getattr(args, "model_cache_dir", None) is None and profile is not None:
+    if args.model_cache_dir is None:
         args.model_cache_dir = profile.model_cache_dir
-    if profile is not None:
-        explicit_manifests = list(getattr(args, "manifests", None) or [])
-        args.manifests = list(profile.manifests) + explicit_manifests
+    args.manifests = [*profile.manifests, *args.manifests]
     return args
 
 
@@ -56,10 +51,9 @@ def cmd_sync(args: argparse.Namespace) -> int:
         ocr_lang=args.ocr_lang,
     )
     only_paths = {Path(args.path).as_posix()} if args.path else None
-    manifests = getattr(args, "manifests", None) or []
     report = sync_module.sync(
-        _require(getattr(args, "root", None), "--root"),
-        manifests,
+        _require(args.root, "--root"),
+        args.manifests,
         _require(args.database, "--database"),
         options=options,
         model_cache_dir=args.model_cache_dir,
@@ -72,7 +66,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     print(f"renamed: {report.sources_renamed}")
     print(f"selected-missing: {report.selected_missing_paths}")
     print(f"unmatched-globs: {report.unmatched_globs}")
-    print(f"indexed-but-unselected: {getattr(report, 'indexed_unselected_paths', [])}")
+    print(f"indexed-but-unselected: {report.indexed_unselected_paths}")
     print(f"cleanup-warnings: {report.cleanup_warnings}")
     print(f"unchanged: {len(report.sources_unchanged)} source(s)")
     print(
@@ -81,11 +75,6 @@ def cmd_sync(args: argparse.Namespace) -> int:
     )
     print(f"embeddings generated: {report.embeddings_generated}")
     return 0 if report.status == "ok" else 1
-
-
-def _relative_pdf_link(database_path: Path, sources_dir: Path | None, source_row, page: int) -> str:
-    path = source_row["path"]
-    return f"{path}#page={page}"
 
 
 def _fts_rows(conn, query, fts_limit, source_types=None):
@@ -119,36 +108,22 @@ def _fts_rows(conn, query, fts_limit, source_types=None):
         return conn.execute(statement, [fallback_query, *type_params, fts_limit]).fetchall()
 
 
-def _search(
-    conn,
-    sources_dir,
-    query,
-    limit,
-    fts_limit,
-    vector_limit,
-    model_cache_dir,
-    database_path,
-    *,
-    source_types=None,
-):
-    from . import schema, sync as sync_module, vector_backend
+def active_embedding_model(conn, model_cache_dir: Path):
+    """Return the embedding model recorded as active in the database."""
+    from . import sync as sync_module
 
     config = schema.load_config(conn)
+    return sync_module.EmbeddingModel(config.embedding_model, config.embedding_revision, model_cache_dir)
+
+
+def hybrid_search(conn, query, limit, fts_limit, vector_limit, embedder, *, source_types=None):
+    from . import vector_backend
 
     fts_rows = _fts_rows(conn, query, fts_limit, source_types)
     fts_rank = {row["chunk_id"]: rank for rank, row in enumerate(fts_rows, start=1)}
-
-    if hasattr(model_cache_dir, "embed"):
-        embedder = model_cache_dir
-    else:
-        embedder = sync_module.EmbeddingModel(
-            config.embedding_model,
-            config.embedding_revision,
-            model_cache_dir or (Path(database_path).resolve().parent / "model-cache"),
-        )
     query_vector = embedder.embed([query])[0]
 
-    active_model_id = config.embedding_model_id
+    active_model_id = schema.load_config(conn).embedding_model_id
     if source_types:
         placeholders = ",".join("?" for _ in source_types)
         allowed_rows = conn.execute(
@@ -202,16 +177,14 @@ def _search(
     results = []
     for position, chunk_id in enumerate(ranked_chunk_ids, start=1):
         chunk = conn.execute("SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)).fetchone()
-        if chunk is None:
-            continue
         source_row = conn.execute(
             "SELECT * FROM sources WHERE source_pk = ?", (chunk["source_pk"],)
         ).fetchone()
         entry = {
             "rank": position,
-            "source_path": source_row["path"] if source_row else None,
-            "source_type": source_row["source_type"] if source_row else None,
-            "source_sha256": source_row["sha256"] if source_row else None,
+            "source_path": source_row["path"],
+            "source_type": source_row["source_type"],
+            "source_sha256": source_row["sha256"],
             "heading_path": json.loads(chunk["heading_path"]) if chunk["heading_path"] else [],
             "passage": chunk["body"],
             "physical_page": chunk["physical_page"],
@@ -223,74 +196,38 @@ def _search(
             "provenance": sorted(provenance[chunk_id]),
             "fused_score": fused_scores[chunk_id],
         }
-        if (
-            source_row is not None
-            and source_row["source_type"] == "pdf"
-            and chunk["physical_page"] is not None
-        ):
-            entry["pdf_link"] = _relative_pdf_link(
-                database_path, sources_dir, source_row, chunk["physical_page"]
-            )
+        if source_row["source_type"] == "pdf" and chunk["physical_page"] is not None:
+            entry["pdf_link"] = f"{source_row['path']}#page={chunk['physical_page']}"
         results.append(entry)
     return results
 
 
-def hybrid_search(
-    conn,
-    sources_dir,
-    query,
-    limit,
-    fts_limit,
-    vector_limit,
-    model_cache_dir,
-    database_path,
-    *,
-    embedder=None,
-):
-    return _search(
-        conn,
-        sources_dir,
-        query,
-        limit,
-        fts_limit,
-        vector_limit,
-        embedder if embedder is not None else model_cache_dir,
-        database_path,
-    )
-
-
 def cmd_search(args: argparse.Namespace) -> int:
-    from . import schema
-    from .page_output import PageAssetMissingError, PageOutputError, enrich_search_result_with_page_assets
+    from .page_output import PageAssetMissingError, PageOutputError, page_assets_for
 
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
         schema.ensure_schema(conn)
-        results = _search(
+        model_cache_dir = args.model_cache_dir or Path(args.database).resolve().parent / "model-cache"
+        results = hybrid_search(
             conn,
-            getattr(args, "root", None),
             args.query,
             args.limit,
             args.fts_limit,
             args.vector_limit,
-            args.model_cache_dir,
-            args.database,
-            source_types=getattr(args, "source_types", None),
+            active_embedding_model(conn, model_cache_dir),
+            source_types=args.source_types,
         )
-        source_cache: dict[str, object] = {}
+        source_pks = {row["path"]: row["source_pk"] for row in conn.execute("SELECT path, source_pk FROM sources")}
         for result in results:
-            source_path = result.get("source_path")
-            if not source_path:
-                result["page_render"] = None
-                result["figure_crops"] = []
-                continue
-            source_row = source_cache.get(source_path)
-            if source_row is None:
-                source_row = conn.execute("SELECT * FROM sources WHERE path = ?", (source_path,)).fetchone()
-                source_cache[source_path] = source_row
-            result = enrich_search_result_with_page_assets(conn, args.database, source_row, result)
+            page = result["physical_page"]
+            result["page_render"], result["figure_crops"] = (
+                page_assets_for(conn, args.database, source_pks[result["source_path"]], page)
+                if page is not None
+                else (None, [])
+            )
         print(json.dumps(results, indent=2))
     except PageAssetMissingError as exc:
         print(str(exc), file=sys.stderr)
@@ -304,17 +241,16 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_page(args: argparse.Namespace) -> int:
-    from . import schema
     from .page_output import PageAssetMissingError, PageOutputError, page_json_payload
     from .page_selection import PageSelectionSyntaxError, PageSelectionUnavailableError, resolve_page_selection
     from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
         schema.ensure_schema(conn)
-        root = Path(getattr(args, "root", None) or Path.cwd()).resolve()
+        root = Path(args.root or Path.cwd()).resolve()
         try:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
@@ -365,29 +301,20 @@ def cmd_page(args: argparse.Namespace) -> int:
 
 
 def cmd_extract_pages(args: argparse.Namespace) -> int:
-    from . import schema
-    from .page_extraction import (
-        PageExtractionError,
-        PageExtractionMissingError,
-        PageExtractionPathError,
-        PageExtractionPdfMismatchError,
-        PageExtractionSelectionError,
-        PageExtractionTypeError,
-        extract_pages,
-    )
+    from .page_extraction import PageExtractionError, PageExtractionMissingError, extract_pages
 
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
         schema.ensure_schema(conn)
-        root = Path(getattr(args, "root", None) or Path.cwd()).resolve()
+        root = Path(args.root or Path.cwd()).resolve()
         try:
-            result = extract_pages(conn, args.database, root, args.source_path, args.page, args.output_dir)
+            result = extract_pages(conn, root, args.source_path, args.page, args.output_dir)
         except PageExtractionMissingError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        except (PageExtractionPathError, PageExtractionSelectionError, PageExtractionTypeError, PageExtractionPdfMismatchError, PageExtractionError) as exc:
+        except PageExtractionError as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(
@@ -406,15 +333,15 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
 
 
 def cmd_verify_quote(args: argparse.Namespace) -> int:
-    from . import schema, verify
+    from . import verify
     from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
         schema.ensure_schema(conn)
-        root = Path(getattr(args, "root", None) or Path.cwd()).resolve()
+        root = Path(args.root or Path.cwd()).resolve()
         try:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
@@ -441,9 +368,9 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
 
 
 def cmd_verify_report(args: argparse.Namespace) -> int:
-    from . import schema, verify
+    from . import verify
 
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
@@ -477,9 +404,9 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    from . import schema, sync as sync_module
+    from . import sync as sync_module
 
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
@@ -495,18 +422,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_prune(args: argparse.Namespace) -> int:
-    from . import schema, sync as sync_module
+    from . import sync as sync_module
 
-    rules = sync_module.load_manifest_rules(getattr(args, "manifests", None) or [])
-    prune_all = bool(getattr(args, "prune_all", False))
-    has_any_rules = bool(rules.explicit_paths or rules.include_globs or rules.exclude_globs)
-    if prune_all and has_any_rules:
+    rules = sync_module.load_manifest_rules(args.manifests)
+    prune_all = args.prune_all
+    selects_any = bool(rules.explicit_paths or rules.include_globs)
+    if prune_all and (selects_any or rules.exclude_globs):
         print("prune --all cannot be combined with source/include/exclude rules", file=sys.stderr)
         return 2
-    if not prune_all and not _rules_have_selection(rules):
+    if not prune_all and not selects_any:
         print("prune requires at least one positive source/include rule; excludes only refine it", file=sys.stderr)
         return 2
-    conn = _connect_existing_or_report(schema, args.database, read_only=True)
+    conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
@@ -529,7 +456,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
         leaks = []
         if args.apply:
             conn.close()
-            conn = _connect_existing_or_report(schema, args.database, read_only=False)
+            conn = _connect(args.database, read_only=False)
             if conn is None:
                 return 2
             schema.ensure_schema(conn)

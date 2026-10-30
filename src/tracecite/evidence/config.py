@@ -32,22 +32,16 @@ def load_profile(path: Path) -> TraceCiteProfile:
             data = tomllib.load(handle)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(str(exc)) from exc
-    if data.get("schema_version") != 1:
-        raise ConfigError("TraceCite profile requires schema_version = 1")
-    unknown = set(data) - {"schema_version", "root", "database", "model_cache_dir", "source", "include", "exclude"}
-    if unknown:
-        raise ConfigError(f"unknown field(s) in TraceCite profile: {', '.join(sorted(unknown))}")
-    base = profile_path.parent
-    for key in ("root", "database", "model_cache_dir"):
-        if key not in data or not isinstance(data[key], str) or not data[key].strip():
-            raise ConfigError(f"TraceCite profile requires non-empty string {key}")
-    root = _resolve(base, data.get("root", "."))
     try:
         rules = load_manifest(profile_path)
     except ManifestError as exc:
         raise ConfigError(str(exc)) from exc
+    for key in ("root", "database", "model_cache_dir"):
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            raise ConfigError(f"TraceCite profile requires non-empty string {key}")
+    base = profile_path.parent
     return TraceCiteProfile(
-        root=root,
+        root=_resolve(base, data["root"]),
         database=_resolve(base, data["database"]),
         model_cache_dir=_resolve(base, data["model_cache_dir"]),
         manifests=(profile_path,),

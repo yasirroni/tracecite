@@ -26,12 +26,10 @@ glob = "docs/skip.md"
         encoding="utf-8",
     )
     rules = merge_manifests([manifest])
-    selection = resolve_sources(root, rules, indexed_paths=["docs/old.md"])
-    assert selection.available_paths == ("docs/keep.md",)
+    selection = resolve_sources(root, rules)
+    assert list(selection.selected) == ["docs/keep.md"]
     assert selection.missing_explicit_paths == ("missing.md",)
-    assert selection.excluded_paths == ("docs/skip.md",)
     assert rules.selects_path("docs/old.md")
-    assert "docs/old.md" in selection.selected_existing_paths
 
 
 def test_manifest_rejects_escape_and_unsupported_extension(tmp_path: Path):
@@ -70,7 +68,7 @@ def test_manifest_rejects_unknown_fields_absolute_paths_and_symlink_escape(tmp_p
     manifest.write_text('schema_version = 1\n[[source]]\npath = "escape.md"\n', encoding="utf-8")
     rules = load_manifest(manifest)
     selection = resolve_sources(root, rules)
-    assert selection.available_paths == ()
+    assert selection.selected == {}
     assert selection.missing_explicit_paths == ("escape.md",)
 
 
@@ -168,5 +166,4 @@ def test_manifest_discovery_is_limited_to_declared_candidates(tmp_path: Path):
     manifest = tmp_path / "manifest.toml"
     manifest.write_text('schema_version = 1\n[[include]]\nglob = "docs/*.md"\n', encoding="utf-8")
     selection = resolve_sources(root, merge_manifests([manifest]))
-    assert selection.available_paths == ("docs/keep.md",)
-    assert "node_modules/deep/bad.md" not in selection.available_paths
+    assert list(selection.selected) == ["docs/keep.md"]

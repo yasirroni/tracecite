@@ -260,7 +260,7 @@ def test_author_index_search_doctor_check_succeed_in_order(
     assert index_result.sync_report.status == "ok"
 
     results = search_docs_index(
-        contract, "Integrated System Plan", repo_root=root, embedder=make_embedder()
+        contract, "Integrated System Plan", embedder=make_embedder()
     )
     assert results
     # Verify stable schema: each result must be a dict with expected keys
@@ -281,7 +281,7 @@ def test_author_index_search_doctor_check_succeed_in_order(
         assert isinstance(result, dict)
         assert set(result.keys()) >= expected_keys, f"result keys {set(result.keys())} missing from {expected_keys}"
 
-    assert doctor_docs_index(contract, repo_root=root) == ()
+    assert doctor_docs_index(contract) == ()
 
     check_result = check_docs(
         contract, config_path=root / "docs/tracecite.toml", repo_root=root
@@ -322,7 +322,7 @@ def test_two_fresh_copies_are_deterministic_for_sources_and_search(
         author_docs(contract, config_path=config, repo_root=root)
         sync_docs_index(contract, repo_root=root, embedder=make_embedder())
         results = search_docs_index(
-            contract, "Integrated System Plan", repo_root=root, embedder=make_embedder()
+            contract, "Integrated System Plan", embedder=make_embedder()
         )
         # Compare retained and public staged markdown files for byte-identity
         retained_bytes = (contract.retained_root / "report.md").read_bytes()

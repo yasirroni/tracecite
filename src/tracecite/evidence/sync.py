@@ -43,14 +43,9 @@ from .embedding import Embedder, EmbeddingModel
 from .parsers import markdown as markdown_parser
 from .parsers import pdf as pdf_parser
 from .parsers import workbook as workbook_parser
-from .parsers.base import ParsedChunkUnit
+from .parsers.base import ParsedChunkUnit, units_from_layout
+from .paths import file_sha256
 
-SUPPORTED_EXTENSIONS = {
-    ".pdf": "pdf",
-    ".md": "markdown",
-    ".xlsx": "workbook",
-    ".xlsm": "workbook",
-}
 ASSET_EVENT_HOOK = None
 
 
@@ -147,44 +142,10 @@ def load_manifest_rules(manifest_paths: Path | Sequence[Path]) -> manifest_modul
     return manifest_module.merge_manifests(paths)
 
 
-def discover_source_files(sources_dir: Path, rules: manifest_module.ManifestRules) -> dict[str, Path]:
-    sources_dir = Path(sources_dir).resolve()
-    discovered: dict[str, Path] = {}
-    candidates: set[Path] = set()
-    for relative in rules.explicit_paths:
-        candidates.add(sources_dir / relative)
-    for pattern in rules.include_globs:
-        candidates.update(sources_dir.glob(pattern))
-    for path in sorted(candidates):
-        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-            continue
-        resolved = path.resolve()
-        try:
-            resolved.relative_to(sources_dir)
-        except ValueError:
-            continue
-        relative = resolved.relative_to(sources_dir).as_posix()
-        if rules.selects_path(relative):
-            discovered[relative] = resolved
-    return discovered
-
-
-def source_type_for(path: Path) -> str:
-    return SUPPORTED_EXTENSIONS[Path(path).suffix.lower()]
-
-
 def _parser_config_for(source_type: str, options: SyncOptions) -> dict:
     if source_type == "pdf":
         return {"ocr_lang": options.ocr_lang}
     return {}
-
-
-def hash_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
@@ -287,7 +248,6 @@ def _source_matches(path: Path, expected: tuple[str, int, int]) -> bool:
 class _SourcePlan:
     source_path: str
     source_pk: int | None
-    relative_path: str
     abs_path: Path
     source_type: str
     action: str  # "add" | "reparse" | "rechunk" | "renormalise-only"
@@ -422,8 +382,7 @@ def sync(
     database_path = Path(database_path)
 
     rules = load_manifest_rules(manifest_path)
-    discovered = discover_source_files(sources_dir, rules)
-    manifest = {path: path for path in sorted(set(discovered) | set(rules.explicit_paths)) if rules.selects_path(path)}
+    selection = manifest_module.resolve_sources(sources_dir, rules)
 
     conn = schema.connect(database_path)
     snapshot_root: Path | None = None
@@ -451,8 +410,7 @@ def sync(
             embedder = EmbeddingModel(options.embedding_model, options.embedding_revision, cache_dir)
 
         existing_sources = {row["path"]: row for row in conn.execute("SELECT * FROM sources").fetchall()}
-        selection = manifest_module.resolve_sources(sources_dir, rules, indexed_paths=existing_sources)
-        present_paths = {path for path in manifest if path in discovered}
+        present_paths = set(selection.selected)
         selected_existing_paths = {path for path in existing_sources if rules.selects_path(path)}
         indexed_unselected_paths = set(existing_sources) - selected_existing_paths
         missing_selected_paths = selected_existing_paths - present_paths
@@ -461,9 +419,8 @@ def sync(
         continuing_ids = present_paths & set(existing_sources)
 
         if only_relative_paths is not None:
-            scoped_ids = {path for path in manifest if path in only_relative_paths}
-            added_ids &= scoped_ids
-            continuing_ids &= scoped_ids
+            added_ids &= only_relative_paths
+            continuing_ids &= only_relative_paths
 
         # ---- rename detection: gone id <-> added id sharing an unambiguous hash ----
         observed_states: dict[str, tuple[Path, str, int, int]] = {}
@@ -478,7 +435,7 @@ def sync(
             added_hashes: dict[str, str] = {}
             added_stats: dict[str, tuple[int, int]] = {}
             for sid in added_ids:
-                added_abs = sources_dir / manifest[sid]
+                added_abs = sources_dir / sid
                 captured = _capture_stable_file_state(added_abs)
                 if captured is None:
                     return SyncReport(status="aborted-source-changed")
@@ -493,7 +450,7 @@ def sync(
                     renames[gone_list[0]] = added_list[0]
                     new_id = added_list[0]
                     size_bytes, mtime_ns = added_stats[new_id]
-                    rename_rechecks[new_id] = (sources_dir / manifest[new_id], file_hash, size_bytes, mtime_ns)
+                    rename_rechecks[new_id] = (sources_dir / new_id, file_hash, size_bytes, mtime_ns)
 
         renamed_new_ids = set(renames.values())
         true_added_ids = added_ids - renamed_new_ids
@@ -505,16 +462,15 @@ def sync(
 
         # ---- build per-source plans needing (re)parsing or rechunking ----
         plans: list[_SourcePlan] = []
-        hint_updates: list[tuple[str, str, int, int]] = []
+        hint_updates: list[tuple[str, int, int]] = []
         # (chunk_id, semantic_input_hash) pairs needing only a fresh embedding
         # mapping: the embedding model changed but the source did not.
         reembed_only_chunks: list[tuple[str, str]] = []
         pending_embeddings: dict[str, str] = {}  # semantic_input_hash -> body text
 
         for source_path in sorted(true_added_ids):
-            relative_path = manifest[source_path]
-            abs_path = sources_dir / relative_path
-            source_type = source_type_for(abs_path)
+            abs_path = sources_dir / source_path
+            source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
             snapshot = _capture_source_snapshot(abs_path, snapshot_root)
             if snapshot is None:
                 return SyncReport(status="aborted-source-changed")
@@ -526,7 +482,6 @@ def sync(
                 _SourcePlan(
                     source_path=source_path,
                     source_pk=None,
-                    relative_path=relative_path,
                     abs_path=abs_path,
                     source_type=source_type,
                     action="add",
@@ -541,9 +496,8 @@ def sync(
             )
 
         for source_path in sorted(continuing_ids):
-            relative_path = manifest[source_path]
-            abs_path = sources_dir / relative_path
-            source_type = source_type_for(abs_path)
+            abs_path = sources_dir / source_path
+            source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
             row = existing_sources[source_path]
             source_pk = row["source_pk"]
             captured = _capture_stable_file_state(abs_path)
@@ -560,7 +514,6 @@ def sync(
                 and file_hash == row["sha256"]
                 and size_bytes == row["size_bytes"]
                 and mtime_ns == row["mtime_ns"]
-                and relative_path == row["path"]
             )
             if fast_unchanged:
                 missing_rows = _chunks_missing_active_embedding(conn, source_pk, options.model_id)
@@ -581,11 +534,10 @@ def sync(
                 continue
 
             content_changed = file_hash != row["sha256"]
-            path_changed = relative_path != row["path"]
 
             if not content_changed and config_matches and not options.full:
-                if path_changed or size_bytes != row["size_bytes"] or mtime_ns != row["mtime_ns"]:
-                    hint_updates.append((source_path, relative_path, size_bytes, mtime_ns))
+                if size_bytes != row["size_bytes"] or mtime_ns != row["mtime_ns"]:
+                    hint_updates.append((source_path, size_bytes, mtime_ns))
                 if not options.reembed:
                     report.sources_unchanged.append(source_path)
                     continue
@@ -614,7 +566,6 @@ def sync(
                 _SourcePlan(
                     source_path=source_path,
                     source_pk=source_pk,
-                    relative_path=relative_path,
                     abs_path=abs_path,
                     source_type=source_type,
                     action=action,
@@ -652,15 +603,9 @@ def sync(
                 units: list[ParsedChunkUnit] = []
                 for page_row in page_rows:
                     if plan.source_type == "pdf":
-                        units.extend(
-                            pdf_parser.units_from_page_layout(
-                                plan.source_path, page_row["physical_page"], page_row["layout_json"]
-                            )
-                        )
-                    elif plan.source_type == "markdown":
-                        units.extend(markdown_parser.units_from_page_layout(page_row["layout_json"]))
+                        units.extend(pdf_parser.units_from_page_layout(page_row["physical_page"], page_row["layout_json"]))
                     else:
-                        units.extend(workbook_parser.units_from_page_layout(page_row["layout_json"]))
+                        units.extend(units_from_layout(page_row["layout_json"]))
                 plan.units = units
                 plan.pages = []
                 report.sources_rechunked.append(plan.source_path)
@@ -770,21 +715,20 @@ def sync(
         try:
             backend = vector_backend.SqliteVecBackend()
 
-            # path/mtime hint-only updates for sources whose content, parser,
+            # size/mtime hint-only updates for sources whose content, parser,
             # chunker, and normalisation metadata are all unchanged
-            for source_path, relative_path, size_bytes, mtime_ns in hint_updates:
+            for source_path, size_bytes, mtime_ns in hint_updates:
                 conn.execute(
-                    "UPDATE sources SET path = ?, size_bytes = ?, mtime_ns = ? WHERE path = ?",
-                    (relative_path, size_bytes, mtime_ns, source_path),
+                    "UPDATE sources SET size_bytes = ?, mtime_ns = ? WHERE path = ?",
+                    (size_bytes, mtime_ns, source_path),
                 )
 
             # renames: relabel path while retaining internal source_pk
             for old_id, new_id in sorted(renames.items()):
-                new_relative_path = manifest[new_id]
                 _, _, size_bytes, mtime_ns = rename_rechecks[new_id]
                 conn.execute(
                     "UPDATE sources SET path = ?, size_bytes = ?, mtime_ns = ? WHERE path = ?",
-                    (new_relative_path, size_bytes, mtime_ns, old_id),
+                    (new_id, size_bytes, mtime_ns, old_id),
                 )
                 report.sources_renamed.append((old_id, new_id))
 
@@ -807,7 +751,7 @@ def sync(
                         ) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
                         """,
                         (
-                            plan.relative_path,
+                            plan.source_path,
                             plan.source_type,
                             plan.sha256,
                             plan.size_bytes,
@@ -824,7 +768,7 @@ def sync(
                         ),
                     )
                     plan.source_pk = conn.execute(
-                        "SELECT source_pk FROM sources WHERE path = ?", (plan.relative_path,)
+                        "SELECT source_pk FROM sources WHERE path = ?", (plan.source_path,)
                     ).fetchone()["source_pk"]
                     asset_generation = asset_generations.get(plan.source_path)
                     if asset_generation is not None:
@@ -959,7 +903,7 @@ def sync(
                             WHERE source_pk = ?
                             """,
                             (
-                                plan.relative_path,
+                                plan.source_path,
                                 plan.sha256,
                                 plan.size_bytes,
                                 plan.mtime_ns,
@@ -1026,14 +970,14 @@ def sync(
             conn.execute("COMMIT")
         except _SourceChangedDuringSync:
             try:
-                if getattr(conn, "in_transaction", True):
+                if conn.in_transaction:
                     conn.execute("ROLLBACK")
             finally:
                 shutil.rmtree(generation_root, ignore_errors=True)
             return SyncReport(status="aborted-source-changed")
         except Exception:
             try:
-                if getattr(conn, "in_transaction", True):
+                if conn.in_transaction:
                     conn.execute("ROLLBACK")
             except Exception:
                 pass
@@ -1054,10 +998,6 @@ def plan_prune(conn: sqlite3.Connection, selected_paths: Collection[str]) -> Pru
     rows = conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
     selected = set(selected_paths)
     return PrunePlan(tuple(row["path"] for row in rows if row["path"] not in selected))
-
-
-def validate_prune_plan(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) -> None:
-    _validated_prune_asset_targets(conn, database_path, plan)
 
 
 def _canonical_asset_parts(database_path: Path, stored_asset_path: str, *, validate_filesystem: bool = True) -> tuple[str, ...]:
@@ -1092,7 +1032,8 @@ def _prune_asset_target(
     return _PruneAssetTarget(generation=generation, source_pk=source_pk, source_dir=source_dir)
 
 
-def _validated_prune_asset_targets(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) -> set[_PruneAssetTarget]:
+def validate_prune_plan(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) -> set[_PruneAssetTarget]:
+    """Return the asset directories the plan would remove, or raise if any stored asset path is unsafe."""
     targets: set[_PruneAssetTarget] = set()
     targets_by_source: dict[int, set[_PruneAssetTarget]] = defaultdict(set)
     for path in plan.paths:
@@ -1307,10 +1248,9 @@ def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None
 
 def apply_prune(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) -> list[str]:
     backend = vector_backend.SqliteVecBackend()
-    _validated_prune_asset_targets(conn, database_path, plan)
     conn.execute("BEGIN IMMEDIATE")
     try:
-        pruned_asset_targets = _validated_prune_asset_targets(conn, database_path, plan)
+        pruned_asset_targets = validate_prune_plan(conn, database_path, plan)
         for path in plan.paths:
             row = conn.execute("SELECT source_pk FROM sources WHERE path = ?", (path,)).fetchone()
             if row is None:
@@ -1326,7 +1266,7 @@ def apply_prune(conn: sqlite3.Connection, database_path: Path, plan: PrunePlan) 
         conn.execute("COMMIT")
     except Exception:
         try:
-            if getattr(conn, "in_transaction", True):
+            if conn.in_transaction:
                 conn.execute("ROLLBACK")
         except Exception:
             pass
@@ -1401,13 +1341,13 @@ def _render_assets(database_path: Path, plan: _SourcePlan, generation: str) -> t
         render = pdf_parser.render_page(plan.content_path, physical_page)
         asset_path = base_dir / f"page-{physical_page:04d}.{render.ext}"
         asset_path.write_bytes(render.image_bytes)
-        sha256 = hashlib.sha256(asset_path.read_bytes()).hexdigest()
+        sha256 = file_sha256(asset_path)
         _asset_event("asset-hash")
         rendered.append((physical_page, asset_path, render, "page-render", sha256))
         for crop in pdf_parser.render_figure_crops(plan.content_path, physical_page):
             crop_path = base_dir / f"{crop.label}.{crop.ext}"
             crop_path.write_bytes(crop.image_bytes)
-            sha256 = hashlib.sha256(crop_path.read_bytes()).hexdigest()
+            sha256 = file_sha256(crop_path)
             _asset_event("asset-hash")
             rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
     generation_obj = AssetGeneration(
@@ -1425,13 +1365,8 @@ def _persist_assets(conn: sqlite3.Connection, plan: _SourcePlan, rendered_assets
         _insert_asset(conn, plan.source_pk, plan.source_path, physical_page, asset_path, render, asset_type, sha256, database_path)
 
 
-def referenced_asset_generations(conn: sqlite3.Connection, database_path: Path | None = None) -> set[Path]:
+def referenced_asset_generations(conn: sqlite3.Connection, database_path: Path) -> set[Path]:
     rows = conn.execute("SELECT asset_path FROM assets").fetchall()
-    if database_path is None:
-        database_path_row = conn.execute("PRAGMA database_list").fetchone()
-        database_path = Path(database_path_row["file"]) if database_path_row is not None and database_path_row["file"] else None
-    if database_path is None:
-        return {Path(row["asset_path"]).parents[1] for row in rows}
     database_parent = Path(database_path).resolve().parent
     referenced: set[Path] = set()
     for row in rows:
@@ -1500,8 +1435,7 @@ def _insert_asset(conn, source_pk: int, source_path: str, physical_page, asset_p
 
 def integrity_check(conn: sqlite3.Connection) -> list[str]:
     issues: list[str] = []
-    database_path_row = conn.execute("PRAGMA database_list").fetchone()
-    database_path = Path(database_path_row["file"]) if database_path_row is not None and database_path_row["file"] else None
+    database_path = Path(conn.execute("PRAGMA database_list").fetchone()["file"])
 
     fts_count = conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0]
     chunks_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
@@ -1521,15 +1455,13 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
     backend = vector_backend.SqliteVecBackend()
     issues.extend(backend.integrity_check(conn))
 
-    missing_assets = conn.execute("SELECT asset_id, asset_path FROM assets").fetchall()
-    for row in missing_assets:
-        asset_path = schema.resolve_asset_path(database_path, row["asset_path"]) if database_path is not None else Path(row["asset_path"])
+    for row in conn.execute("SELECT asset_id, asset_path, sha256 FROM assets").fetchall():
+        asset_path = schema.resolve_asset_path(database_path, row["asset_path"])
         if not asset_path.is_file():
             issues.append(f"asset {row['asset_id']} references missing file {row['asset_path']}")
             continue
-        expected = conn.execute("SELECT sha256 FROM assets WHERE asset_id = ?", (row["asset_id"],)).fetchone()["sha256"]
-        actual = hashlib.sha256(asset_path.read_bytes()).hexdigest()
-        if actual != expected:
-            issues.append(f"asset {row['asset_id']} hash mismatch: expected {expected}, got {actual}")
+        actual = file_sha256(asset_path)
+        if actual != row["sha256"]:
+            issues.append(f"asset {row['asset_id']} hash mismatch: expected {row['sha256']}, got {actual}")
 
     return issues

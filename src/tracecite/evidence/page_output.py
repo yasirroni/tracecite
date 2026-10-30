@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
 from . import schema
+from .paths import file_sha256
 
 
 class PageOutputError(ValueError):
@@ -15,14 +15,6 @@ class PageAssetMissingError(PageOutputError):
     pass
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def _asset_payload(database_path: Path, asset_row) -> dict:
     try:
         asset_path = schema.resolve_asset_path(database_path, asset_row["asset_path"])
@@ -31,7 +23,7 @@ def _asset_payload(database_path: Path, asset_row) -> dict:
     resolved_path = asset_path.resolve()
     if not asset_path.is_file():
         raise PageAssetMissingError(f"missing asset file: {asset_row['asset_path']}")
-    if _file_sha256(asset_path) != asset_row["sha256"]:
+    if file_sha256(asset_path) != asset_row["sha256"]:
         raise PageAssetMissingError(f"asset hash mismatch: {asset_row['asset_path']}")
     try:
         bbox = json.loads(asset_row["bbox_json"]) if asset_row["bbox_json"] else None
@@ -80,15 +72,3 @@ def page_json_payload(conn, database_path: Path, source_row, page_row) -> dict:
         "page_render": page_render,
         "figure_crops": figure_crops,
     }
-
-
-def enrich_search_result_with_page_assets(conn, database_path: Path, source_row, result: dict) -> dict:
-    physical_page = result.get("physical_page")
-    if source_row is None or physical_page is None:
-        result["page_render"] = None
-        result["figure_crops"] = []
-        return result
-    page_render, figure_crops = page_assets_for(conn, database_path, source_row["source_pk"], physical_page)
-    result["page_render"] = page_render
-    result["figure_crops"] = figure_crops
-    return result

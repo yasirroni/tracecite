@@ -53,11 +53,7 @@ class RenderedAsset:
 
 def _looks_like_heading(text: str) -> bool:
     stripped = text.strip()
-    if not stripped or len(stripped) > HEADING_MAX_CHARS:
-        return False
-    if stripped.endswith((".", ",", ";")):
-        return False
-    return True
+    return bool(stripped) and len(stripped) <= HEADING_MAX_CHARS and not stripped.endswith((".", ",", ";"))
 
 
 def _blocks_for_page(page: pymupdf.Page) -> list[dict]:
@@ -226,53 +222,35 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                     layout={"blocks": blocks},
                 )
             )
-
-            for block_index, block in enumerate(blocks):
-                units.append(
-                    ParsedChunkUnit(
-                        text=block["text"],
-                        logical_key=f"page{physical_page:04d}-block{block_index:03d}",
-                        heading_path=block["heading_path"],
-                        symbol=None,
-                        content_type=block["content_type"],
-                        physical_page=physical_page,
-                        page_start_offset=block["start_offset"],
-                        page_end_offset=block["end_offset"],
-                        page_range_start=physical_page,
-                        page_range_end=physical_page,
-                        locator={"bbox": block["bbox"]},
-                    )
-                )
+            units.extend(_block_units(physical_page, blocks))
 
     return ParseResult(pages=pages, units=units)
 
 
-def units_from_page_layout(source_path: str, physical_page: int, layout_json: str) -> list[ParsedChunkUnit]:
+def _block_units(physical_page: int, blocks: list[dict]) -> list[ParsedChunkUnit]:
+    return [
+        ParsedChunkUnit(
+            text=block["text"],
+            logical_key=f"page{physical_page:04d}-block{block_index:03d}",
+            heading_path=block["heading_path"],
+            symbol=None,
+            content_type=block["content_type"],
+            physical_page=physical_page,
+            page_start_offset=block["start_offset"],
+            page_end_offset=block["end_offset"],
+            locator={"bbox": block["bbox"]},
+        )
+        for block_index, block in enumerate(blocks)
+    ]
+
+
+def units_from_page_layout(physical_page: int, layout_json: str | None) -> list[ParsedChunkUnit]:
     """Rebuild chunk-input units from retained ``pages.layout_json``.
 
     A chunker- or normalisation-only change rechunks from this layout
     without reopening the PDF.
     """
-
-    layout = json.loads(layout_json) if layout_json else {"blocks": []}
-    units: list[ParsedChunkUnit] = []
-    for block_index, block in enumerate(layout.get("blocks", [])):
-        units.append(
-            ParsedChunkUnit(
-                text=block["text"],
-                logical_key=f"page{physical_page:04d}-block{block_index:03d}",
-                heading_path=block["heading_path"],
-                symbol=None,
-                content_type=block["content_type"],
-                physical_page=physical_page,
-                page_start_offset=block["start_offset"],
-                page_end_offset=block["end_offset"],
-                page_range_start=physical_page,
-                page_range_end=physical_page,
-                locator={"bbox": block["bbox"]},
-            )
-        )
-    return units
+    return _block_units(physical_page, json.loads(layout_json)["blocks"] if layout_json else [])
 
 
 def render_page(path: Path, physical_page: int, zoom: float = 2.0) -> RenderedAsset:

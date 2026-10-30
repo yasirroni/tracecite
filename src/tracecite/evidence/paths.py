@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 import posixpath
 
@@ -12,9 +13,15 @@ def _lexical_posix(value: str | Path) -> str:
     return str(value).replace("\\", "/")
 
 
-def normalise_relative_source_declaration(value: str | Path) -> str:
+def file_sha256(path: Path) -> str:
+    with Path(path).open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def normalise_relative_declaration(value: str | Path) -> str:
+    """Normalise a manifest path or glob to a root-relative POSIX form."""
     text = _lexical_posix(value)
-    if text.startswith("/") or text.startswith("//") or (len(text) >= 3 and text[1:3] == ":/"):
+    if text.startswith("/") or (len(text) >= 3 and text[1:3] == ":/"):
         raise PathAuthorityError(f"absolute source path is not allowed: {value}")
     parts: list[str] = []
     for part in text.split("/"):
@@ -25,22 +32,6 @@ def normalise_relative_source_declaration(value: str | Path) -> str:
         parts.append(part)
     if not parts:
         raise PathAuthorityError("source path is empty")
-    return "/".join(parts)
-
-
-def normalise_relative_glob_declaration(value: str | Path) -> str:
-    text = _lexical_posix(value)
-    if text.startswith("/") or text.startswith("//") or (len(text) >= 3 and text[1:3] == ":/"):
-        raise PathAuthorityError(f"absolute source path is not allowed: {value}")
-    parts: list[str] = []
-    for part in text.split("/"):
-        if part in ("", "."):
-            continue
-        if part == "..":
-            raise PathAuthorityError(f"source path may not escape root: {value}")
-        parts.append(part)
-    if not parts:
-        raise PathAuthorityError("source glob is empty")
     return "/".join(parts)
 
 

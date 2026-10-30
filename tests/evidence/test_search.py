@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from tracecite.evidence import schema, sync as sync_module
-from tracecite.evidence.commands import _fts_rows, _search
+from tracecite.evidence.commands import _fts_rows, active_embedding_model, hybrid_search
 
 from conftest import build_markdown, build_pdf, write_manifest
 
@@ -41,20 +41,14 @@ def test_search_source_type_filter_restricts_lexical_and_vector_results(
     _sync_mixed_type_corpus(corpus_dir, manifest_path, database_path, make_embedder())
     conn = schema.connect(database_path)
     try:
-        unfiltered = _search(conn, corpus_dir, "coal plant retirement", 5, 50, 50, make_embedder(), database_path)
+        unfiltered = hybrid_search(conn, "coal plant retirement", 5, 50, 50, make_embedder())
         assert {result["source_type"] for result in unfiltered} == {"pdf", "markdown"}
 
-        pdf_only = _search(
-            conn, corpus_dir, "coal plant retirement", 5, 50, 50, make_embedder(), database_path,
-            source_types=["pdf"],
-        )
+        pdf_only = hybrid_search(conn, "coal plant retirement", 5, 50, 50, make_embedder(), source_types=["pdf"])
         assert pdf_only
         assert {result["source_type"] for result in pdf_only} == {"pdf"}
 
-        markdown_only = _search(
-            conn, corpus_dir, "coal plant retirement", 5, 50, 50, make_embedder(), database_path,
-            source_types=["markdown"],
-        )
+        markdown_only = hybrid_search(conn, "coal plant retirement", 5, 50, 50, make_embedder(), source_types=["markdown"])
         assert markdown_only
         assert {result["source_type"] for result in markdown_only} == {"markdown"}
     finally:
@@ -95,8 +89,8 @@ def test_search_preserves_raw_fts_phrase_and_prefix_expressions(
     _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
     conn = schema.connect(database_path)
     try:
-        phrase_results = _search(conn, corpus_dir, '"coal plant"', 5, 50, 50, make_embedder(), database_path)
-        prefix_results = _search(conn, corpus_dir, "retire*", 5, 50, 50, make_embedder(), database_path)
+        phrase_results = hybrid_search(conn, '"coal plant"', 5, 50, 50, make_embedder())
+        prefix_results = hybrid_search(conn, "retire*", 5, 50, 50, make_embedder())
         assert any("Retirement" in result["heading_path"] for result in phrase_results)
         assert any("Retirement" in result["heading_path"] for result in prefix_results)
     finally:
@@ -111,7 +105,7 @@ def test_search_percentage_text_falls_back_without_changing_vector_query(
     query = "10%, 50%, and 90%"
     conn = schema.connect(database_path)
     try:
-        results = _search(conn, corpus_dir, query, 5, 50, 50, embedder, database_path)
+        results = hybrid_search(conn, query, 5, 50, 50, embedder)
     finally:
         conn.close()
     assert results
@@ -136,9 +130,7 @@ def test_semantic_search_finds_paraphrase(corpus_dir, manifest_path, database_pa
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
     conn = schema.connect(database_path)
     try:
-        results = _search(
-            conn, corpus_dir, "when will coal power stations shut down", 5, 50, 50, embedder, database_path
-        )
+        results = hybrid_search(conn, "when will coal power stations shut down", 5, 50, 50, embedder)
         assert results
         assert any("Retirement" in r["heading_path"] for r in results)
     finally:
@@ -152,9 +144,7 @@ def test_hybrid_rank_fusion_combines_lexical_and_vector_provenance(
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
     conn = schema.connect(database_path)
     try:
-        results = _search(
-            conn, corpus_dir, "coal plant retirement dates", 5, 50, 50, embedder, database_path
-        )
+        results = hybrid_search(conn, "coal plant retirement dates", 5, 50, 50, embedder)
         assert results
         top = results[0]
         assert "lexical" in top["provenance"] or "vector" in top["provenance"]
@@ -168,7 +158,7 @@ def test_search_respects_configurable_limits(corpus_dir, manifest_path, database
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
     conn = schema.connect(database_path)
     try:
-        results = _search(conn, corpus_dir, "report", 1, 50, 50, embedder, database_path)
+        results = hybrid_search(conn, "report", 1, 50, 50, embedder)
         assert len(results) <= 1
     finally:
         conn.close()
@@ -181,7 +171,7 @@ def test_search_contract_for_pdf_result_omits_internal_keys_and_exposes_page_ran
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
     conn = schema.connect(database_path)
     try:
-        results = _search(conn, corpus_dir, "retirement dates", 1, 50, 50, embedder, database_path)
+        results = hybrid_search(conn, "retirement dates", 1, 50, 50, embedder)
         assert results
         result = results[0]
         assert "chunk_id" not in result
@@ -207,7 +197,7 @@ def test_search_contract_for_markdown_result_exposes_line_locator(
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
     conn = schema.connect(database_path)
     try:
-        results = _search(conn, corpus_dir, "hydrogen storage", 1, 50, 50, embedder, database_path)
+        results = hybrid_search(conn, "hydrogen storage", 1, 50, 50, embedder)
         assert results
         result = results[0]
         assert "chunk_id" not in result
@@ -246,7 +236,7 @@ def test_search_uses_atomically_activated_embedding_model_ids(corpus_dir, manife
                 return []
 
         monkeypatch.setattr(sync_module.vector_backend, "SqliteVecBackend", CapturingBackend)
-        _search(conn, corpus_dir, "retirement dates", 1, 50, 50, embedder, database_path)
+        hybrid_search(conn, "retirement dates", 1, 50, 50, embedder)
         assert captured["allowed"] == new_ids
     finally:
         conn.close()
@@ -273,7 +263,7 @@ def test_search_constructs_active_model_and_returns_results_after_cached_reactiv
     monkeypatch.setattr(sync_module, "EmbeddingModel", FakeEmbeddingModel)
     conn = schema.connect(database_path)
     try:
-        results = _search(conn, corpus_dir, "coal plant retirement dates", 3, 50, 50, tmp_path / "cache", database_path)
+        results = hybrid_search(conn, "coal plant retirement dates", 3, 50, 50, active_embedding_model(conn, tmp_path / "cache"))
         assert results
         assert any("Retirement" in result["heading_path"] for result in results)
         assert constructed == [(schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION, tmp_path / "cache")]

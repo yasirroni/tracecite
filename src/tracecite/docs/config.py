@@ -19,30 +19,22 @@ _FIELDS = {
 }
 
 
-def _inside(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-        return True
-    except ValueError:
-        return False
-
-
-def _path(value: object, *, name: str, repo_root: Path, require_relative: bool = True) -> Path:
+def _path(value: object, *, name: str, repo_root: Path) -> Path:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{name} must be a non-empty repository-relative path")
     raw = Path(value)
-    if require_relative and raw.is_absolute():
+    if raw.is_absolute():
         raise ValueError(f"{name} must be repository-relative")
-    if require_relative and ".." in raw.parts:
+    if ".." in raw.parts:
         raise ValueError(f"{name} must not escape the repository")
     resolved = (repo_root / raw).resolve(strict=False)
-    if not _inside(resolved, repo_root):
+    if not resolved.is_relative_to(repo_root):
         raise ValueError(f"{name} resolves outside the repository")
     return resolved
 
 
 def _overlap(left: Path, right: Path) -> bool:
-    return _inside(left, right) or _inside(right, left)
+    return left.is_relative_to(right) or right.is_relative_to(left)
 
 
 def load_docs_contract(path: str | Path, *, repo_root: str | Path) -> DocsEvidenceContract:

@@ -10,9 +10,10 @@ import shutil
 import tempfile
 from typing import TYPE_CHECKING
 
+from ..evidence.paths import file_sha256
 from ..tables import augment_document_with_embedding_text
 from .contract import DocsEvidenceContract
-from .stage import validate_retained_source_links
+from .stage import is_publication_excluded, validate_retained_source_links
 
 if TYPE_CHECKING:
     from ..evidence.sync import SyncOptions, SyncReport
@@ -68,38 +69,20 @@ def resolve_docs_index_profile(contract: DocsEvidenceContract) -> DocsIndexProfi
 
 
 def _inside(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _is_publication_excluded(path: Path, contract: DocsEvidenceContract) -> bool:
-    resolved = path.resolve()
-    for exclude in contract.publication_exclude:
-        target = exclude.resolve()
-        if resolved == target:
-            return True
-        if target.is_dir() and _inside(resolved, target):
-            return True
-    return False
+    return path.resolve().is_relative_to(root.resolve())
 
 
 def _should_skip_retained_path(path: Path, retained_root: Path) -> bool:
-    if not path.is_file():
-        return True
     relative = path.relative_to(retained_root)
-    if any(part in _EXCLUDED_DIR_NAMES or part.startswith(".tracecite") for part in relative.parts):
-        return True
-    if path.suffix.lower() in _EXCLUDED_SUFFIXES:
-        return True
-    if path.name.endswith("_files"):
-        return True
-    return False
+    return (
+        not path.is_file()
+        or any(part in _EXCLUDED_DIR_NAMES or part.startswith(".tracecite") for part in relative.parts)
+        or path.suffix.lower() in _EXCLUDED_SUFFIXES
+        or path.name.endswith("_files")
+    )
 
 
-def _mirror_exclude_globs(contract: DocsEvidenceContract, repo_root: Path) -> tuple[str, ...]:
+def _mirror_exclude_globs(contract: DocsEvidenceContract) -> tuple[str, ...]:
     retained = contract.retained_root.resolve()
     globs: set[str] = set()
     for exclude in contract.publication_exclude:
@@ -122,12 +105,11 @@ def _mirror_exclude_globs(contract: DocsEvidenceContract, repo_root: Path) -> tu
 
 def _retained_markdown_paths(contract: DocsEvidenceContract) -> list[Path]:
     retained = contract.retained_root.resolve()
-    paths = [
+    return [
         path
         for path in sorted(retained.rglob("*.md"))
-        if not _should_skip_retained_path(path, retained) and not _is_publication_excluded(path, contract)
+        if not _should_skip_retained_path(path, retained) and not is_publication_excluded(path, contract)
     ]
-    return paths
 
 
 def _local_resource_destinations(markdown: str) -> set[str]:
@@ -223,25 +205,8 @@ def prepare_docs_index_input(
     strict_tables: bool = False,
     pandoc: str | Path | None = None,
     allow_pipe_fallback: bool = False,
-) -> DocsIndexProfile:
-    profile, _tables = _prepare_docs_index_input(
-        contract,
-        repo_root=repo_root,
-        strict_tables=strict_tables,
-        pandoc=pandoc,
-        allow_pipe_fallback=allow_pipe_fallback,
-    )
-    return profile
-
-
-def _prepare_docs_index_input(
-    contract: DocsEvidenceContract,
-    *,
-    repo_root: str | Path,
-    strict_tables: bool = False,
-    pandoc: str | Path | None = None,
-    allow_pipe_fallback: bool = False,
 ) -> tuple[DocsIndexProfile, int]:
+    """Write the index-input mirror and manifest; return the profile and the number of normalised tables."""
     root = Path(repo_root).resolve()
     profile = resolve_docs_index_profile(contract)
     retained = contract.retained_root.resolve()
@@ -251,8 +216,7 @@ def _prepare_docs_index_input(
     if link_issues:
         raise ValueError("; ".join(link_issues))
 
-    exclude_globs = _mirror_exclude_globs(contract, root)
-    manifest_text = _render_manifest(exclude_globs)
+    manifest_text = _render_manifest(_mirror_exclude_globs(contract))
     markdown_paths = _retained_markdown_paths(contract)
 
     contract.staged_root.parent.mkdir(parents=True, exist_ok=True)
@@ -311,7 +275,7 @@ def sync_docs_index(
     pandoc: str | Path | None = None,
     allow_pipe_fallback: bool = False,
 ) -> DocsIndexResult:
-    profile, tables_normalized = _prepare_docs_index_input(
+    profile, tables_normalized = prepare_docs_index_input(
         contract,
         repo_root=repo_root,
         strict_tables=strict_tables,
@@ -335,15 +299,13 @@ def search_docs_index(
     contract: DocsEvidenceContract,
     query: str,
     *,
-    repo_root: str | Path,
     limit: int = 10,
     fts_limit: int = 50,
     vector_limit: int = 50,
     embedder=None,
 ) -> list[dict]:
-    del repo_root
     from ..evidence import schema
-    from ..evidence.commands import hybrid_search
+    from ..evidence.commands import active_embedding_model, hybrid_search
 
     profile = resolve_docs_index_profile(contract)
     if not profile.database_path.is_file():
@@ -351,17 +313,8 @@ def search_docs_index(
     conn = schema.connect_existing(profile.database_path, read_only=True)
     try:
         schema.ensure_schema(conn)
-        return hybrid_search(
-            conn,
-            profile.input_root,
-            query,
-            limit,
-            fts_limit,
-            vector_limit,
-            embedder if embedder is not None else profile.model_cache_dir,
-            profile.database_path,
-            embedder=embedder,
-        )
+        embedder = embedder or active_embedding_model(conn, profile.model_cache_dir)
+        return hybrid_search(conn, query, limit, fts_limit, vector_limit, embedder)
     finally:
         conn.close()
 
@@ -406,12 +359,10 @@ def _index_input_freshness(contract: DocsEvidenceContract, profile: DocsIndexPro
     return tuple(diagnostics)
 
 
-def _manifest_freshness(
-    contract: DocsEvidenceContract, profile: DocsIndexProfile, repo_root: Path,
-) -> tuple[str, ...]:
+def _manifest_freshness(contract: DocsEvidenceContract, profile: DocsIndexProfile) -> tuple[str, ...]:
     if not profile.manifest_path.is_file():
         return ()
-    expected = _render_manifest(_mirror_exclude_globs(contract, repo_root))
+    expected = _render_manifest(_mirror_exclude_globs(contract))
     try:
         actual = profile.manifest_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -424,15 +375,15 @@ def _manifest_freshness(
 def _database_freshness(profile: DocsIndexProfile) -> tuple[str, ...]:
     if not profile.manifest_path.is_file():
         return ()
-    from ..evidence import schema, sync as sync_module
+    from ..evidence import manifest, schema
 
     try:
-        rules = sync_module.load_manifest_rules(profile.manifest_path)
+        rules = manifest.load_manifest(profile.manifest_path)
     except Exception:
         # An unparsable manifest is already reported by _manifest_freshness;
         # there is no usable source selection to compare the database against.
         return ()
-    discovered = sync_module.discover_source_files(profile.input_root, rules)
+    discovered = manifest.resolve_sources(profile.input_root, rules).selected
     conn = schema.connect_existing(profile.database_path, read_only=True)
     try:
         schema.ensure_schema(conn)
@@ -445,20 +396,15 @@ def _database_freshness(profile: DocsIndexProfile) -> tuple[str, ...]:
     for path in sorted(set(rows) - set(discovered)):
         diagnostics.append(f"documentation index database has stale source: {path}")
     for path in sorted(set(discovered) & set(rows)):
-        if sync_module.hash_file(discovered[path]) != rows[path]:
+        if file_sha256(discovered[path]) != rows[path]:
             diagnostics.append(f"documentation index database is stale relative to mirror: {path}")
     return tuple(diagnostics)
 
 
-def docs_index_freshness_diagnostics(
-    contract: DocsEvidenceContract,
-    *,
-    repo_root: str | Path,
-) -> tuple[str, ...]:
-    root = Path(repo_root).resolve()
+def docs_index_freshness_diagnostics(contract: DocsEvidenceContract) -> tuple[str, ...]:
     profile = resolve_docs_index_profile(contract)
     diagnostics = list(_index_input_freshness(contract, profile))
-    diagnostics.extend(_manifest_freshness(contract, profile, root))
+    diagnostics.extend(_manifest_freshness(contract, profile))
     if not profile.database_path.is_file():
         diagnostics.append("documentation index database is missing")
     else:
@@ -466,9 +412,9 @@ def docs_index_freshness_diagnostics(
     return tuple(diagnostics)
 
 
-def doctor_docs_index(contract: DocsEvidenceContract, *, repo_root: str | Path) -> tuple[str, ...]:
+def doctor_docs_index(contract: DocsEvidenceContract) -> tuple[str, ...]:
     profile = resolve_docs_index_profile(contract)
-    issues = list(docs_index_freshness_diagnostics(contract, repo_root=repo_root))
+    issues = list(docs_index_freshness_diagnostics(contract))
     if not profile.database_path.is_file():
         return tuple(issues)
     from ..evidence import schema, sync as sync_module

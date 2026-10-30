@@ -7,6 +7,7 @@ from pathlib import Path
 
 from tracecite.evidence.parsers import markdown as markdown_parser
 from tracecite.evidence.parsers import pdf as pdf_parser
+from tracecite.evidence.parsers.base import units_from_layout
 
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -26,7 +27,7 @@ def test_markdown_units_from_layout_reconstruction_matches_fresh_parse():
     import json
 
     layout_json = json.dumps(result.pages[0].layout)
-    rebuilt = markdown_parser.units_from_page_layout(layout_json)
+    rebuilt = units_from_layout(layout_json)
     assert [u.text for u in rebuilt] == [u.text for u in result.units]
     assert [u.logical_key for u in rebuilt] == [u.logical_key for u in result.units]
 

@@ -375,7 +375,6 @@ def _docs_search(args: argparse.Namespace) -> int:
     results = search_docs_index(
         contract,
         args.query,
-        repo_root=args.repo_root,
         limit=args.limit,
         fts_limit=args.fts_limit,
         vector_limit=args.vector_limit,
@@ -386,7 +385,7 @@ def _docs_search(args: argparse.Namespace) -> int:
 
 def _docs_doctor(args: argparse.Namespace) -> int:
     contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
-    issues = doctor_docs_index(contract, repo_root=args.repo_root)
+    issues = doctor_docs_index(contract)
     for issue in issues:
         print(f"ISSUE: {issue}")
     if not issues:

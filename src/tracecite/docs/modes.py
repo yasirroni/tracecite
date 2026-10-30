@@ -145,9 +145,7 @@ def check_docs(contract: DocsEvidenceContract, *, config_path: str | Path, repo_
         recorded_public = manifest.get("public", {})
         if recorded_public != expected_public:
             diagnostics.append("public staged manifest is stale")
-        diagnostics.extend(
-            docs_index_freshness_diagnostics(contract, repo_root=root)
-        )
+        diagnostics.extend(docs_index_freshness_diagnostics(contract))
     except Exception as exc:
         diagnostics.append(f"staging expectation failed: {exc}")
     finally:

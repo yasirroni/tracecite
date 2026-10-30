@@ -318,20 +318,3 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
             )
     return ParseResult(pages=pages, units=units)
 
-
-def units_from_page_layout(layout_json: str) -> list[ParsedChunkUnit]:
-    layout = json.loads(layout_json) if layout_json else {"units": []}
-    units: list[ParsedChunkUnit] = []
-    for entry in layout.get("units", []):
-        units.append(
-            ParsedChunkUnit(
-                text=entry["text"],
-                logical_key=entry["logical_key"],
-                heading_path=entry["heading_path"],
-                symbol=None,
-                content_type=entry["content_type"],
-                physical_page=None,
-                locator=entry.get("locator", {}),
-            )
-        )
-    return units

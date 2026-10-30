@@ -78,61 +78,49 @@ class DocsStageResult:
     changed_files: tuple[Path, ...]
 
 
-def _entry_for(destination: str, markdown_path: Path, repo_root: Path,
-               registry: dict[Path, list[SourceLinkEntry]]) -> tuple[SourceLinkEntry, str, int] | None:
-    parsed = parse_staged_source_destination(destination)
-    if parsed is None:
-        return None
-    relative, page = parsed
-    resolved = (markdown_path.parent / relative).resolve()
-    entries = registry.get(resolved, [])
-    if len(entries) != 1:
-        raise ValueError(f"source-link destination has {len(entries)} registry entries: {relative}")
-    return entries[0], relative, page
+def _registry_entries(relative: str, markdown_path: Path,
+                      registry: dict[Path, list[SourceLinkEntry]]) -> list[SourceLinkEntry]:
+    return registry.get((markdown_path.parent / relative).resolve(), [])
 
 
-def _render_destination(entry: SourceLinkEntry, relative: str, page: int,
-                        markdown_path: Path, repo_root: Path, target: StageTarget) -> str:
-    if target == "public":
-        return f"{entry.public_url}#page={page}"
-    source = (repo_root / entry.local_path).resolve()
-    return f"{Path(os.path.relpath(source, markdown_path.parent)).as_posix()}#page={page}"
+def _routed_destination(destination: str, markdown_path: Path, output_markdown_path: Path, repo_root: Path,
+                        registry: dict[Path, list[SourceLinkEntry]], target: StageTarget) -> str | None:
+    """Return the staged form of a source-link destination, or ``None`` to leave it unchanged.
 
-
-def _markdown_entry_for(destination: str, markdown_path: Path, repo_root: Path,
-                        registry: dict[Path, list[SourceLinkEntry]]) -> tuple[SourceLinkEntry, str, str] | None:
-    """Resolve a narrow local `.md`/`.md#anchor` destination against the registry.
-
-    Unlike ``_entry_for`` (PDF), an unmapped or malformed candidate returns
-    ``None`` rather than raising: most Markdown links are ordinary
-    documentation navigation, not source citations, so only a destination
-    that both parses cleanly and resolves to exactly one registered entry is
-    treated as a routing candidate.
+    A PDF ``#page=N`` destination must resolve to exactly one registry entry.
+    A local Markdown destination is routed only when it resolves to exactly
+    one entry; any other Markdown link is ordinary navigation.
     """
-    parsed = parse_staged_markdown_destination(destination)
-    if parsed is None:
+    if "://" in destination or "?" in destination:
         return None
-    relative, anchor = parsed
-    resolved = (markdown_path.parent / relative).resolve()
-    entries = registry.get(resolved, [])
-    if len(entries) != 1:
+    if ".pdf" in destination.lower() or "#page=" in destination:
+        parsed = parse_staged_source_destination(destination)
+        if parsed is None:
+            raise ValueError(f"malformed source-PDF destination: {destination}")
+        relative, page = parsed
+        entries = _registry_entries(relative, markdown_path, registry)
+        if len(entries) != 1:
+            raise ValueError(f"source-link destination has {len(entries)} registry entries: {relative}")
+        fragment = f"#page={page}"
+    elif ".md" in destination.lower():
+        parsed = parse_staged_markdown_destination(destination)
+        if parsed is None:
+            return None
+        relative, anchor = parsed
+        entries = _registry_entries(relative, markdown_path, registry)
+        if len(entries) != 1:
+            return None
+        fragment = f"#{anchor}" if anchor else ""
+    else:
         return None
-    return entries[0], relative, anchor
-
-
-def _render_markdown_destination(entry: SourceLinkEntry, relative: str, anchor: str,
-                                 markdown_path: Path, repo_root: Path, target: StageTarget) -> str:
-    fragment = f"#{anchor}" if anchor else ""
     if target == "public":
-        return f"{entry.public_url}{fragment}"
-    source = (repo_root / entry.local_path).resolve()
-    return f"{Path(os.path.relpath(source, markdown_path.parent)).as_posix()}{fragment}"
+        return f"{entries[0].public_url}{fragment}"
+    source = (repo_root / entries[0].local_path).resolve()
+    return f"{Path(os.path.relpath(source, output_markdown_path.parent)).as_posix()}{fragment}"
 
 
-def _rewrite_markdown(text: str, markdown_path: Path, repo_root: Path,
-                      registry: dict[Path, list[SourceLinkEntry]], target: StageTarget,
-                      output_markdown_path: Path | None = None) -> str:
-    output_markdown_path = output_markdown_path or markdown_path
+def _rewrite_markdown(text: str, markdown_path: Path, output_markdown_path: Path, repo_root: Path,
+                      registry: dict[Path, list[SourceLinkEntry]], target: StageTarget) -> str:
     output: list[str] = []
     fenced = False
     marker = ""
@@ -201,30 +189,11 @@ def _rewrite_markdown(text: str, markdown_path: Path, repo_root: Path,
                 break
         definition = _DEFINITION.match(bare)
         if definition and not any(start < definition.end() and definition.start() < end for start, end in protected):
-            destination = definition.group("destination")
-            if (
-                (".pdf" in destination.lower() or "#page=" in destination)
-                and "://" not in destination
-                and "?" not in destination
-            ):
-                parsed = _entry_for(destination, markdown_path, repo_root, registry)
-                if parsed is None:
-                    raise ValueError(f"malformed source-PDF destination: {destination}")
-                entry, relative, page = parsed
-                replacement = _render_destination(entry, relative, page, output_markdown_path, repo_root, target)
+            replacement = _routed_destination(
+                definition.group("destination"), markdown_path, output_markdown_path, repo_root, registry, target
+            )
+            if replacement is not None:
                 line = f"{definition.group('prefix')}{replacement}{definition.group('suffix')}" + line[len(bare):]
-            elif (
-                ".md" in destination.lower()
-                and "://" not in destination
-                and "?" not in destination
-            ):
-                markdown_parsed = _markdown_entry_for(destination, markdown_path, repo_root, registry)
-                if markdown_parsed is not None:
-                    entry, relative, anchor = markdown_parsed
-                    replacement = _render_markdown_destination(
-                        entry, relative, anchor, output_markdown_path, repo_root, target
-                    )
-                    line = f"{definition.group('prefix')}{replacement}{definition.group('suffix')}" + line[len(bare):]
             output.append(line)
             continue
         cursor = 0
@@ -237,35 +206,12 @@ def _rewrite_markdown(text: str, markdown_path: Path, repo_root: Path,
             if match.start() > 0 and bare[match.start() - 1] == "!":
                 continue
             destination = match.group("destination")
-            if (
-                (".pdf" in destination.lower() or "#page=" in destination)
-                and "://" not in destination
-                and "?" not in destination
-                and not destination.startswith("<")
-            ):
-                parsed = _entry_for(destination, markdown_path, repo_root, registry)
-                if parsed is None:
-                    raise ValueError(f"malformed source-PDF destination: {destination}")
-                entry, relative, page = parsed
-                pieces.extend((bare[cursor:match.start()], match.group("prefix")))
-                pieces.append(_render_destination(entry, relative, page, output_markdown_path, repo_root, target))
-                pieces.append(match.group("suffix"))
-                cursor = match.end()
+            if destination.startswith("<"):
                 continue
-            if (
-                ".md" in destination.lower()
-                and "://" not in destination
-                and "?" not in destination
-            ):
-                markdown_parsed = _markdown_entry_for(destination, markdown_path, repo_root, registry)
-                if markdown_parsed is not None:
-                    entry, relative, anchor = markdown_parsed
-                    pieces.extend((bare[cursor:match.start()], match.group("prefix")))
-                    pieces.append(
-                        _render_markdown_destination(entry, relative, anchor, output_markdown_path, repo_root, target)
-                    )
-                    pieces.append(match.group("suffix"))
-                    cursor = match.end()
+            replacement = _routed_destination(destination, markdown_path, output_markdown_path, repo_root, registry, target)
+            if replacement is not None:
+                pieces.extend((bare[cursor:match.start()], match.group("prefix"), replacement, match.group("suffix")))
+                cursor = match.end()
         if pieces:
             pieces.append(bare[cursor:])
             line = "".join(pieces) + line[len(bare):]
@@ -310,10 +256,7 @@ def stage_docs(
             original = path.read_text(encoding="utf-8")
             relative = path.relative_to(temporary)
             link_path = link_root / relative
-            transformed = _rewrite_markdown(
-                original, link_path, root, registry, target,
-                output_markdown_path=target_path / relative,
-            )
+            transformed = _rewrite_markdown(original, link_path, target_path / relative, root, registry, target)
             if transformed != original:
                 path.write_text(transformed, encoding="utf-8")
                 changed.append(path.relative_to(temporary))
@@ -333,19 +276,12 @@ def stage_docs(
     return DocsStageResult(target, target_path, tuple(changed))
 
 
-def _is_publication_excluded_markdown(path: Path, contract: DocsEvidenceContract) -> bool:
+def is_publication_excluded(path: Path, contract: DocsEvidenceContract) -> bool:
     resolved = path.resolve()
-    for exclude in contract.publication_exclude:
-        target = exclude.resolve()
-        if resolved == target:
-            return True
-        if target.is_dir():
-            try:
-                resolved.relative_to(target)
-                return True
-            except ValueError:
-                continue
-    return False
+    return any(
+        resolved == target or (target.is_dir() and resolved.is_relative_to(target))
+        for target in (exclude.resolve() for exclude in contract.publication_exclude)
+    )
 
 
 def validate_retained_source_links(
@@ -360,18 +296,11 @@ def validate_retained_source_links(
         return tuple(f"source-links registry: {issue}" for issue in issues)
     diagnostics: list[str] = []
     for path in sorted(contract.retained_root.rglob("*.md")):
-        if _is_publication_excluded_markdown(path, contract):
+        if is_publication_excluded(path, contract):
             continue
         relative = path.relative_to(contract.retained_root).as_posix()
         try:
-            _rewrite_markdown(
-                path.read_text(encoding="utf-8"),
-                path,
-                root,
-                registry,
-                "local",
-                output_markdown_path=path,
-            )
+            _rewrite_markdown(path.read_text(encoding="utf-8"), path, path, root, registry, "local")
         except ValueError as exc:
             diagnostics.append(f"{relative}: {exc}")
     return tuple(diagnostics)

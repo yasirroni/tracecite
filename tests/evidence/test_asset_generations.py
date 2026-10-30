@@ -306,7 +306,7 @@ def test_sync_can_defer_generation_cleanup_until_explicit_validation_step(corpus
 
     conn = schema.connect(database_path)
     try:
-        referenced = sync_module.referenced_asset_generations(conn)
+        referenced = sync_module.referenced_asset_generations(conn, database_path)
         assert first_generation not in referenced
         warnings = sync_module.cleanup_asset_generations(conn, database_path)
         assert warnings == []

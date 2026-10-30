@@ -443,7 +443,7 @@ def test_quote_rejects_unrelated_earlier_citation_scope(corpus_dir, manifest_pat
         conn.close()
     assert len(result.quote_results) == 1
     assert result.quote_results[0].status == "exact"
-    assert result.quote_results[0].matched_key == "B"
+    assert result.quote_results[0].citation_key == "B"
 
 
 def test_wrapped_citation_paragraph_binds_contiguous_multiline_quote(
@@ -468,7 +468,7 @@ def test_wrapped_citation_paragraph_binds_contiguous_multiline_quote(
     assert len(result.quote_results) == 1
     quote = result.quote_results[0]
     assert quote.status == "normalised"
-    assert quote.matched_key == "A"
+    assert quote.citation_key == "A"
     assert quote.source_path == "AEMO_2026_ISP.pdf"
     assert quote.physical_page == 65
 

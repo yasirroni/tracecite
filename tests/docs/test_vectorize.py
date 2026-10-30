@@ -129,7 +129,7 @@ def test_mirror_preserves_relative_paths_and_augments_tables(tmp_path: Path) -> 
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     before = _snapshot(contract.retained_root)
-    profile = prepare_docs_index_input(contract, repo_root=root)
+    profile, _ = prepare_docs_index_input(contract, repo_root=root)
     assert before == _snapshot(contract.retained_root)
     mirror = profile.input_root / "index.md"
     assert mirror.is_file()
@@ -142,7 +142,7 @@ def test_mirror_preserves_relative_paths_and_augments_tables(tmp_path: Path) -> 
 def test_prepare_atomically_replaces_index_input_and_preserves_siblings(tmp_path: Path) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
-    profile = prepare_docs_index_input(contract, repo_root=root)
+    profile, _ = prepare_docs_index_input(contract, repo_root=root)
     sentinel = contract.staged_root / "local"
     sentinel.mkdir(parents=True)
     (sentinel / "keep.md").write_text("keep", encoding="utf-8")
@@ -198,11 +198,11 @@ def test_doctor_reports_stale_manifest_content(tmp_path: Path, make_embedder) ->
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     sync_docs_index(contract, repo_root=root, embedder=make_embedder())
-    assert doctor_docs_index(contract, repo_root=root) == ()
+    assert doctor_docs_index(contract) == ()
     (contract.staged_root / "index-input.manifest.toml").write_text(
         "this does not match the current docs contract\n", encoding="utf-8"
     )
-    issues = doctor_docs_index(contract, repo_root=root)
+    issues = doctor_docs_index(contract)
     assert any("manifest" in issue and "stale" in issue for issue in issues)
 
 
@@ -212,14 +212,14 @@ def test_doctor_reports_database_stale_relative_to_rebuilt_mirror(
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
     sync_docs_index(contract, repo_root=root, embedder=make_embedder())
-    assert doctor_docs_index(contract, repo_root=root) == ()
+    assert doctor_docs_index(contract) == ()
     (contract.retained_root / "index.md").write_text(
         "# Topic\n\nUpdated fixture query text about coal plant retirement planning.\n\n"
         "See [report](../../sources/report.pdf#page=1).\n",
         encoding="utf-8",
     )
     prepare_docs_index_input(contract, repo_root=root)
-    issues = doctor_docs_index(contract, repo_root=root)
+    issues = doctor_docs_index(contract)
     assert any("stale relative to mirror" in issue for issue in issues)
 
 
@@ -236,7 +236,7 @@ def test_publication_exclude_is_translated_into_manifest(tmp_path: Path) -> None
         encoding="utf-8",
     )
     contract = load_docs_contract(config, repo_root=root)
-    profile = prepare_docs_index_input(contract, repo_root=root)
+    profile, _ = prepare_docs_index_input(contract, repo_root=root)
     manifest = profile.manifest_path.read_text(encoding="utf-8")
     assert 'glob = "private/**"' in manifest
     assert not (profile.input_root / "private/secret.md").exists()
@@ -338,7 +338,6 @@ def test_two_fresh_indexes_are_deterministic_for_paths_keys_hashes_and_search(
         results = search_docs_index(
             fresh_contract,
             "fixture query coal plant retirement",
-            repo_root=fresh_root,
             embedder=make_embedder(),
         )
         return _index_snapshot(fresh_contract.index_output), results
@@ -355,14 +354,14 @@ def test_index_input_freshness_reports_leaked_artifacts(tmp_path: Path) -> None:
     prepare_docs_index_input(contract, repo_root=root)
     leaked = contract.staged_root / "index-input/leaked.html"
     leaked.write_text("<html></html>", encoding="utf-8")
-    diagnostics = docs_index_freshness_diagnostics(contract, repo_root=root)
+    diagnostics = docs_index_freshness_diagnostics(contract)
     assert any("index-input leaked artifact: leaked.html" in issue for issue in diagnostics)
 
 
 def test_docs_index_freshness_reports_missing_index_when_never_indexed(tmp_path: Path) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
-    diagnostics = docs_index_freshness_diagnostics(contract, repo_root=root)
+    diagnostics = docs_index_freshness_diagnostics(contract)
     assert any("index-input mirror is missing" in issue for issue in diagnostics)
     assert any("documentation index database is missing" in issue for issue in diagnostics)
 
@@ -370,14 +369,14 @@ def test_docs_index_freshness_reports_missing_index_when_never_indexed(tmp_path:
 def test_search_and_doctor_report_missing_or_stale_index_input(tmp_path: Path, make_embedder) -> None:
     config, root = _fixture(tmp_path)
     contract = load_docs_contract(config, repo_root=root)
-    issues = doctor_docs_index(contract, repo_root=root)
+    issues = doctor_docs_index(contract)
     assert any("missing" in issue for issue in issues)
     sync_docs_index(contract, repo_root=root, embedder=make_embedder())
-    assert doctor_docs_index(contract, repo_root=root) == ()
-    results = search_docs_index(contract, "fixture query", repo_root=root, embedder=make_embedder())
+    assert doctor_docs_index(contract) == ()
+    results = search_docs_index(contract, "fixture query", embedder=make_embedder())
     assert results
     assert "chunk_id" not in results[0]
-    empty = search_docs_index(contract, "", repo_root=root, embedder=make_embedder())
+    empty = search_docs_index(contract, "", embedder=make_embedder())
     assert empty == [] or isinstance(empty, list)
 
 
@@ -429,7 +428,7 @@ def test_docs_index_cli_help_and_fixture_commands(tmp_path: Path, make_embedder)
             cli,
             "search_docs_index",
             lambda *_args, **_kwargs: search_docs_index(
-                contract, "fixture query", repo_root=fixture_root, embedder=embedder
+                contract, "fixture query", embedder=embedder
             ),
         )
         assert cli._docs_search(search_args) == 0

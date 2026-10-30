@@ -9,7 +9,6 @@ without re-reading the file (mirroring the PDF parser's retained-page reuse).
 
 from __future__ import annotations
 
-import json
 import re
 
 from .base import ParsedChunkUnit, ParsedPage, ParseResult
@@ -142,22 +141,3 @@ def parse(path, config: dict | None = None) -> ParseResult:
     )
     return ParseResult(pages=[page], units=units)
 
-
-def units_from_page_layout(layout_json: str) -> list[ParsedChunkUnit]:
-    layout = json.loads(layout_json) if layout_json else {"units": []}
-    units: list[ParsedChunkUnit] = []
-    for entry in layout.get("units", []):
-        units.append(
-            ParsedChunkUnit(
-                text=entry["text"],
-                logical_key=entry["logical_key"],
-                heading_path=entry["heading_path"],
-                symbol=None,
-                content_type=entry["content_type"],
-                physical_page=None,
-                line_start=entry.get("line_start"),
-                line_end=entry.get("line_end"),
-                locator={},
-            )
-        )
-    return units

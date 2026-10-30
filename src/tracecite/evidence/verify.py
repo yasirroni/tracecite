@@ -2,20 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-import posixpath
 import re
 
 from .chunking import normalise_text
 from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
-from .source_links import (
-    SourceLinkEntry,
-    load_source_links,
-    parse_source_link_destination,
-)
+from .source_links import load_source_links, parse_source_link_destination
 
-_DEFINITION_RE = re.compile(
-    r"^\[(?P<key>[^\]]+)\]:\s*(?:<(?P<angle>.*?)#page=(?P<angle_page>-?\d+)>|(?P<bare>.*?)#page=(?P<bare_page>-?\d+))\s*$"
-)
 _DEFINITION_LIKE_RE = re.compile(r"^\[(?P<key>[^\]]+)\]:")
 _CITATION_RE = re.compile(r"\[[^\]]*\]\[(?P<key>[^\]]+)\]")
 _BLOCKQUOTE_RE = re.compile(r"^>\s?(?P<quote>.*)$")
@@ -27,12 +19,8 @@ class QuoteVerification:
     status: str
     physical_page: int
     quote: str
-    matched_key: str | None = None
+    citation_key: str | None = None
     source_path: str | None = None
-
-    @property
-    def citation_key(self) -> str | None:
-        return self.matched_key
 
 
 def verify_quote(conn, source_path: str, physical_page: int, quote: str) -> QuoteVerification:
@@ -85,41 +73,28 @@ class ReportVerification:
         )
 
 
-def _normalise_relative_path(path: str) -> str:
-    return posixpath.normpath(path.replace("\\", "/"))
-
-
 def _parse_definitions(lines: list[str]) -> tuple[dict[str, ReferenceDefinition], list[CitationIssue], set[str]]:
     out: dict[str, ReferenceDefinition] = {}
     issues: list[CitationIssue] = []
     invalid_keys: set[str] = set()
     for line in lines:
-        match = _DEFINITION_RE.match(line)
-        if match:
-            destination = match.group("angle") or match.group("bare") or ""
-            page = match.group("angle_page") or match.group("bare_page")
-            parsed = parse_source_link_destination(
-                f"<{destination}#page={page}>" if match.group("angle") is not None
-                else f"{destination}#page={page}"
-            )
-            if parsed is None:
-                invalid_keys.add(match.group("key"))
-                continue
-            destination, parsed_page = parsed
-            definition = ReferenceDefinition(match.group("key"), parsed_page, destination)
-            existing = out.get(definition.key)
-            if existing is not None:
-                kind = "duplicate-definition" if (existing.path, existing.page) == (definition.path, definition.page) else "ambiguous-definition"
-                issues.append(CitationIssue(definition.key, kind, "duplicate reference definition label"))
-                invalid_keys.add(definition.key)
-                continue
-            out[definition.key] = definition
-            continue
         like = _DEFINITION_LIKE_RE.match(line)
-        if like:
-            key = like.group("key")
+        if not like:
+            continue
+        key = like.group("key")
+        parsed = parse_source_link_destination(line[like.end():].strip())
+        if parsed is None:
             issues.append(CitationIssue(key, "malformed-page", "reference definition must end with #page=<positive integer>"))
             invalid_keys.add(key)
+            continue
+        path, page = parsed
+        existing = out.get(key)
+        if existing is not None:
+            kind = "duplicate-definition" if (existing.path, existing.page) == (path, page) else "ambiguous-definition"
+            issues.append(CitationIssue(key, kind, "duplicate reference definition label"))
+            invalid_keys.add(key)
+            continue
+        out[key] = ReferenceDefinition(key, page, path)
     return out, issues, invalid_keys
 
 
@@ -221,7 +196,7 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
         index += 1
     if source_links_path is not None:
         registry_root = Path(source_links_root or root).resolve()
-        registry, registry_issues = _load_source_links(source_links_path, registry_root)
+        registry, registry_issues = load_source_links(source_links_path, registry_root)
         result.source_link_issues.extend(registry_issues)
         for key in sorted(result.citation_keys_used):
             definition = result.definitions.get(key)
@@ -240,14 +215,10 @@ def verify_report(conn, report_path: Path, root: Path, *, source_links_path: Pat
             elif len(entries) > 1:
                 result.source_link_issues.append(f"{source_row['path']} has {len(entries)} ambiguous entries in {source_links_path}")
             else:
-                entry_abs = (registry_root / _normalise_relative_path(entries[0].local_path)).resolve()
+                entry_abs = (registry_root / entries[0].local_path).resolve()
                 if entry_abs != source_abs:
                     result.source_link_issues.append(f"{entries[0].local_path} in {source_links_path} does not agree with the database")
     return result
-
-
-def _load_source_links(path: Path, source_links_root: Path) -> tuple[dict[Path, list[SourceLinkEntry]], list[str]]:
-    return load_source_links(path, source_links_root)
 
 
 def _prose_lines(lines: list[str]) -> list[str]:

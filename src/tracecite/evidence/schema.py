@@ -220,19 +220,12 @@ def _validate_schema_objects(conn: sqlite3.Connection) -> None:
         columns = _columns(conn, table)
         missing = required_columns - columns
         if missing:
-            for preferred in ("source_pk", "source_type", "embedding_model"):
-                if preferred in missing:
-                    raise IncompatibleDatabaseError(
-                        f"schema v{SCHEMA_VERSION} table {table} is missing required column {preferred}"
-                    )
-            else:
-                raise IncompatibleDatabaseError(
-                    f"schema v{SCHEMA_VERSION} table {table} is missing required column {sorted(missing)[0]}"
-                )
-    if "assets" in tables and "asset_path" in _columns(conn, "assets"):
-        absolute = conn.execute("SELECT asset_path FROM assets WHERE asset_path GLOB '/*' LIMIT 1").fetchone()
-        if absolute is not None:
-            raise IncompatibleDatabaseError("schema v3 database contains absolute asset paths and must be rebuilt")
+            raise IncompatibleDatabaseError(
+                f"schema v{SCHEMA_VERSION} table {table} is missing required column(s) {', '.join(sorted(missing))}"
+            )
+    absolute = conn.execute("SELECT asset_path FROM assets WHERE asset_path GLOB '/*' LIMIT 1").fetchone()
+    if absolute is not None:
+        raise IncompatibleDatabaseError("schema v3 database contains absolute asset paths and must be rebuilt")
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
@@ -458,11 +451,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX assets_sourcepk_page_idx ON assets(source_pk, physical_page)")
         conn.execute("COMMIT")
     except Exception:
-        try:
-            if getattr(conn, "in_transaction", True):
-                conn.execute("ROLLBACK")
-        except Exception:
-            pass
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         raise
 
 

@@ -8,8 +8,9 @@ from types import SimpleNamespace
 import zipfile
 
 from tracecite.evidence import chunking, schema, sync as sync_module
-from tracecite.evidence.commands import _search, cmd_page
+from tracecite.evidence.commands import cmd_page, hybrid_search
 from tracecite.evidence.parsers import workbook as workbook_parser
+from tracecite.evidence.parsers.base import units_from_layout
 
 from conftest import build_markdown, write_manifest
 
@@ -89,7 +90,7 @@ def test_workbook_parser_retains_sheet_ranges_values_and_formula_status(tmp_path
         "row_end": 2,
     }
 
-    rebuilt = workbook_parser.units_from_page_layout(json.dumps(result.pages[0].layout))
+    rebuilt = units_from_layout(json.dumps(result.pages[0].layout))
     assert rebuilt == result.units
 
 
@@ -130,16 +131,7 @@ def test_workbook_sync_and_search_expose_defensible_locator(
 
     conn = schema.connect(database_path)
     try:
-        results = _search(
-            conn,
-            corpus_dir,
-            "brown coal retirement year",
-            5,
-            50,
-            50,
-            embedder,
-            database_path,
-        )
+        results = hybrid_search(conn, "brown coal retirement year", 5, 50, 50, embedder)
         assert results
         result = results[0]
         assert result["source_path"] == "assumptions.xlsx"
@@ -239,7 +231,7 @@ def test_workbook_cell_change_reparses_and_replaces_searchable_chunks(
         assert "B2 = 2031" in body
         assert "B2 = 2035" not in body
 
-        results = _search(conn, corpus_dir, "brown coal retirement year", 5, 50, 50, embedder, database_path)
+        results = hybrid_search(conn, "brown coal retirement year", 5, 50, 50, embedder)
         assert results[0]["source_path"] == "assumptions.xlsx"
         assert "B2 = 2031" in results[0]["passage"]
         assert sync_module.integrity_check(conn) == []
