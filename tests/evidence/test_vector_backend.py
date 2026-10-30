@@ -27,18 +27,8 @@ def _insert_embedding(conn: sqlite3.Connection, model_id: str, semantic_hash: st
     return cursor.lastrowid
 
 
-def test_backend_reports_version_and_capabilities(conn):
-    backend = vector_backend.SqliteVecBackend()
-    assert backend.version(conn).startswith("v")
-    caps = backend.capabilities()
-    assert caps["ann_index"] is False
-    assert caps["backend"] == "sqlite-vec"
-
-
 def test_backend_upsert_search_delete_contract(conn):
-    """Uses only the VectorBackend interface -- no vec0 SQL in this test."""
-
-    backend: vector_backend.VectorBackend = vector_backend.SqliteVecBackend()
+    backend = vector_backend.SqliteVecBackend()
     dims = schema.EMBEDDING_DIMENSIONS
 
     id_a = _insert_embedding(conn, "model-x", "hash-a")

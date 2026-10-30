@@ -6,10 +6,10 @@ import pytest
 
 
 def test_profile_values_and_inline_rules_are_relative_to_config_file(tmp_path: Path):
-    from tracecite.evidence.config import discover_profile, load_profile
+    from tracecite.evidence.config import load_profile
 
     root = tmp_path / "repo"
-    (root / "nested").mkdir(parents=True)
+    root.mkdir()
     profile_path = root / "tracecite.toml"
     profile_path.write_text(
         """
@@ -29,8 +29,6 @@ origin = "default"
 """.strip(),
         encoding="utf-8",
     )
-    assert discover_profile(root / "nested") is None
-    assert discover_profile(root / "nested", profile_path) == profile_path
     profile = load_profile(profile_path)
     assert profile.root == root
     assert profile.database == root / "artifacts" / "tracecite.sqlite"
@@ -41,12 +39,12 @@ origin = "default"
     assert profile.rules.exclude_globs == ("docs/build/**",)
 
 
-def test_config_rejects_legacy_manifest_list_unknown_fields_and_local_scalars(tmp_path: Path):
+def test_config_rejects_unknown_top_level_fields(tmp_path: Path):
     from tracecite.evidence.config import ConfigError, load_profile
 
     config = tmp_path / "tracecite.toml"
     config.write_text(
-        'schema_version = 1\nroot = "."\ndatabase = "db.sqlite"\nmodel_cache_dir = "cache"\nmanifests = []\n',
+        'schema_version = 1\nroot = "."\ndatabase = "db.sqlite"\nmodel_cache_dir = "cache"\nunknown = []\n',
         encoding="utf-8",
     )
     with pytest.raises(ConfigError, match="unknown field"):

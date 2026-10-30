@@ -35,7 +35,6 @@ PARSER_VERSION_WORKBOOK = "1"
 
 CHUNKER_NAME = "greedy-char-budget"
 CHUNKER_VERSION = "2"
-DEFAULT_MAX_CHUNK_CHARS = 1200
 
 NORMALISATION_VERSION = "1"
 
@@ -158,10 +157,6 @@ def _existing_tables(conn: sqlite3.Connection) -> set[str]:
         "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
     ).fetchall()
     return {row["name"] for row in rows}
-
-
-def is_initialised(conn: sqlite3.Connection) -> bool:
-    return "kb_config" in _existing_tables(conn)
 
 
 def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:

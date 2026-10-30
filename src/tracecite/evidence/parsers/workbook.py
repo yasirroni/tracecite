@@ -25,7 +25,6 @@ from .base import ParsedChunkUnit, ParsedPage, ParseResult
 
 
 NAME = "workbook-ooxml"
-VERSION = "1"
 DEFAULT_MAX_UNIT_CHARS = 1000
 DEFAULT_MAX_FORMULA_CHARS = 240
 
@@ -317,7 +316,7 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                     },
                 )
             )
-    return ParseResult(pages=pages, units=units, assets=[])
+    return ParseResult(pages=pages, units=units)
 
 
 def units_from_page_layout(layout_json: str) -> list[ParsedChunkUnit]:

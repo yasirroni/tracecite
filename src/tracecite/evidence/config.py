@@ -20,12 +20,6 @@ class TraceCiteProfile:
     rules: ManifestRules
 
 
-def discover_profile(start: Path, explicit: Path | None = None) -> Path | None:
-    if explicit is not None:
-        return Path(explicit).resolve()
-    return None
-
-
 def _resolve(base: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else (base / path).resolve()

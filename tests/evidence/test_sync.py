@@ -74,7 +74,6 @@ def test_unchanged_file_zero_writes_and_embeddings(
 
     report = sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
     assert report.sources_unchanged == ["doc.pdf"]
-    assert not report.wrote_anything
     assert len(embedder.calls) == calls_before  # zero new embedding calls
 
     conn = schema.connect(database_path)

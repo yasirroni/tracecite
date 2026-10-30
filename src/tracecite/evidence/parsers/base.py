@@ -6,8 +6,6 @@ into stored chunks; parsers never write to the database directly.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -45,26 +43,6 @@ class ParsedChunkUnit:
 
 
 @dataclass(frozen=True)
-class ParsedAsset:
-    """One PDF visual derivative candidate; rendering happens separately."""
-
-    physical_page: int
-    asset_type: str
-    bbox: tuple[float, float, float, float] | None
-    label: str | None = None
-    caption: str | None = None
-    nearby_text: str | None = None
-
-
-@dataclass(frozen=True)
 class ParseResult:
     pages: list[ParsedPage]
     units: list[ParsedChunkUnit]
-    assets: list[ParsedAsset] = field(default_factory=list)
-
-
-class Parser(Protocol):
-    name: str
-    version: str
-
-    def parse(self, path: Path, config: dict) -> ParseResult: ...

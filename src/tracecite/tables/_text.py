@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from html import unescape
 import re
-from typing import Any
 
 from bs4 import BeautifulSoup
 
@@ -53,10 +51,6 @@ def collapse_space(value: str) -> str:
 
 def strip_html(value: str) -> str:
     return collapse_space(BeautifulSoup(value, "html.parser").get_text(" ", strip=True))
-
-
-def plain_text(value: Any) -> str:
-    return collapse_space(unescape(str(value)))
 
 
 def escape_pipe_cell(value: str) -> str:

@@ -15,10 +15,9 @@ import tempfile
 
 import pymupdf
 
-from .base import ParsedAsset, ParsedChunkUnit, ParsedPage, ParseResult
+from .base import ParsedChunkUnit, ParsedPage, ParseResult
 
 NAME = "pdf-pymupdf"
-VERSION = "1"
 HEADING_MAX_CHARS = 70
 
 # A page whose extracted text is shorter than this is treated as a scanned
@@ -188,7 +187,6 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
     ocr_lang = config.get("ocr_lang", DEFAULT_OCR_LANG)
     pages: list[ParsedPage] = []
     units: list[ParsedChunkUnit] = []
-    assets: list[ParsedAsset] = []
 
     with pymupdf.open(path) as document:
         for index, page in enumerate(document):
@@ -246,20 +244,7 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                     )
                 )
 
-            for image_index, image in enumerate(page.get_images(full=True)):
-                xref = image[0]
-                rects = page.get_image_rects(xref)
-                bbox = tuple(rects[0]) if rects else None
-                assets.append(
-                    ParsedAsset(
-                        physical_page=physical_page,
-                        asset_type="figure-crop",
-                        bbox=bbox,
-                        label=f"page-{physical_page:03d}-image-{image_index:02d}",
-                    )
-                )
-
-    return ParseResult(pages=pages, units=units, assets=assets)
+    return ParseResult(pages=pages, units=units)
 
 
 def units_from_page_layout(source_path: str, physical_page: int, layout_json: str) -> list[ParsedChunkUnit]:

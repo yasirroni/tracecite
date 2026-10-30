@@ -36,7 +36,6 @@ import shutil
 import sqlite3
 import stat
 import tempfile
-import tomllib
 import uuid
 
 from . import chunking, manifest as manifest_module, schema, vector_backend
@@ -116,7 +115,6 @@ class SyncReport:
     sources_rechunked: list[str] = field(default_factory=list)
     sources_unchanged: list[str] = field(default_factory=list)
     sources_renamed: list[tuple[str, str]] = field(default_factory=list)
-    sources_deleted: list[str] = field(default_factory=list)
     selected_missing_paths: list[str] = field(default_factory=list)
     indexed_unselected_paths: list[str] = field(default_factory=list)
     unmatched_globs: list[str] = field(default_factory=list)
@@ -126,26 +124,12 @@ class SyncReport:
     chunks_deleted: int = 0
     embeddings_generated: int = 0
 
-    @property
-    def wrote_anything(self) -> bool:
-        return bool(
-            self.sources_added
-            or self.sources_reparsed
-            or self.sources_rechunked
-            or self.sources_renamed
-            or self.sources_deleted
-        )
-
 
 @dataclass
 class AssetGeneration:
-    generation_id: str
     root: Path
     referenced_files: tuple[Path, ...] = ()
     staging_dir: Path | None = None
-
-    def discard(self) -> None:
-        shutil.rmtree(self.root, ignore_errors=True)
 
     def finalize_new_source(self, source_pk: int) -> dict[Path, Path]:
         if self.staging_dir is None:
@@ -201,11 +185,6 @@ def hash_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def _stat(path: Path) -> tuple[int, int]:
-    info = Path(path).stat()
-    return info.st_size, info.st_mtime_ns
 
 
 def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
@@ -321,7 +300,6 @@ class _SourcePlan:
     snapshot_path: Path | None = None
     units: list[ParsedChunkUnit] = field(default_factory=list)
     pages: list = field(default_factory=list)
-    assets: list = field(default_factory=list)
 
     @property
     def content_path(self) -> Path:
@@ -519,7 +497,6 @@ def sync(
 
         renamed_new_ids = set(renames.values())
         true_added_ids = added_ids - renamed_new_ids
-        true_deleted_ids: set[str] = set()
 
         report = SyncReport()
         report.selected_missing_paths.extend(sorted((missing_selected_paths | never_indexed_missing_paths) - set(renames.keys())))
@@ -662,7 +639,6 @@ def sync(
                 result = parser_module.parse(plan.content_path, plan.parser_config)
                 plan.units = result.units
                 plan.pages = result.pages
-                plan.assets = result.assets
                 if plan.action == "add":
                     report.sources_added.append(plan.source_path)
                 else:
@@ -1435,7 +1411,6 @@ def _render_assets(database_path: Path, plan: _SourcePlan, generation: str) -> t
             _asset_event("asset-hash")
             rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
     generation_obj = AssetGeneration(
-        generation_id=generation,
         root=generation_root,
         referenced_files=tuple(path for _, path, _, _, _ in rendered),
         staging_dir=staging_dir,

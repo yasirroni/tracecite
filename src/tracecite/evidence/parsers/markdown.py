@@ -15,7 +15,6 @@ import re
 from .base import ParsedChunkUnit, ParsedPage, ParseResult
 
 NAME = "markdown-heading"
-VERSION = "1"
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 DEFAULT_MAX_UNIT_CHARS = 2400
@@ -141,7 +140,7 @@ def parse(path, config: dict | None = None) -> ParseResult:
         section_candidates=[u.text for u in units if u.content_type == "heading"],
         layout={"units": layout_units},
     )
-    return ParseResult(pages=[page], units=units, assets=[])
+    return ParseResult(pages=[page], units=units)
 
 
 def units_from_page_layout(layout_json: str) -> list[ParsedChunkUnit]:

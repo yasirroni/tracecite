@@ -31,7 +31,7 @@ def _rules_have_selection(rules) -> bool:
 
 
 def _resolve_runtime_args(args: argparse.Namespace) -> argparse.Namespace:
-    profile_path = config_module.discover_profile(Path.cwd(), getattr(args, "config", None))
+    profile_path = getattr(args, "config", None)
     profile = config_module.load_profile(profile_path) if profile_path is not None else None
     if getattr(args, "root", None) is None and profile is not None:
         args.root = profile.root

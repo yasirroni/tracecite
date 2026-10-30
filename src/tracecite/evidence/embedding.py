@@ -18,14 +18,11 @@ class EmbeddingModel:
         model_name: str,
         revision: str,
         cache_dir: Path,
-        *,
-        preloaded_model=None,
     ) -> None:
         self.model_name = model_name
         self.revision = revision
         self.cache_dir = Path(cache_dir)
-        self._model = preloaded_model
-        self.calls: list[list[str]] = []
+        self._model = None
 
     def _ensure_loaded(self):
         if self._model is not None:
@@ -51,7 +48,6 @@ class EmbeddingModel:
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         batch = list(texts)
-        self.calls.append(batch)
         if not batch:
             return []
         model = self._ensure_loaded()

@@ -7,7 +7,7 @@ All vec0 virtual-table SQL lives here; the rest of the evidence code calls
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from collections.abc import Sequence
 import sqlite3
 
 VECTOR_TABLE = "embedding_vectors"
@@ -32,26 +32,6 @@ class VectorMatch:
     distance: float
 
 
-class VectorBackend(Protocol):
-    def upsert(self, conn: sqlite3.Connection, embedding_id: int, vector: Sequence[float]) -> None: ...
-
-    def delete(self, conn: sqlite3.Connection, embedding_id: int) -> None: ...
-
-    def search(
-        self,
-        conn: sqlite3.Connection,
-        query_vector: Sequence[float],
-        top_k: int,
-        allowed_embedding_ids: Sequence[int] | None = None,
-    ) -> list[VectorMatch]: ...
-
-    def integrity_check(self, conn: sqlite3.Connection) -> list[str]: ...
-
-    def version(self, conn: sqlite3.Connection) -> str: ...
-
-    def capabilities(self) -> dict[str, object]: ...
-
-
 def ensure_loaded(conn: sqlite3.Connection) -> None:
     """Load the sqlite-vec extension into an open connection.
 
@@ -71,19 +51,16 @@ def version(conn: sqlite3.Connection) -> str:
 
 
 class SqliteVecBackend:
-    def __init__(self, table: str = VECTOR_TABLE) -> None:
-        self.table = table
-
     def upsert(self, conn: sqlite3.Connection, embedding_id: int, vector: Sequence[float]) -> None:
         packed = _sqlite_vec().serialize_float32(list(vector))
-        conn.execute(f"DELETE FROM {self.table} WHERE embedding_id = ?", (embedding_id,))
+        conn.execute(f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,))
         conn.execute(
-            f"INSERT INTO {self.table}(embedding_id, shard_id, vector) VALUES (?, ?, ?)",
+            f"INSERT INTO {VECTOR_TABLE}(embedding_id, shard_id, vector) VALUES (?, ?, ?)",
             (embedding_id, self._shard_id(embedding_id), packed),
         )
 
     def delete(self, conn: sqlite3.Connection, embedding_id: int) -> None:
-        conn.execute(f"DELETE FROM {self.table} WHERE embedding_id = ?", (embedding_id,))
+        conn.execute(f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,))
 
     def search(
         self,
@@ -120,13 +97,13 @@ class SqliteVecBackend:
         return str((embedding_id - 1) // MAX_KNN_K)
 
     def _shard_ids(self, conn: sqlite3.Connection) -> list[str]:
-        rows = conn.execute(f"SELECT DISTINCT shard_id FROM {self.table}").fetchall()
+        rows = conn.execute(f"SELECT DISTINCT shard_id FROM {VECTOR_TABLE}").fetchall()
         return [str(row[0]) for row in rows]
 
     def _shard_row_count(self, conn: sqlite3.Connection, shard_id: str) -> int:
         return int(
             conn.execute(
-                f"SELECT count(*) FROM {self.table} WHERE shard_id = ?", (shard_id,)
+                f"SELECT count(*) FROM {VECTOR_TABLE} WHERE shard_id = ?", (shard_id,)
             ).fetchone()[0]
         )
 
@@ -143,7 +120,7 @@ class SqliteVecBackend:
             raise ValueError(f"KNN k must not exceed {MAX_KNN_K}")
         rows = conn.execute(
             f"""
-            SELECT embedding_id, distance FROM {self.table}
+            SELECT embedding_id, distance FROM {VECTOR_TABLE}
             WHERE vector MATCH ? AND shard_id = ? AND k = ?
             ORDER BY distance
             """,
@@ -152,13 +129,13 @@ class SqliteVecBackend:
         return [VectorMatch(embedding_id=row[0], distance=row[1]) for row in rows]
 
     def _row_count(self, conn: sqlite3.Connection) -> int:
-        return int(conn.execute(f"SELECT count(*) FROM {self.table}").fetchone()[0])
+        return int(conn.execute(f"SELECT count(*) FROM {VECTOR_TABLE}").fetchone()[0])
 
     def integrity_check(self, conn: sqlite3.Connection) -> list[str]:
         issues: list[str] = []
         orphan_vectors = conn.execute(
             f"""
-            SELECT v.embedding_id FROM {self.table} v
+            SELECT v.embedding_id FROM {VECTOR_TABLE} v
             LEFT JOIN embeddings e ON e.embedding_id = v.embedding_id
             WHERE e.embedding_id IS NULL
             """
@@ -169,28 +146,17 @@ class SqliteVecBackend:
         missing_vectors = conn.execute(
             f"""
             SELECT e.embedding_id FROM embeddings e
-            LEFT JOIN {self.table} v ON v.embedding_id = e.embedding_id
+            LEFT JOIN {VECTOR_TABLE} v ON v.embedding_id = e.embedding_id
             WHERE v.embedding_id IS NULL
             """
         ).fetchall()
         for row in missing_vectors:
-            issues.append(f"embeddings row {row[0]} has no vector in {self.table}")
+            issues.append(f"embeddings row {row[0]} has no vector in {VECTOR_TABLE}")
 
         vector_rows = self._row_count(conn)
         embedding_rows = int(conn.execute("SELECT count(*) FROM embeddings").fetchone()[0])
         if vector_rows != embedding_rows and not issues:
             issues.append(
-                f"{self.table} has {vector_rows} rows but embeddings has {embedding_rows} rows"
+                f"{VECTOR_TABLE} has {vector_rows} rows but embeddings has {embedding_rows} rows"
             )
         return issues
-
-    def version(self, conn: sqlite3.Connection) -> str:
-        return version(conn)
-
-    def capabilities(self) -> dict[str, object]:
-        return {
-            "backend": "sqlite-vec",
-            "ann_index": False,
-            "distance": "l2",
-            "supports_bounded_filters": True,
-        }

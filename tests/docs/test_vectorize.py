@@ -262,7 +262,6 @@ def test_sync_indexes_and_repeated_sync_is_unchanged(tmp_path: Path, make_embedd
     calls_before = len(embedder.calls)
     second = sync_docs_index(contract, repo_root=root, embedder=embedder)
     assert second.sync_report.sources_unchanged == ["index.md"]
-    assert not second.sync_report.wrote_anything
     assert len(embedder.calls) == calls_before
 
 

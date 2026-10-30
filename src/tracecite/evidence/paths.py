@@ -53,7 +53,6 @@ def normalise_source_path(root: Path, value: str | Path, *, base: Path | None = 
     raw_path = Path(text)
     if raw_path.is_absolute():
         candidate = raw_path
-        display = text
     else:
         parts = [part for part in text.split("/") if part not in ("", ".")]
         depth = 0
@@ -65,7 +64,6 @@ def normalise_source_path(root: Path, value: str | Path, *, base: Path | None = 
             if depth < 0 and base is None:
                 raise PathAuthorityError(f"source path may not escape root: {value}")
         candidate = (Path(base).resolve() if base is not None else root) / Path(*parts)
-        display = posixpath.normpath(text)
 
     resolved_parent = candidate.parent.resolve()
     resolved = (resolved_parent / candidate.name).resolve() if candidate.exists() else resolved_parent / candidate.name
