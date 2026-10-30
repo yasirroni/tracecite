@@ -39,13 +39,7 @@ DEFAULT_MAX_CHUNK_CHARS = 1200
 DEFAULT_OCR_LANG = "eng"
 
 
-def _add_evidence_common_args(
-    parser: argparse.ArgumentParser,
-    *,
-    root_required: bool = False,
-    database_required: bool = True,
-) -> None:
-    del root_required, database_required
+def _add_evidence_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=Path, default=argparse.SUPPRESS, help="TraceCite profile TOML.")
     parser.add_argument("--root", type=Path, default=None, help="Source root directory.")
     parser.add_argument("--database", type=Path, default=None, help="SQLite database path.")
@@ -55,7 +49,7 @@ def _add_evidence_common_args(
 
 def _add_evidence_parsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     sync_parser = subparsers.add_parser("sync", help="Synchronise selected sources into the database.")
-    _add_evidence_common_args(sync_parser, root_required=True)
+    _add_evidence_common_args(sync_parser)
     sync_parser.add_argument("path", nargs="?", default=None, help="Only sync this one root-relative source path.")
     sync_parser.add_argument("--full", action="store_true", help="Reparse and rechunk every source.")
     sync_parser.add_argument("--reembed", action="store_true", help="Force embedding regeneration.")
@@ -363,11 +357,8 @@ def _docs_mode(args: argparse.Namespace, operation) -> int:
 
 
 def _docs_index(args: argparse.Namespace) -> int:
-    try:
-        contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
-        result = sync_docs_index(contract, repo_root=args.repo_root)
-    except ModuleNotFoundError as error:
-        return _missing_evidence_exit(error)
+    contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+    result = sync_docs_index(contract, repo_root=args.repo_root)
     report = result.sync_report
     print(f"Documentation index input: {result.profile.input_root}")
     print(f"Documentation index database: {result.profile.database_path}")
@@ -380,44 +371,27 @@ def _docs_index(args: argparse.Namespace) -> int:
 
 
 def _docs_search(args: argparse.Namespace) -> int:
-    try:
-        contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
-        results = search_docs_index(
-            contract,
-            args.query,
-            repo_root=args.repo_root,
-            limit=args.limit,
-            fts_limit=args.fts_limit,
-            vector_limit=args.vector_limit,
-        )
-    except ModuleNotFoundError as error:
-        return _missing_evidence_exit(error)
+    contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+    results = search_docs_index(
+        contract,
+        args.query,
+        repo_root=args.repo_root,
+        limit=args.limit,
+        fts_limit=args.fts_limit,
+        vector_limit=args.vector_limit,
+    )
     print(json.dumps(results, indent=2))
     return 0
 
 
 def _docs_doctor(args: argparse.Namespace) -> int:
-    try:
-        contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
-        issues = doctor_docs_index(contract, repo_root=args.repo_root)
-    except ModuleNotFoundError as error:
-        return _missing_evidence_exit(error)
+    contract = load_docs_contract(args.docs_config, repo_root=args.repo_root)
+    issues = doctor_docs_index(contract, repo_root=args.repo_root)
     for issue in issues:
         print(f"ISSUE: {issue}")
     if not issues:
         print("doctor: no issues found")
     return 0 if not issues else 1
-
-
-def _missing_evidence_exit(error: ModuleNotFoundError) -> int:
-    if _is_missing_evidence_dependency(error):
-        print(
-            "tracecite: evidence commands require the optional evidence dependencies; "
-            "install with tracecite[evidence]",
-            file=sys.stderr,
-        )
-        return 2
-    raise error
 
 
 def _table_normalise(args: argparse.Namespace) -> int:

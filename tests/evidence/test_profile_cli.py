@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tracecite.evidence import cli, sync as sync_module
+from tracecite import cli
+from tracecite.evidence import sync as sync_module
 from conftest import FakeEmbedder, build_pdf, write_manifest
 
 

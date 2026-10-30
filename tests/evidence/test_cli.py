@@ -6,11 +6,10 @@ import subprocess
 import sys
 import os
 import json
-import importlib
 from pathlib import Path
 import pytest
 
-from tracecite.evidence import cli
+from tracecite import cli
 from tracecite.evidence import schema, sync as sync_module
 
 from conftest import FakeEmbedder, build_pdf, write_manifest
@@ -357,7 +356,7 @@ def test_prune_apply_honours_layered_local_exclusion(tmp_path, capsys):
     assert _source_paths(database_path) == ["docs/keep.md"]
 
 
-def test_prune_apply_rolls_back_on_failure(tmp_path, monkeypatch):
+def test_prune_apply_rolls_back_on_failure(tmp_path, capsys, monkeypatch):
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "docs/keep.md")
     _insert_source(database_path, "docs/remove.md")
@@ -367,16 +366,9 @@ def test_prune_apply_rolls_back_on_failure(tmp_path, monkeypatch):
         raise RuntimeError("injected prune failure")
 
     monkeypatch.setattr(sync_module.schema, "touch_config", fail_touch_config)
-    active_sync_module = importlib.import_module("tracecite.evidence.sync")
-    monkeypatch.setattr(active_sync_module.schema, "touch_config", fail_touch_config)
 
-    try:
-        cli.main(["prune", "--database", str(database_path), "--manifest", str(manifest_path), "--apply"])
-    except RuntimeError as exc:
-        assert "injected prune failure" in str(exc)
-    else:
-        raise AssertionError("expected injected prune failure")
-
+    assert cli.main(["prune", "--database", str(database_path), "--manifest", str(manifest_path), "--apply"]) == 2
+    assert "injected prune failure" in capsys.readouterr().err
     assert _source_paths(database_path) == ["docs/keep.md", "docs/remove.md"]
 
 
