@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from tracecite.evidence.source_links import (
-    SourceLinkEntry,
     load_source_links,
     parse_staged_markdown_destination,
     parse_staged_source_destination,

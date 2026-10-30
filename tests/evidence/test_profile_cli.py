@@ -4,7 +4,7 @@ from pathlib import Path
 
 from tracecite import cli
 from tracecite.evidence import sync as sync_module
-from conftest import FakeEmbedder, build_pdf, write_manifest
+from conftest import FakeEmbedder, build_pdf
 
 
 def test_explicit_config_supplies_runtime_and_inline_rules_for_commands(tmp_path: Path, monkeypatch):

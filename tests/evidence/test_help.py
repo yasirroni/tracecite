@@ -47,9 +47,11 @@ print(json.dumps({'stdout': buf.getvalue(), 'modules': sorted(sys.modules)}))
     return payload["stdout"], set(payload["modules"])
 
 
-def test_top_level_help_does_not_load_heavy_modules():
+def test_top_level_help_lists_commands_without_loading_heavy_modules():
     stdout, modules = _help_modules("--help")
     assert "usage: tracecite" in stdout
+    for command in ("table", "document", "prepare", "docs", "check", "sync", "search", "doctor"):
+        assert command in stdout
     assert not [name for name in modules if name.startswith(FORBIDDEN)]
 
 

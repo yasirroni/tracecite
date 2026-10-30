@@ -8,7 +8,7 @@ import tomllib
 import pymupdf
 import pytest
 
-from tracecite.evidence import schema, sync as sync_module
+from tracecite.evidence import schema
 
 
 class FakeEmbedder:

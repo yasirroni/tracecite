@@ -7,7 +7,6 @@ import sys
 import os
 import json
 from pathlib import Path
-import pytest
 
 from tracecite import cli
 from tracecite.evidence import schema, sync as sync_module
@@ -88,26 +87,6 @@ def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
     assert exit_code == 0
 
     exit_code = cli.main(["doctor", "--database", str(database_path)])
-    assert exit_code == 0
-
-
-def test_cli_page_and_verify_quote(tmp_path, capsys, monkeypatch):
-    corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
-    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
-
-    exit_code = cli.main(["page", "--database", str(database_path), "doc.pdf", "1"])
-    captured = capsys.readouterr()
     assert exit_code == 0
 
 

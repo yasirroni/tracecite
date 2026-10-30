@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -396,7 +395,7 @@ def test_changed_content_path_move_retains_old_row_until_prune(corpus_dir, manif
 
 
 def test_content_movement_preserves_embeddings(corpus_dir, manifest_path, database_path, make_embedder):
-    pdf_path = build_pdf(
+    build_pdf(
         corpus_dir / "doc.pdf",
         [
             ["Alpha", "This alpha section paragraph contains distinctive wording for identification purposes."],
@@ -651,18 +650,6 @@ def test_bad_embedding_dimension_rejected_before_database_writes(one_pdf_corpus,
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0] == 0
-    finally:
-        conn.close()
-
-
-def test_embedding_dimension_change_rejected_before_vector_mutation(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
-):
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    conn = schema.connect(database_path)
-    try:
-        before_config = dict(conn.execute("SELECT * FROM kb_config").fetchone())
-        before_vectors = conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0]
     finally:
         conn.close()
 

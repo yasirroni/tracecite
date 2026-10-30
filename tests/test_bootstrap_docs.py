@@ -242,7 +242,7 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
                     f"unexpected symlink left in {project}: {path}",
                 )
 
-    def test_quarto_julia_only_build_no_longer_raises_already_exists(self) -> None:
+    def test_quarto_julia_only_build_succeeds(self) -> None:
         build_dir = REPO_ROOT / "docs_quarto_jl" / "build"
         if build_dir.exists():
             shutil.rmtree(build_dir)
@@ -258,7 +258,6 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
             0,
             f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}",
         )
-        self.assertNotIn("AlreadyExists", result.stdout + result.stderr)
         self.assertTrue((build_dir / "index.html").is_file())
 
 

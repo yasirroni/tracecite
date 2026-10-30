@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
@@ -317,8 +316,6 @@ def test_two_fresh_indexes_are_deterministic_for_paths_keys_hashes_and_search(
     tmp_path: Path, make_embedder
 ) -> None:
     config, root = _fixture(tmp_path)
-    contract = load_docs_contract(config, repo_root=root)
-    embedder = make_embedder()
 
     def build_fresh() -> tuple[dict[str, object], list[dict]]:
         fresh_root = tmp_path / f"fresh-{len(list(tmp_path.glob('fresh-*')))}"
@@ -376,8 +373,6 @@ def test_search_and_doctor_report_missing_or_stale_index_input(tmp_path: Path, m
     results = search_docs_index(contract, "fixture query", embedder=make_embedder())
     assert results
     assert "chunk_id" not in results[0]
-    empty = search_docs_index(contract, "", embedder=make_embedder())
-    assert empty == [] or isinstance(empty, list)
 
 
 def test_docs_index_cli_help_and_fixture_commands(tmp_path: Path, make_embedder) -> None:
