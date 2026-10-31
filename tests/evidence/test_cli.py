@@ -9,7 +9,7 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
-from conftest import FakeEmbedder, build_pdf, write_manifest
+from conftest import FakeEmbedder, build_pdf, insert_source, write_manifest
 
 from tracecite import cli
 from tracecite.evidence import schema
@@ -62,19 +62,7 @@ def _write_manifest(path: Path, text: str) -> Path:
 def _insert_source(database_path: Path, stored_path: str) -> None:
     with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
-        conn.execute(
-            """
-            INSERT INTO sources (
-                path, source_type, language, canonical_url,
-                capture_manifest_ref, sha256, size_bytes, mtime_ns,
-                parser_name, parser_version, parser_config,
-                chunker_name, chunker_version, chunker_config,
-                normalisation_version, normalisation_config,
-                indexed_at_utc, index_status
-            ) VALUES (?, 'markdown', NULL, NULL, NULL, 'sha', 1, 1, 'parser', '1', '{}', 'chunker', '1', '{}', '1', '{}', 'now', 'ok')
-            """,
-            (stored_path,),
-        )
+        insert_source(conn, stored_path, "markdown")
         conn.commit()
 
 

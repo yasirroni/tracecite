@@ -6,7 +6,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
-from conftest import build_pdf
+from conftest import build_pdf, insert_source
 
 from tracecite import cli
 from tracecite.evidence import schema
@@ -33,22 +33,11 @@ def _insert_pdf_source(
 ) -> None:
     with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
-        conn.execute(
-            """
-            INSERT INTO sources (
-                path, source_type, language, canonical_url,
-                capture_manifest_ref, sha256, size_bytes, mtime_ns,
-                parser_name, parser_version, parser_config,
-                chunker_name, chunker_version, chunker_config,
-                normalisation_version, normalisation_config,
-                indexed_at_utc, index_status
-            ) VALUES (?, 'pdf', NULL, NULL, NULL, ?, 1, 1, 'parser', '1', '{}', 'chunker', '1', '{}', '1', '{}', 'now', 'ok')
-            """,
-            (source_path, hashlib.sha256(source_pdf.read_bytes()).hexdigest()),
+        source_pk = insert_source(
+            conn,
+            source_path,
+            sha256=hashlib.sha256(source_pdf.read_bytes()).hexdigest(),
         )
-        source_pk = conn.execute(
-            "SELECT source_pk FROM sources WHERE path = ?", (source_path,)
-        ).fetchone()["source_pk"]
         for physical_page in range(1, page_count + 1):
             conn.execute(
                 """

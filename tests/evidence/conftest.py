@@ -41,6 +41,23 @@ def write_manifest(path: Path, entries: dict[str, str]) -> Path:
     return path
 
 
+def insert_source(
+    conn, path: str, source_type: str = "pdf", sha256: str = "sha"
+) -> int:
+    """Insert a minimal indexed source row and return its ``source_pk``."""
+    return conn.execute(
+        """
+        INSERT INTO sources (
+            path, source_type, sha256, size_bytes, mtime_ns,
+            parser_name, parser_version, parser_config,
+            chunker_name, chunker_version, chunker_config,
+            normalisation_version, normalisation_config, indexed_at_utc, index_status
+        ) VALUES (?, ?, ?, 1, 1, 'parser', '1', '{}', 'chunker', '1', '{}', '1', '{}', 'now', 'ok')
+        """,
+        (path, source_type, sha256),
+    ).lastrowid
+
+
 def read_manifest(path: Path) -> dict[str, str]:
     with Path(path).open("rb") as handle:
         data = tomllib.load(handle)
