@@ -19,6 +19,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_SCRIPT_SOURCE = REPO_ROOT / "scripts" / "bootstrap_docs.py"
 
 
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", *args],
+        cwd=root,
+        check=True,
+    )
+
+
 def _run(fixture_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(fixture_root / "scripts" / "bootstrap_docs.py"), *args],
@@ -164,66 +172,14 @@ class BootstrapCleanCheckTests(unittest.TestCase):
             _build_minimal_fixture(root)
 
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-            subprocess.run(
-                [
-                    "git",
-                    "-c",
-                    "user.email=test@example.com",
-                    "-c",
-                    "user.name=Test",
-                    "add",
-                    "-A",
-                ],
-                cwd=root,
-                check=True,
-            )
-            subprocess.run(
-                [
-                    "git",
-                    "-c",
-                    "user.email=test@example.com",
-                    "-c",
-                    "user.name=Test",
-                    "commit",
-                    "-q",
-                    "-m",
-                    "seed sources",
-                ],
-                cwd=root,
-                check=True,
-            )
+            _git(root, "add", "-A")
+            _git(root, "commit", "-q", "-m", "seed sources")
 
             first = _run(root)
             self.assertEqual(first.returncode, 0, first.stderr)
 
-            subprocess.run(
-                [
-                    "git",
-                    "-c",
-                    "user.email=test@example.com",
-                    "-c",
-                    "user.name=Test",
-                    "add",
-                    "-A",
-                ],
-                cwd=root,
-                check=True,
-            )
-            subprocess.run(
-                [
-                    "git",
-                    "-c",
-                    "user.email=test@example.com",
-                    "-c",
-                    "user.name=Test",
-                    "commit",
-                    "-q",
-                    "-m",
-                    "first bootstrap",
-                ],
-                cwd=root,
-                check=True,
-            )
+            _git(root, "add", "-A")
+            _git(root, "commit", "-q", "-m", "first bootstrap")
 
             second = _run(root)
             self.assertEqual(second.returncode, 0, second.stderr)

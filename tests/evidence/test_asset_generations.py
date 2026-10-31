@@ -6,10 +6,20 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
-from conftest import build_pdf, write_manifest
+from conftest import FakeEmbedder, build_pdf, write_manifest
 
 from tracecite.evidence import schema
 from tracecite.evidence import sync as sync_module
+
+
+def _sync(corpus_dir, manifest_path, database_path, **options):
+    return sync_module.sync(
+        corpus_dir,
+        manifest_path,
+        database_path,
+        options=sync_module.SyncOptions(**options),
+        embedder=FakeEmbedder(),
+    )
 
 
 def _asset_state(database_path: Path):
@@ -49,11 +59,11 @@ def _asset_rows(database_path: Path) -> list[tuple[str, int, str]]:
 
 
 def test_assets_are_written_to_generation_paths_and_hash_checked(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "Asset generation page text."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     state = _asset_state(database_path)
     assert state
     assert all(path.startswith("imgs/generations/") for path, _, _ in state)
@@ -73,11 +83,11 @@ def test_assets_are_written_to_generation_paths_and_hash_checked(
 
 
 def test_relative_asset_storage_relocates_with_database_and_imgs(
-    corpus_dir, manifest_path, database_path, make_embedder, tmp_path
+    corpus_dir, manifest_path, database_path, tmp_path
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "Relocatable asset storage."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     relocated = tmp_path / "relocated"
     relocated.mkdir()
     relocated_db = relocated / "tracecite.sqlite"
@@ -92,13 +102,13 @@ def test_relative_asset_storage_relocates_with_database_and_imgs(
 
 
 def test_schema_v3_rejects_existing_absolute_asset_paths(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path
 ):
     build_pdf(
         corpus_dir / "doc.pdf", [["Title", "Absolute asset path compatibility check."]]
     )
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     with closing(schema.connect(database_path)) as conn:
         stored = conn.execute("SELECT asset_path FROM assets LIMIT 1").fetchone()[
             "asset_path"
@@ -111,14 +121,14 @@ def test_schema_v3_rejects_existing_absolute_asset_paths(
 
 
 def test_new_source_assets_finalize_from_staging_to_source_pk_directory(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path
 ):
     build_pdf(
         corpus_dir / "doc.pdf",
         [["Title", "New source assets start in staging and finish under source_pk."]],
     )
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
 
     with closing(schema.connect(database_path)) as conn:
         source_pk = conn.execute(
@@ -135,11 +145,11 @@ def test_new_source_assets_finalize_from_staging_to_source_pk_directory(
 
 
 def test_asset_render_failure_discards_candidate_generation_and_keeps_old_assets(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "Original asset bytes."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     before = _asset_state(database_path)
     build_pdf(
         corpus_dir / "doc.pdf", [["Title", "Changed text that triggers reparse."]]
@@ -150,16 +160,14 @@ def test_asset_render_failure_discards_candidate_generation_and_keeps_old_assets
 
     monkeypatch.setattr(sync_module.pdf_parser, "render_page", boom)
     with pytest.raises(RuntimeError, match="render failed"):
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
+        _sync(corpus_dir, manifest_path, database_path)
     assert _asset_state(database_path) == before
     generations = list((database_path.parent / "imgs" / "generations").glob("*"))
     assert len(generations) == 1
 
 
 def test_new_source_staging_rename_failure_rolls_back_and_discards_generation(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(
         corpus_dir / "doc.pdf",
@@ -176,9 +184,7 @@ def test_new_source_staging_rename_failure_rolls_back_and_discards_generation(
         sync_module.AssetGeneration, "finalize_new_source", fail_finalize
     )
     with pytest.raises(RuntimeError, match="rename failed"):
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
+        _sync(corpus_dir, manifest_path, database_path)
     monkeypatch.setattr(sync_module.AssetGeneration, "finalize_new_source", original)
 
     with closing(schema.connect(database_path)) as conn:
@@ -189,11 +195,11 @@ def test_new_source_staging_rename_failure_rolls_back_and_discards_generation(
 
 
 def test_asset_sql_commit_failure_keeps_prior_assets_and_discards_candidate_generation(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "Original asset bytes."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     before = _asset_state(database_path)
     before_generations = sorted(
         path.name for path in (database_path.parent / "imgs" / "generations").iterdir()
@@ -209,9 +215,7 @@ def test_asset_sql_commit_failure_keeps_prior_assets_and_discards_candidate_gene
 
     monkeypatch.setattr(sync_module.schema, "touch_config", fail_touch_config)
     with pytest.raises(RuntimeError, match="commit step failed"):
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
+        _sync(corpus_dir, manifest_path, database_path)
 
     assert _asset_state(database_path) == before
     after_generations = sorted(
@@ -221,11 +225,11 @@ def test_asset_sql_commit_failure_keeps_prior_assets_and_discards_candidate_gene
 
 
 def test_actual_commit_failure_rolls_back_or_recovers_without_candidate_adoption(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "Original asset bytes."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     before = _asset_state(database_path)
 
     real_connect = sync_module.schema.connect
@@ -252,9 +256,7 @@ def test_actual_commit_failure_rolls_back_or_recovers_without_candidate_adoption
     )
     monkeypatch.setattr(sync_module.schema, "connect", connect_proxy)
     with pytest.raises(RuntimeError, match="actual COMMIT failed"):
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
+        _sync(corpus_dir, manifest_path, database_path)
     monkeypatch.setattr(sync_module.schema, "connect", real_connect)
 
     assert _asset_state(database_path) == before
@@ -263,7 +265,7 @@ def test_actual_commit_failure_rolls_back_or_recovers_without_candidate_adoption
 
 
 def test_asset_hashing_completes_before_write_transaction(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(
         corpus_dir / "doc.pdf",
@@ -272,7 +274,7 @@ def test_asset_hashing_completes_before_write_transaction(
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
     events: list[str] = []
     monkeypatch.setattr(sync_module, "ASSET_EVENT_HOOK", events.append)
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     assert "asset-hash" in events
     assert "begin-immediate" in events
     assert max(
@@ -281,12 +283,12 @@ def test_asset_hashing_completes_before_write_transaction(
 
 
 def test_prune_apply_removes_only_pruned_physical_asset_directory_from_shared_generation(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path
 ):
     build_pdf(corpus_dir / "keep.pdf", [["Keep", "Retained source asset bytes."]])
     build_pdf(corpus_dir / "remove.pdf", [["Remove", "Pruned source asset bytes."]])
     write_manifest(manifest_path, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             "SELECT sources.path, sources.source_pk, assets.asset_path FROM assets JOIN sources USING (source_pk)"
@@ -311,13 +313,13 @@ def test_prune_apply_removes_only_pruned_physical_asset_directory_from_shared_ge
 
 
 def test_prune_cleanup_failure_reports_leak_and_preserves_database(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(
         corpus_dir / "remove.pdf", [["Remove", "Cleanup failure must be reported."]]
     )
     write_manifest(manifest_path, {"remove.pdf": "remove.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     with closing(schema.connect(database_path)) as conn:
         plan = sync_module.plan_prune(conn, selected_paths=[])
         monkeypatch.setattr(
@@ -332,11 +334,11 @@ def test_prune_cleanup_failure_reports_leak_and_preserves_database(
 
 
 def test_successful_sync_reports_post_commit_generation_cleanup_leak(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "First generation."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     build_pdf(
         corpus_dir / "doc.pdf",
         [["Title", "Second generation leaves first unreferenced."]],
@@ -346,9 +348,7 @@ def test_successful_sync_reports_post_commit_generation_cleanup_leak(
         raise OSError("gc denied")
 
     monkeypatch.setattr(sync_module, "_rmtree_dir_at", fail_rmtree)
-    report = sync_module.sync(
-        corpus_dir, manifest_path, database_path, embedder=make_embedder()
-    )
+    report = _sync(corpus_dir, manifest_path, database_path)
     assert any("gc denied" in warning for warning in report.cleanup_warnings)
     with closing(schema.connect(database_path)) as conn:
         assert sync_module.integrity_check(conn) == []
@@ -362,7 +362,7 @@ def test_sync_can_defer_generation_cleanup_until_explicit_validation_step(
         [["Title", "First generation remains while bootstrap backup is live."]],
     )
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     first_generation = next((database_path.parent / "imgs" / "generations").iterdir())
 
     build_pdf(
@@ -394,22 +394,16 @@ def test_sync_can_defer_generation_cleanup_until_explicit_validation_step(
 
 
 def test_explicit_asset_generation_cleanup_reports_leaks_without_corrupting_db(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "First generation."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     build_pdf(
         corpus_dir / "doc.pdf",
         [["Title", "Second generation leaves first unreferenced."]],
     )
-    sync_module.sync(
-        corpus_dir,
-        manifest_path,
-        database_path,
-        options=sync_module.SyncOptions(cleanup_asset_generations=False),
-        embedder=make_embedder(),
-    )
+    _sync(corpus_dir, manifest_path, database_path, cleanup_asset_generations=False)
     monkeypatch.setattr(
         sync_module,
         "_rmtree_dir_at",
@@ -422,23 +416,17 @@ def test_explicit_asset_generation_cleanup_reports_leaks_without_corrupting_db(
 
 
 def test_cleanup_asset_generations_removes_stale_generation_with_descriptor_cleanup(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "First generation."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     first_generation = next((database_path.parent / "imgs" / "generations").iterdir())
     build_pdf(
         corpus_dir / "doc.pdf",
         [["Title", "Second generation leaves first unreferenced."]],
     )
-    sync_module.sync(
-        corpus_dir,
-        manifest_path,
-        database_path,
-        options=sync_module.SyncOptions(cleanup_asset_generations=False),
-        embedder=make_embedder(),
-    )
+    _sync(corpus_dir, manifest_path, database_path, cleanup_asset_generations=False)
 
     with closing(schema.connect(database_path)) as conn:
         warnings = sync_module.cleanup_asset_generations(conn, database_path)
@@ -448,21 +436,15 @@ def test_cleanup_asset_generations_removes_stale_generation_with_descriptor_clea
 
 
 def test_cleanup_asset_generations_unsupported_dirfd_warns_and_retains_all_assets(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+    corpus_dir, manifest_path, database_path, monkeypatch
 ):
     build_pdf(corpus_dir / "keep.pdf", [["Keep", "First generation keep."]])
     build_pdf(corpus_dir / "remove.pdf", [["Remove", "First generation remove."]])
     write_manifest(manifest_path, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     first_generation = next((database_path.parent / "imgs" / "generations").iterdir())
     build_pdf(corpus_dir / "keep.pdf", [["Keep", "Second generation keep."]])
-    sync_module.sync(
-        corpus_dir,
-        manifest_path,
-        database_path,
-        options=sync_module.SyncOptions(cleanup_asset_generations=False),
-        embedder=make_embedder(),
-    )
+    _sync(corpus_dir, manifest_path, database_path, cleanup_asset_generations=False)
     before_paths = sorted(
         path.relative_to(database_path.parent).as_posix()
         for path in (database_path.parent / "imgs").rglob("*")
@@ -487,23 +469,17 @@ def test_cleanup_asset_generations_unsupported_dirfd_warns_and_retains_all_asset
 
 
 def test_cleanup_asset_generations_unlinks_replaced_generation_symlink_without_traversal(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch, tmp_path
+    corpus_dir, manifest_path, database_path, monkeypatch, tmp_path
 ):
     build_pdf(corpus_dir / "doc.pdf", [["Title", "First generation."]])
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    _sync(corpus_dir, manifest_path, database_path)
     first_generation = next((database_path.parent / "imgs" / "generations").iterdir())
     build_pdf(
         corpus_dir / "doc.pdf",
         [["Title", "Second generation leaves first unreferenced."]],
     )
-    sync_module.sync(
-        corpus_dir,
-        manifest_path,
-        database_path,
-        options=sync_module.SyncOptions(cleanup_asset_generations=False),
-        embedder=make_embedder(),
-    )
+    _sync(corpus_dir, manifest_path, database_path, cleanup_asset_generations=False)
     outside = tmp_path / "outside-stale-generation"
     outside.mkdir()
     sentinel = outside / "sentinel.txt"
@@ -528,7 +504,7 @@ def test_cleanup_asset_generations_unlinks_replaced_generation_symlink_without_t
 
 
 def test_prune_rejects_absolute_traversal_sibling_and_symlink_targets_atomically(
-    tmp_path, make_embedder
+    tmp_path,
 ):
     for stored_asset_path in (
         str(tmp_path / "outside" / "absolute.png"),
@@ -551,7 +527,7 @@ def test_prune_rejects_absolute_traversal_sibling_and_symlink_targets_atomically
         build_pdf(corpus / "keep.pdf", [["Keep", "Retained asset."]])
         build_pdf(corpus / "remove.pdf", [["Remove", "Pruned asset."]])
         write_manifest(manifest, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
-        sync_module.sync(corpus, manifest, database, embedder=make_embedder())
+        _sync(corpus, manifest, database)
         img_root = database.parent / "imgs"
         (img_root / "generations").mkdir(parents=True, exist_ok=True)
         (img_root / "generations" / "link").symlink_to(
@@ -595,7 +571,7 @@ def test_prune_rejects_absolute_traversal_sibling_and_symlink_targets_atomically
 
 
 def test_prune_rejects_mixed_valid_and_invalid_candidate_before_db_or_fs_mutation(
-    tmp_path, make_embedder
+    tmp_path,
 ):
     corpus = tmp_path / "corpus"
     manifest = tmp_path / "manifest.toml"
@@ -612,7 +588,7 @@ def test_prune_rejects_mixed_valid_and_invalid_candidate_before_db_or_fs_mutatio
             "remove-bad.pdf": "remove-bad.pdf",
         },
     )
-    sync_module.sync(corpus, manifest, database, embedder=make_embedder())
+    _sync(corpus, manifest, database)
     before_sources = _source_paths(database)
     before_assets = _asset_rows(database)
     remove_ok_dir = schema.resolve_asset_path(
@@ -638,7 +614,7 @@ def test_prune_rejects_mixed_valid_and_invalid_candidate_before_db_or_fs_mutatio
         assert remove_ok_dir.exists()
 
 
-def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path, make_embedder):
+def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path):
     corpus = tmp_path / "corpus"
     manifest = tmp_path / "manifest.toml"
     database = tmp_path / "tracecite.sqlite"
@@ -646,7 +622,7 @@ def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path, make_embe
     build_pdf(corpus / "keep.pdf", [["Keep", "Retained asset."]])
     build_pdf(corpus / "remove.pdf", [["Remove", "Shallow asset path."]])
     write_manifest(manifest, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
-    sync_module.sync(corpus, manifest, database, embedder=make_embedder())
+    _sync(corpus, manifest, database)
     before_sources = _source_paths(database)
 
     with closing(schema.connect(database)) as conn:
@@ -667,7 +643,7 @@ def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path, make_embe
 
 
 def test_prune_cleanup_revalidates_after_touch_config_symlink_replacement(
-    tmp_path, make_embedder, monkeypatch
+    tmp_path, monkeypatch
 ):
     corpus = tmp_path / "corpus"
     manifest = tmp_path / "manifest.toml"
@@ -676,7 +652,7 @@ def test_prune_cleanup_revalidates_after_touch_config_symlink_replacement(
     build_pdf(corpus / "keep.pdf", [["Keep", "Retained asset."]])
     build_pdf(corpus / "remove.pdf", [["Remove", "Replacement probe asset."]])
     write_manifest(manifest, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
-    sync_module.sync(corpus, manifest, database, embedder=make_embedder())
+    _sync(corpus, manifest, database)
     with closing(schema.connect(database)) as conn:
         remove_asset = conn.execute(
             "SELECT asset_path FROM assets JOIN sources USING (source_pk) WHERE sources.path = 'remove.pdf'"
@@ -706,7 +682,7 @@ def test_prune_cleanup_revalidates_after_touch_config_symlink_replacement(
 
 
 def test_prune_cleanup_revalidates_generation_ancestor_symlink_replacement(
-    tmp_path, make_embedder, monkeypatch
+    tmp_path, monkeypatch
 ):
     corpus = tmp_path / "corpus"
     manifest = tmp_path / "manifest.toml"
@@ -717,7 +693,7 @@ def test_prune_cleanup_revalidates_generation_ancestor_symlink_replacement(
         corpus / "remove.pdf", [["Remove", "Generation replacement probe asset."]]
     )
     write_manifest(manifest, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
-    sync_module.sync(corpus, manifest, database, embedder=make_embedder())
+    _sync(corpus, manifest, database)
     with closing(schema.connect(database)) as conn:
         remove_asset = conn.execute(
             "SELECT asset_path FROM assets JOIN sources USING (source_pk) WHERE sources.path = 'remove.pdf'"

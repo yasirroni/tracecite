@@ -4,11 +4,14 @@ import json
 from contextlib import closing
 from pathlib import Path
 
-from conftest import FakeEmbedder, build_pdf_with_image_only_page, write_manifest
+from conftest import (
+    build_pdf_with_image_only_page,
+    sync_with_fake_model,
+    write_manifest,
+)
 
 from tracecite import cli
 from tracecite.evidence import schema
-from tracecite.evidence import sync as sync_module
 
 
 def _page_json(root, database_path, *arguments) -> int:
@@ -31,15 +34,7 @@ def _sync_pdf_with_assets(
 ):
     pdf_path = build_pdf_with_image_only_page(corpus_dir / "figure.pdf")
     write_manifest(manifest_path, {"figure.pdf": "figure.pdf"})
-    monkeypatch.setattr(
-        sync_module, "EmbeddingModel", lambda *args, **kwargs: FakeEmbedder()
-    )
-    assert (
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
-        ).status
-        == "ok"
-    )
+    sync_with_fake_model(monkeypatch, corpus_dir, manifest_path, database_path)
     return pdf_path
 
 
@@ -71,15 +66,7 @@ def test_page_json_preserves_order_for_multiple_selected_pages(
 
     build_pdf(corpus_dir / "figure.pdf", [["First page"], ["Second page"]])
     write_manifest(manifest_path, {"figure.pdf": "figure.pdf"})
-    monkeypatch.setattr(
-        sync_module, "EmbeddingModel", lambda *args, **kwargs: FakeEmbedder()
-    )
-    assert (
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
-        ).status
-        == "ok"
-    )
+    sync_with_fake_model(monkeypatch, corpus_dir, manifest_path, database_path)
 
     exit_code = _page_json(corpus_dir, database_path, "figure.pdf", "2, 1")
     captured = capsys.readouterr()

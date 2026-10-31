@@ -9,6 +9,7 @@ import pymupdf
 import pytest
 
 from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
 
 
 class FakeEmbedder:
@@ -56,6 +57,15 @@ def insert_source(
         """,
         (path, source_type, sha256),
     ).lastrowid
+
+
+def sync_with_fake_model(monkeypatch, corpus_dir, manifest_path, database_path) -> None:
+    """Index the corpus with the fake embedder, which the CLI also loads."""
+    monkeypatch.setattr(sync_module, "EmbeddingModel", lambda *a, **k: FakeEmbedder())
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
+    )
+    assert report.status == "ok"
 
 
 def read_manifest(path: Path) -> dict[str, str]:
