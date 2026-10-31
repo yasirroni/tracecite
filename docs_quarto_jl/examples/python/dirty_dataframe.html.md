@@ -14,7 +14,7 @@ and stable identifiers for retrieval.
 ``` {.python .cell-code}
 import pandas as pd
 
-from tracecite.tables import knowledge_table
+from tracecite.tables import computed_first_row_summary, knowledge_table
 
 dirty_table = pd.DataFrame(
     {
@@ -155,9 +155,9 @@ print(
 :::
 
 
-The minimal call above and advanced call below show the optional caption,
-metadata, stable row identity, and data-derived finding. TraceCite can also normalise
-tables produced by other libraries; this helper is a convenient Pandoc output
+The advanced call below controls presentation, retrieval context, stable row
+identity, and the data-derived finding. TraceCite can also normalise tables
+produced by other libraries; this helper is a convenient Pandoc Markdown output
 route.
 
 ::: {#dirty-dataframe-pandoc-advanced .cell execution_count=4}
@@ -204,6 +204,17 @@ print(
 : Technology costs. {#tbl-dirty-python}
 
 **First-row finding.** For **Solar PV**, capital cost ($/kW) is **1250.00 \$/kW** and status is **firm**.
+:::
+
+
+`computed_first_row_summary()` returns the finding on its own, for prose outside
+a table. With a single field, the finding states that field's value.
+
+::: {#dirty-dataframe-first-row-summary .cell execution_count=5}
+``` {.python .cell-code}
+print(computed_first_row_summary(dirty_table, columns=["status"]))
+```
+**First-row finding.** Status is **firm**.
 :::
 
 

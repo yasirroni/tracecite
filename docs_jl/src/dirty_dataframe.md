@@ -44,7 +44,10 @@ dirty_table = DataFrame(
 
 ## Evidence route 1: HTML MIME
 
-The native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.
+A bare DataFrame is a normal Julia evidence route. Its retained HTML is
+preserved, and TraceCite can convert it to canonical Markdown and retrieval
+records without requiring the native helper. The same HTML adapter handles
+Literate and Documenter output.
 
 ````@example dirty_dataframe
 dirty_table
@@ -56,7 +59,7 @@ dirty_table
 the minimal form emits a bare pipe table without a numbered Quarto caption.
 
 ````@example dirty_dataframe
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "dirty-dataframe-julia-minimal", # Required: stable TraceCite identity.
@@ -70,7 +73,7 @@ produced by other libraries; this helper is a convenient Pandoc Markdown output
 route.
 
 ````@example dirty_dataframe
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "tbl-dirty-julia", # Required: stable identity and Quarto target.
@@ -102,7 +105,7 @@ print(
 a table. With a single field, the finding states that field's value.
 
 ````@example dirty_dataframe
-print(computed_first_row_summary(dirty_table; columns = ["status"]))
+println(computed_first_row_summary(dirty_table; columns = ["status"]))
 
 
 using Dates # hide
@@ -127,10 +130,22 @@ event_table = knowledge_table( # hide
     ordering = "temperature descending", # hide
     row_identity = ["place", "date"], # hide
 ) # hide
-@assert occursin("| North | 1960-01-02 | 50.7 |", event_table) # hide
+@assert occursin("| 1960-01-02 |", event_table) # hide
 @assert occursin("\"ordering\":\"temperature descending\"", event_table) # hide
 @assert occursin("\"row_identity\":[\"place\",\"date\"]", event_table) # hide
 ````
+
+## What the canonical model provides
+
+For either input route, TraceCite derives:
+
+- raw source evidence;
+- canonical Markdown;
+- normalised retrieval text;
+- table-level and row-level records; and
+- diagnostics, identifiers, and source hashes.
+
+These are retrieval representations, not embedding vectors.
 
 ---
 

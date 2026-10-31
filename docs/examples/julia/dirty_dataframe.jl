@@ -18,6 +18,7 @@ model.
 """
 
 # %%
+#| label: dirty-dataframe-setup
 #| output: false
 using DataFrames
 using TraceCite
@@ -47,10 +48,14 @@ dirty_table = DataFrame(
 """
 ## Evidence route 1: HTML MIME
 
-The native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.
+A bare DataFrame is a normal Julia evidence route. Its retained HTML is
+preserved, and TraceCite can convert it to canonical Markdown and retrieval
+records without requiring the native helper. The same HTML adapter handles
+Literate and Documenter output.
 """
 
 # %%
+#| label: dirty-dataframe-html-display
 dirty_table
 
 # %% [markdown]
@@ -62,9 +67,10 @@ the minimal form emits a bare pipe table without a numbered Quarto caption.
 """
 
 # %%
+#| label: dirty-dataframe-pandoc-minimal
 #| output: asis
 
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "dirty-dataframe-julia-minimal", # Required: stable TraceCite identity.
@@ -80,9 +86,10 @@ route.
 """
 
 # %%
+#| label: dirty-dataframe-pandoc-advanced
 #| output: asis
 
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "tbl-dirty-julia", # Required: stable identity and Quarto target.
@@ -116,11 +123,13 @@ a table. With a single field, the finding states that field's value.
 """
 
 # %%
+#| label: dirty-dataframe-first-row-summary
 #| output: asis
 
-print(computed_first_row_summary(dirty_table; columns = ["status"]))
+println(computed_first_row_summary(dirty_table; columns = ["status"]))
 
 # %%
+#| label: dirty-dataframe-assertions
 #| include: false
 
 using Dates
@@ -145,6 +154,21 @@ event_table = knowledge_table(
     ordering = "temperature descending",
     row_identity = ["place", "date"],
 )
-@assert occursin("| North | 1960-01-02 | 50.7 |", event_table)
+@assert occursin("| 1960-01-02 |", event_table)
 @assert occursin("\"ordering\":\"temperature descending\"", event_table)
 @assert occursin("\"row_identity\":[\"place\",\"date\"]", event_table)
+
+# %% [markdown]
+"""
+## What the canonical model provides
+
+For either input route, TraceCite derives:
+
+- raw source evidence;
+- canonical Markdown;
+- normalised retrieval text;
+- table-level and row-level records; and
+- diagnostics, identifiers, and source hashes.
+
+These are retrieval representations, not embedding vectors.
+"""

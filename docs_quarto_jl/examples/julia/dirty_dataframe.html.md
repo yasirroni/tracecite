@@ -13,7 +13,7 @@ This page uses the same table contract as the Python introduction: HTML MIME
 and native Pandoc output are two evidence routes into TraceCite's canonical
 model.
 
-::: {#2 .cell execution_count=1}
+::: {#dirty-dataframe-setup .cell execution_count=1}
 ``` {.julia .cell-code}
 using DataFrames
 using TraceCite
@@ -45,14 +45,17 @@ dirty_table = DataFrame(
 
 ## Evidence route 1: HTML MIME
 
-The native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.
+A bare DataFrame is a normal Julia evidence route. Its retained HTML is
+preserved, and TraceCite can convert it to canonical Markdown and retrieval
+records without requiring the native helper. The same HTML adapter handles
+Literate and Documenter output.
 
-::: {#4 .cell execution_count=1}
+::: {#cell-dirty-dataframe-html-display .cell execution_count=1}
 ``` {.julia .cell-code}
 dirty_table
 ```
 
-::: {.cell-output .cell-output-display execution_count=1}
+::: {#dirty-dataframe-html-display .cell-output .cell-output-display execution_count=1}
 ```{=html}
 <div><div style = "float: left;"><span>5×5 DataFrame</span></div><div style = "clear: both;"></div></div><div class = "data-frame" style = "overflow-x: scroll;"><table class = "data-frame" style = "margin-bottom: 6px;"><thead><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: right;">Row</th><th style = "text-align: left;">technology</th><th style = "text-align: left;">capital_cost_per_kw</th><th style = "text-align: left;">variable_cost_per_mwh</th><th style = "text-align: left;">status</th><th style = "text-align: left;">notes</th></tr><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: right;"></th><th title = "String" style = "text-align: left;">String</th><th title = "Union{Missing, Float64}" style = "text-align: left;">Float64?</th><th title = "Float64" style = "text-align: left;">Float64</th><th title = "String" style = "text-align: left;">String</th><th title = "String" style = "text-align: left;">String</th></tr></thead><tbody><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: right;">1</td><td style = "text-align: left;">Solar PV</td><td style = "text-align: right;">1250.0</td><td style = "text-align: right;">0.0</td><td style = "text-align: left;">firm</td><td style = "text-align: left;">Currency: A$1,250/kW</td></tr><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: right;">2</td><td style = "text-align: left;">Battery | BESS</td><td style = "text-align: right;">890.5</td><td style = "text-align: right;">12.4</td><td style = "text-align: left;">provisional</td><td style = "text-align: left;">literal pipe: north | south</td></tr><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: right;">3</td><td style = "text-align: left;">Gas *peaker*</td><td style = "text-align: right;">760.0</td><td style = "text-align: right;">185.0</td><td style = "text-align: left;">review</td><td style = "text-align: left;">emphasis must remain literal</td></tr><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: right;">4</td><td style = "text-align: left;">Hydrogen &lt;draft&gt;</td><td style = "font-style: italic; text-align: right;">missing</td><td style = "text-align: right;">240.0</td><td style = "text-align: left;">missing</td><td style = "text-align: left;">HTML-looking text must be escaped</td></tr><tr class = "dataRow"><td class = "rowLabel" style = "font-weight: bold; text-align: right;">5</td><td style = "text-align: left;">Demand response</td><td style = "text-align: right;">140.0</td><td style = "text-align: right;">-15.0</td><td style = "text-align: left;">credit</td><td style = "text-align: left;">negative value is intentional</td></tr></tbody></table></div>
 ```
@@ -66,8 +69,9 @@ dirty_table
 `knowledge_table()` needs a stable table identifier. A caption is optional, so
 the minimal form emits a bare pipe table without a numbered Quarto caption.
 
+::: {#dirty-dataframe-pandoc-minimal .cell execution_count=1}
 ``` {.julia .cell-code}
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "dirty-dataframe-julia-minimal", # Required: stable TraceCite identity.
@@ -83,6 +87,8 @@ print(
 | Gas \*peaker\* | 760 | 185 | review | emphasis must remain literal |
 | Hydrogen &lt;draft&gt; | not available | 240 | missing | HTML-looking text must be escaped |
 | Demand response | 140 | -15 | credit | negative value is intentional |
+:::
+
 
 
 The advanced call below controls presentation, retrieval context, stable row
@@ -90,8 +96,9 @@ identity, and the data-derived finding. TraceCite can also normalise tables
 produced by other libraries; this helper is a convenient Pandoc Markdown output
 route.
 
+::: {#dirty-dataframe-pandoc-advanced .cell execution_count=1}
 ``` {.julia .cell-code}
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "tbl-dirty-julia", # Required: stable identity and Quarto target.
@@ -131,16 +138,33 @@ print(
 : Technology costs. {#tbl-dirty-julia}
 
 **First-row finding.** For **Solar PV**, capital cost ($/kW) is **1250.00 \$/kW** and status is **firm**.
+:::
+
 
 
 `computed_first_row_summary()` returns the finding on its own, for prose outside
 a table. With a single field, the finding states that field's value.
 
+::: {#dirty-dataframe-first-row-summary .cell execution_count=1}
 ``` {.julia .cell-code}
-print(computed_first_row_summary(dirty_table; columns = ["status"]))
+println(computed_first_row_summary(dirty_table; columns = ["status"]))
 ```
 **First-row finding.** Status is **firm**.
+:::
 
 
 
+
+
+## What the canonical model provides
+
+For either input route, TraceCite derives:
+
+- raw source evidence;
+- canonical Markdown;
+- normalised retrieval text;
+- table-level and row-level records; and
+- diagnostics, identifiers, and source hashes.
+
+These are retrieval representations, not embedding vectors.
 
