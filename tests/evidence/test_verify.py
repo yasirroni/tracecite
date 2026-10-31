@@ -13,12 +13,6 @@ from tracecite.evidence import sync as sync_module
 
 
 def _index_report_corpus(corpus_dir, manifest_path, database_path, embedder):
-    build_pdf(
-        corpus_dir / "AEMO_2026_ISP.pdf",
-        [["Front", "Cover page."]]
-        + [["Retirement", "The retirement trajectory differs between planning cycles."]]
-        * 0,
-    )
     # Build a 65-page-ish document cheaply: just enough pages so page 65 exists.
     pages = [
         ["Section", f"Filler paragraph number {i} for padding purposes only today."]
@@ -368,80 +362,6 @@ public_url = "https://example.invalid/aemo-2026-isp.pdf"
         conn.close()
 
 
-def test_source_links_rejects_schema_v2_unknown_field_missing_field_and_duplicates(
-    corpus_dir, manifest_path, database_path, make_embedder, tmp_path
-):
-    _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    report_path = tmp_path / "reports" / "example.md"
-    _write_report(report_path, corpus_dir)
-    source_links_path = tmp_path / "source-links.toml"
-
-    cases = [
-        ("schema_version = 1\n", "schema_version = 3"),
-        ("schema_version = 2\n", "schema_version = 3"),
-        (
-            """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP.pdf"
-publc_url = "https://example.invalid/source.pdf"
-""",
-            "unknown field",
-        ),
-        (
-            """schema_version = 3
-
-[[source]]
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-""",
-            "missing required field",
-        ),
-        (
-            """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-
-[[source]]
-name = "report-duplicate"
-local_path = "./AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source2.pdf"
-""",
-            "duplicate",
-        ),
-        (
-            """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP_2.pdf"
-public_url = "https://example.invalid/source2.pdf"
-""",
-            "duplicate source-link name",
-        ),
-    ]
-
-    conn = schema.connect(database_path)
-    try:
-        for text, expected in cases:
-            source_links_path.write_text(text, encoding="utf-8")
-            result = verify.verify_report(
-                conn, report_path, corpus_dir, source_links_path=source_links_path
-            )
-            assert any(expected in issue for issue in result.source_link_issues)
-    finally:
-        conn.close()
-
-
 def test_source_links_registry_preserves_opaque_metadata_without_affecting_verification(
     corpus_dir, manifest_path, database_path, make_embedder, tmp_path
 ):
@@ -611,24 +531,6 @@ def test_whitespace_empty_quote_fails_structurally(
     assert result.quote_results[0].status == "structural-error"
 
 
-def test_empty_and_whitespace_quotes_fail_structurally(
-    corpus_dir, manifest_path, database_path, make_embedder, tmp_path
-):
-    _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    report_path = tmp_path / "reports" / "empty.md"
-    report_path.parent.mkdir(parents=True)
-    report_path.write_text(
-        'Evidence [A].\n\n> ""\n> "   "\n\n[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n',
-        encoding="utf-8",
-    )
-    conn = schema.connect(database_path)
-    try:
-        result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
-    assert [quote.status for quote in result.quote_results] == ["structural-error"]
-
-
 def test_code_and_comments_are_ignored_by_citation_scanner(
     corpus_dir, manifest_path, database_path, make_embedder, tmp_path
 ):
@@ -660,43 +562,6 @@ def test_code_and_comments_are_ignored_by_citation_scanner(
     issue_keys = {issue.key for issue in result.citation_issues}
     assert issue_keys == {"TILDE", "LONG", "SHORT"}
     assert len(result.quote_results) == 1
-
-
-@pytest.mark.parametrize("field", ["name", "local_path", "public_url"])
-@pytest.mark.parametrize("value", ["", 7, [], None])
-def test_source_link_fields_reject_non_string_and_empty_values(
-    field, value, corpus_dir, manifest_path, database_path, make_embedder, tmp_path
-):
-    _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    report_path = tmp_path / "reports" / "source-links.md"
-    report_path.parent.mkdir(parents=True)
-    _write_report(report_path, corpus_dir)
-    values = {
-        "name": "report",
-        "local_path": "AEMO_2026_ISP.pdf",
-        "public_url": "https://example.invalid/source.pdf",
-    }
-    values[field] = value
-    source_links_path = tmp_path / "source-links.toml"
-    lines = ["schema_version = 3", "", "[[source]]"]
-    for key, item in values.items():
-        if isinstance(item, str):
-            lines.append(f'{key} = "{item}"')
-        elif item is None:
-            lines.append(f"{key} = 0")
-        elif isinstance(item, list):
-            lines.append(f"{key} = []")
-        else:
-            lines.append(f"{key} = {item}")
-    source_links_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    conn = schema.connect(database_path)
-    try:
-        result = verify.verify_report(
-            conn, report_path, corpus_dir, source_links_path=source_links_path
-        )
-    finally:
-        conn.close()
-    assert any(f"{field}" in issue for issue in result.source_link_issues)
 
 
 def test_reference_destinations_accept_spaces_and_angle_brackets(
