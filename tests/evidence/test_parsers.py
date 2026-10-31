@@ -1,5 +1,5 @@
 """Direct parser unit tests, including one against the static fixture under
-``fixtures/`` (most other tests build fixtures inline via ``conftest.py``)."""
+``tests/fixtures/`` (most other tests build fixtures inline via ``conftest.py``)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from tracecite.evidence.parsers import markdown as markdown_parser
 from tracecite.evidence.parsers import pdf as pdf_parser
 from tracecite.evidence.parsers.base import units_from_layout
 
-FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def test_markdown_parser_against_static_fixture():
