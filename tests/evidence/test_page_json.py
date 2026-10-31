@@ -11,6 +11,21 @@ from tracecite.evidence import schema
 from tracecite.evidence import sync as sync_module
 
 
+def _page_json(root, database_path, *arguments) -> int:
+    return cli.main(
+        [
+            "page",
+            "--root",
+            str(root),
+            "--database",
+            str(database_path),
+            "--format",
+            "json",
+            *arguments,
+        ]
+    )
+
+
 def _sync_pdf_with_assets(
     corpus_dir: Path, manifest_path: Path, database_path: Path, monkeypatch
 ):
@@ -33,19 +48,7 @@ def test_page_json_returns_ordered_array_with_page_assets(
 ):
     _sync_pdf_with_assets(corpus_dir, manifest_path, database_path, monkeypatch)
 
-    exit_code = cli.main(
-        [
-            "page",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "--format",
-            "json",
-            "figure.pdf",
-            "1",
-        ]
-    )
+    exit_code = _page_json(corpus_dir, database_path, "figure.pdf", "1")
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -78,19 +81,7 @@ def test_page_json_preserves_order_for_multiple_selected_pages(
         == "ok"
     )
 
-    exit_code = cli.main(
-        [
-            "page",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "--format",
-            "json",
-            "figure.pdf",
-            "2,1",
-        ]
-    )
+    exit_code = _page_json(corpus_dir, database_path, "figure.pdf", "2, 1")
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -109,19 +100,7 @@ def test_page_json_fails_on_missing_or_escaped_assets_before_stdout(
         asset_path = schema.resolve_asset_path(database_path, asset_row["asset_path"])
         asset_path.unlink()
 
-    exit_code = cli.main(
-        [
-            "page",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "--format",
-            "json",
-            "figure.pdf",
-            "1",
-        ]
-    )
+    exit_code = _page_json(corpus_dir, database_path, "figure.pdf", "1")
     captured = capsys.readouterr()
     assert exit_code == 1
     assert captured.out == ""
@@ -136,19 +115,7 @@ def test_page_json_fails_on_asset_hash_mismatch_before_stdout(
         asset_path = schema.resolve_asset_path(database_path, asset_row["asset_path"])
         asset_path.write_bytes(asset_path.read_bytes() + b"tampered")
 
-    exit_code = cli.main(
-        [
-            "page",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "--format",
-            "json",
-            "figure.pdf",
-            "1",
-        ]
-    )
+    exit_code = _page_json(corpus_dir, database_path, "figure.pdf", "1")
     captured = capsys.readouterr()
     assert exit_code == 1
     assert captured.out == ""
@@ -169,19 +136,7 @@ def test_page_json_fails_on_escaped_asset_paths_before_stdout(
         )
         conn.commit()
 
-    exit_code = cli.main(
-        [
-            "page",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "--format",
-            "json",
-            "figure.pdf",
-            "1",
-        ]
-    )
+    exit_code = _page_json(corpus_dir, database_path, "figure.pdf", "1")
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""

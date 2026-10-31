@@ -36,6 +36,20 @@ def _make_corpus(tmp_path: Path):
     return corpus_dir, manifest_path, database_path
 
 
+def _sync(root: Path, manifest_path: Path, database_path: Path) -> int:
+    return cli.main(
+        [
+            "sync",
+            "--root",
+            str(root),
+            "--manifest",
+            str(manifest_path),
+            "--database",
+            str(database_path),
+        ]
+    )
+
+
 def _fake_model(*args, **kwargs):
     return FakeEmbedder()
 
@@ -77,17 +91,7 @@ def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
 
-    exit_code = cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
+    exit_code = _sync(corpus_dir, manifest_path, database_path)
     assert exit_code == 0
 
     exit_code = cli.main(["doctor", "--database", str(database_path)])
@@ -97,20 +101,7 @@ def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
 def test_cli_verify_quote_exit_codes_and_json_contract(tmp_path, capsys, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    assert (
-        cli.main(
-            [
-                "sync",
-                "--root",
-                str(corpus_dir),
-                "--manifest",
-                str(manifest_path),
-                "--database",
-                str(database_path),
-            ]
-        )
-        == 0
-    )
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
     capsys.readouterr()
 
     cases = [
@@ -152,20 +143,7 @@ def test_cli_page_and_quote_normalise_paths_and_reject_escapes(
     outside.write_text("outside", encoding="utf-8")
     (corpus_dir / "escape.pdf").symlink_to(outside)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    assert (
-        cli.main(
-            [
-                "sync",
-                "--root",
-                str(corpus_dir),
-                "--manifest",
-                str(manifest_path),
-                "--database",
-                str(database_path),
-            ]
-        )
-        == 0
-    )
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
 
     assert (
         cli.main(
@@ -246,17 +224,7 @@ def test_cli_page_and_quote_normalise_paths_and_reject_escapes(
 def test_cli_search_returns_json(tmp_path, capsys, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
+    _sync(corpus_dir, manifest_path, database_path)
     exit_code = cli.main(
         [
             "search",
@@ -286,20 +254,7 @@ def test_cli_search_percentage_query_keeps_json_on_stdout(
     monkeypatch.setattr(
         sync_module, "EmbeddingModel", lambda *args, **kwargs: CapturingEmbedder()
     )
-    assert (
-        cli.main(
-            [
-                "sync",
-                "--root",
-                str(corpus_dir),
-                "--manifest",
-                str(manifest_path),
-                "--database",
-                str(database_path),
-            ]
-        )
-        == 0
-    )
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
     capsys.readouterr()
 
     query = "10%, 50%, and 90%"
@@ -378,17 +333,7 @@ def test_cli_sync_prints_structured_missing_and_unmatched_warnings(
     )
     database_path = tmp_path / "tracecite.sqlite"
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    exit_code = cli.main(
-        [
-            "sync",
-            "--root",
-            str(root),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
+    exit_code = _sync(root, manifest_path, database_path)
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "selected-missing: ['missing.pdf']" in out
