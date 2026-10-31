@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -59,15 +60,12 @@ def test_first_time_indexing(
     assert report.chunks_added == 2
     assert report.embeddings_generated == 2
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 1
         assert conn.execute("SELECT count(*) FROM pages").fetchone()[0] == 2
         assert conn.execute("SELECT count(*) FROM chunks").fetchone()[0] == 2
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 2
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_unchanged_file_zero_writes_and_embeddings(
@@ -301,8 +299,7 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
     renamed_path = corpus_dir / "doc-renamed.pdf"
     one_pdf_corpus.rename(renamed_path)
     write_manifest(manifest_path, {"doc-renamed.pdf": "doc-renamed.pdf"})
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         before_sources = [
             dict(row)
             for row in conn.execute(
@@ -317,8 +314,6 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
             database_path.with_name(database_path.name + "-wal").exists(),
             database_path.with_name(database_path.name + "-shm").exists(),
         )
-    finally:
-        conn.close()
 
     def mutate_at_begin(event):
         if event == "begin-immediate":
@@ -341,8 +336,7 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
         sync_module.ASSET_EVENT_HOOK = None
 
     assert report.status == "aborted-source-changed"
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert not conn.in_transaction
         assert [
             dict(row)
@@ -359,8 +353,6 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
             database_path.with_name(database_path.name + "-shm").exists(),
         )
         assert after_wal == before_wal
-    finally:
-        conn.close()
 
     repair = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=embedder
@@ -420,8 +412,7 @@ def test_changed_content_path_move_retains_old_row_until_prune(
     write_manifest(manifest_path, {"old.pdf": "old.pdf"})
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         old_source_pk = conn.execute(
             "SELECT source_pk FROM sources WHERE path = 'old.pdf'"
         ).fetchone()["source_pk"]
@@ -434,8 +425,6 @@ def test_changed_content_path_move_retains_old_row_until_prune(
         old_embedding_count = conn.execute(
             "SELECT count(*) FROM embeddings"
         ).fetchone()[0]
-    finally:
-        conn.close()
 
     old_path.unlink()
     build_pdf(
@@ -450,8 +439,7 @@ def test_changed_content_path_move_retains_old_row_until_prune(
     assert report.indexed_unselected_paths == ["old.pdf"]
     assert report.sources_renamed == []
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert {
             row["path"] for row in conn.execute("SELECT path FROM sources").fetchall()
         } == {"old.pdf", "new.pdf"}
@@ -471,8 +459,6 @@ def test_changed_content_path_move_retains_old_row_until_prune(
         assert {
             row["path"] for row in conn.execute("SELECT path FROM sources").fetchall()
         } == {"new.pdf"}
-    finally:
-        conn.close()
 
 
 def test_content_movement_preserves_embeddings(
@@ -627,15 +613,12 @@ def test_changed_content_retains_orphan_embeddings_until_prune(
     )
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 2
         assert conn.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0] == 1
         plan = sync_module.plan_prune(conn, selected_paths=[])
         sync_module.apply_prune(conn, database_path, plan)
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 0
-    finally:
-        conn.close()
 
 
 def test_delete_removes_chunks_fts_vectors_and_assets(
@@ -686,13 +669,10 @@ def test_embedding_failure_leaves_database_unchanged(
 
     # An empty schema may already exist (created on first connect), but no
     # application data (sources/chunks/embeddings) may have been written.
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM chunks").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 0
-    finally:
-        conn.close()
 
 
 def test_source_changes_mid_embedding_aborts(
@@ -785,13 +765,10 @@ def test_bad_embedding_dimension_rejected_before_database_writes(
         sync_module.sync(
             corpus_dir, manifest_path, database_path, embedder=BadDimensionEmbedder()
         )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0] == 0
-    finally:
-        conn.close()
 
 
 def test_cached_model_reactivation_commits_even_without_vector_work(
@@ -807,33 +784,26 @@ def test_cached_model_reactivation_commits_even_without_vector_work(
         options=b_options,
         embedder=make_embedder(),
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert schema.load_config(conn).embedding_model_id == b_options.model_id
         original_count = conn.execute(
             "SELECT count(*) FROM embeddings WHERE model_id = ?", (original_id,)
         ).fetchone()[0]
-    finally:
-        conn.close()
     assert original_count > 0
 
     report = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=make_embedder()
     )
     assert report.embeddings_generated == 0
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert schema.load_config(conn).embedding_model_id == original_id
-    finally:
-        conn.close()
 
 
 def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
     one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         before_config = dict(conn.execute("SELECT * FROM kb_config").fetchone())
         before_embeddings = [
             dict(row)
@@ -844,8 +814,6 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
         before_vectors = conn.execute(
             "SELECT count(*) FROM embedding_vectors"
         ).fetchone()[0]
-    finally:
-        conn.close()
 
     def fail_activation(*args, **kwargs):
         raise RuntimeError("activation failed after vectors")
@@ -862,8 +830,7 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
             embedder=make_embedder(),
         )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert dict(conn.execute("SELECT * FROM kb_config").fetchone()) == before_config
         assert [
             dict(row)
@@ -875,8 +842,6 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
             conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0]
             == before_vectors
         )
-    finally:
-        conn.close()
 
     def fail_if_called(*args, **kwargs):
         raise AssertionError(
@@ -896,15 +861,12 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
             embedder=make_embedder(),
         )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert dict(conn.execute("SELECT * FROM kb_config").fetchone()) == before_config
         assert (
             conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0]
             == before_vectors
         )
-    finally:
-        conn.close()
 
 
 def test_manifest_discovery_does_not_traverse_unmatched_noisy_dirs(
@@ -957,13 +919,10 @@ def test_sync_reports_indexed_vanished_glob_path_as_selected_missing_not_prunabl
 
     assert report.selected_missing_paths == ["reports/keep.md"]
     assert report.indexed_unselected_paths == []
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert (
             sync_module.plan_prune(conn, selected_paths=["reports/keep.md"]).paths == ()
         )
-    finally:
-        conn.close()
 
 
 def test_sync_local_exclusion_makes_indexed_path_unselected(
@@ -1037,8 +996,7 @@ def test_sync_ocr_fallback_populates_pages_and_chunks(
     )
     assert report.sources_added == ["scan.pdf"]
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         page_rows = conn.execute(
             "SELECT physical_page, text, extraction_method FROM pages "
             "JOIN sources USING (source_pk) WHERE sources.path = 'scan.pdf' ORDER BY physical_page"
@@ -1055,8 +1013,6 @@ def test_sync_ocr_fallback_populates_pages_and_chunks(
         assert chunk_rows
         assert any("text layer" in row["body"].lower() for row in chunk_rows)
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_sync_ocr_lang_option_threaded_into_parser_config(
@@ -1078,8 +1034,7 @@ def test_sync_ocr_lang_option_threaded_into_parser_config(
     )
     assert set(report.sources_added) == {"scan.pdf", "report.md"}
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         pdf_config = json.loads(
             conn.execute(
                 "SELECT parser_config FROM sources WHERE path = 'scan.pdf'"
@@ -1093,8 +1048,6 @@ def test_sync_ocr_lang_option_threaded_into_parser_config(
             ).fetchone()["parser_config"]
         )
         assert markdown_config == {}
-    finally:
-        conn.close()
 
 
 def test_sync_figure_crop_nearby_text_lands_in_assets_table(
@@ -1133,8 +1086,7 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
     )
     assert report.sources_added == ["figure.pdf"]
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             "SELECT asset_type, nearby_text, ocr_text, visual_description FROM assets "
             "JOIN sources USING (source_pk) WHERE sources.path = 'figure.pdf' AND asset_type = 'figure-crop'"
@@ -1144,8 +1096,6 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
         assert "Figure 1" in rows[0]["nearby_text"]
         assert rows[0]["ocr_text"] is None
         assert rows[0]["visual_description"] is None
-    finally:
-        conn.close()
 
 
 def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
@@ -1175,23 +1125,17 @@ def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
         sync_module.ASSET_EVENT_HOOK = None
 
     assert report.status == "aborted-source-changed"
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM chunks").fetchone()[0] == 0
-    finally:
-        conn.close()
 
     repair = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=make_embedder()
     )
     assert repair.sources_added == ["a.md"]
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         body = "\n".join(row["body"] for row in conn.execute("SELECT body FROM chunks"))
         assert "Evidence bravo 2222." in body
-    finally:
-        conn.close()
 
 
 def test_rename_mutation_with_restored_metadata_aborts(
@@ -1226,15 +1170,12 @@ def test_rename_mutation_with_restored_metadata_aborts(
         sync_module.ASSET_EVENT_HOOK = None
 
     assert report.status == "aborted-source-changed"
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert [row["path"] for row in conn.execute("SELECT path FROM sources")] == [
             "old.md"
         ]
         body = "\n".join(row["body"] for row in conn.execute("SELECT body FROM chunks"))
         assert "Evidence alpha 1111." in body
-    finally:
-        conn.close()
 
 
 def test_reparse_mutation_at_precommit_rolls_back_and_repairs(
@@ -1267,24 +1208,18 @@ def test_reparse_mutation_at_precommit_rolls_back_and_repairs(
         sync_module.ASSET_EVENT_HOOK = None
 
     assert report.status == "aborted-source-changed"
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         body = "\n".join(row["body"] for row in conn.execute("SELECT body FROM chunks"))
         assert "Evidence alpha 1111." in body
         assert "Evidence bravo 2222." not in body
-    finally:
-        conn.close()
 
     repair = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=make_embedder()
     )
     assert repair.sources_reparsed == ["a.md"]
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         body = "\n".join(row["body"] for row in conn.execute("SELECT body FROM chunks"))
         assert "Evidence delta 3333." in body
-    finally:
-        conn.close()
 
 
 def test_same_size_same_mtime_content_change_is_not_fast_unchanged(
@@ -1311,13 +1246,10 @@ def test_same_size_same_mtime_content_change_is_not_fast_unchanged(
     assert report.sources_reparsed == ["a.md"]
     assert report.sources_unchanged == []
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         row = conn.execute("SELECT sha256 FROM sources WHERE path = 'a.md'").fetchone()
         assert row["sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
         body = "\n".join(
             item["body"] for item in conn.execute("SELECT body FROM chunks")
         )
         assert "Evidence bravo 2222." in body
-    finally:
-        conn.close()

@@ -30,11 +30,7 @@ class FakeEmbedder:
 @pytest.fixture
 def make_embedder():
     """Factory for a fresh, call-counting fake embedder."""
-
-    def _make() -> FakeEmbedder:
-        return FakeEmbedder()
-
-    return _make
+    return FakeEmbedder
 
 
 def write_manifest(path: Path, entries: dict[str, str]) -> Path:

@@ -71,7 +71,7 @@ class KnowledgeBaseConfig:
         return embedding_model_id(self.embedding_model, self.embedding_revision)
 
 
-_KNOWN_TABLES = {
+ORDINARY_TABLES = (
     "kb_config",
     "sources",
     "pages",
@@ -79,8 +79,8 @@ _KNOWN_TABLES = {
     "embeddings",
     "chunk_embeddings",
     "assets",
-    "sqlite_sequence",
-}
+)
+_KNOWN_TABLES = {*ORDINARY_TABLES, "sqlite_sequence"}
 _KNOWN_TABLE_PREFIXES = ("chunks_fts", "embedding_vectors")
 
 _REQUIRED_COLUMNS = {
@@ -116,15 +116,7 @@ _REQUIRED_COLUMNS = {
 }
 
 _REQUIRED_OBJECTS = {
-    "tables": {
-        "kb_config",
-        "sources",
-        "pages",
-        "chunks",
-        "embeddings",
-        "chunk_embeddings",
-        "assets",
-    },
+    "tables": set(ORDINARY_TABLES),
     "virtual_tables": {"chunks_fts", "embedding_vectors"},
     "indexes": {
         "chunks_sourcepk_idx",

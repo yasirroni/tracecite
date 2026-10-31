@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -12,8 +13,7 @@ from tracecite.evidence import sync as sync_module
 
 
 def _asset_state(database_path: Path):
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             "SELECT asset_path, sha256 FROM assets ORDER BY asset_path"
         ).fetchall()
@@ -29,31 +29,23 @@ def _asset_state(database_path: Path):
             )
             for row in rows
         ]
-    finally:
-        conn.close()
 
 
 def _source_paths(database_path: Path) -> list[str]:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         return [
             row["path"]
             for row in conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
         ]
-    finally:
-        conn.close()
 
 
 def _asset_rows(database_path: Path) -> list[tuple[str, int, str]]:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             "SELECT sources.path, assets.source_pk, assets.asset_path "
             "FROM assets JOIN sources USING (source_pk) ORDER BY sources.path, assets.asset_path"
         ).fetchall()
         return [(row["path"], row["source_pk"], row["asset_path"]) for row in rows]
-    finally:
-        conn.close()
 
 
 def test_assets_are_written_to_generation_paths_and_hash_checked(
@@ -74,13 +66,10 @@ def test_assets_are_written_to_generation_paths_and_hash_checked(
     )
     assert all(stored == actual for _, stored, actual in state)
     schema.resolve_asset_path(database_path, state[0][0]).write_bytes(b"corrupt")
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert any(
             "hash mismatch" in issue for issue in sync_module.integrity_check(conn)
         )
-    finally:
-        conn.close()
 
 
 def test_relative_asset_storage_relocates_with_database_and_imgs(
@@ -95,14 +84,11 @@ def test_relative_asset_storage_relocates_with_database_and_imgs(
     shutil.copy2(database_path, relocated_db)
     shutil.copytree(schema.imgs_dir(database_path), relocated / "imgs")
 
-    conn = schema.connect(relocated_db)
-    try:
+    with closing(schema.connect(relocated_db)) as conn:
         rows = conn.execute("SELECT asset_path FROM assets").fetchall()
         assert rows
         assert all(row["asset_path"].startswith("imgs/generations/") for row in rows)
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_schema_v3_rejects_existing_absolute_asset_paths(
@@ -113,8 +99,7 @@ def test_schema_v3_rejects_existing_absolute_asset_paths(
     )
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         stored = conn.execute("SELECT asset_path FROM assets LIMIT 1").fetchone()[
             "asset_path"
         ]
@@ -123,8 +108,6 @@ def test_schema_v3_rejects_existing_absolute_asset_paths(
         conn.commit()
         with pytest.raises(schema.IncompatibleDatabaseError, match="absolute asset"):
             schema.ensure_schema(conn)
-    finally:
-        conn.close()
 
 
 def test_new_source_assets_finalize_from_staging_to_source_pk_directory(
@@ -137,8 +120,7 @@ def test_new_source_assets_finalize_from_staging_to_source_pk_directory(
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         source_pk = conn.execute(
             "SELECT source_pk FROM sources WHERE path = 'doc.pdf'"
         ).fetchone()["source_pk"]
@@ -146,8 +128,6 @@ def test_new_source_assets_finalize_from_staging_to_source_pk_directory(
             schema.resolve_asset_path(database_path, row["asset_path"])
             for row in conn.execute("SELECT asset_path FROM assets").fetchall()
         ]
-    finally:
-        conn.close()
     assert asset_paths
     assert all(path.parent.name == str(source_pk) for path in asset_paths)
     generation_root = asset_paths[0].parents[1]
@@ -201,12 +181,9 @@ def test_new_source_staging_rename_failure_rolls_back_and_discards_generation(
         )
     monkeypatch.setattr(sync_module.AssetGeneration, "finalize_new_source", original)
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM assets").fetchone()[0] == 0
-    finally:
-        conn.close()
     generations_root = database_path.parent / "imgs" / "generations"
     assert not generations_root.exists() or not list(generations_root.iterdir())
 
@@ -281,11 +258,8 @@ def test_actual_commit_failure_rolls_back_or_recovers_without_candidate_adoption
     monkeypatch.setattr(sync_module.schema, "connect", real_connect)
 
     assert _asset_state(database_path) == before
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_asset_hashing_completes_before_write_transaction(
@@ -313,8 +287,7 @@ def test_prune_apply_removes_only_pruned_physical_asset_directory_from_shared_ge
     build_pdf(corpus_dir / "remove.pdf", [["Remove", "Pruned source asset bytes."]])
     write_manifest(manifest_path, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             "SELECT sources.path, sources.source_pk, assets.asset_path FROM assets JOIN sources USING (source_pk)"
         ).fetchall()
@@ -332,8 +305,6 @@ def test_prune_apply_removes_only_pruned_physical_asset_directory_from_shared_ge
         assert remove_dir.exists()
         leaks = sync_module.apply_prune(conn, database_path, preview)
         assert leaks == []
-    finally:
-        conn.close()
     assert keep_dir.exists()
     assert not remove_dir.exists()
     assert keep_dir.parent.exists()
@@ -347,8 +318,7 @@ def test_prune_cleanup_failure_reports_leak_and_preserves_database(
     )
     write_manifest(manifest_path, {"remove.pdf": "remove.pdf"})
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         plan = sync_module.plan_prune(conn, selected_paths=[])
         monkeypatch.setattr(
             sync_module,
@@ -359,8 +329,6 @@ def test_prune_cleanup_failure_reports_leak_and_preserves_database(
         assert any("cleanup denied" in leak for leak in leaks)
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_successful_sync_reports_post_commit_generation_cleanup_leak(
@@ -382,11 +350,8 @@ def test_successful_sync_reports_post_commit_generation_cleanup_leak(
         corpus_dir, manifest_path, database_path, embedder=make_embedder()
     )
     assert any("gc denied" in warning for warning in report.cleanup_warnings)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_sync_can_defer_generation_cleanup_until_explicit_validation_step(
@@ -418,14 +383,11 @@ def test_sync_can_defer_generation_cleanup_until_explicit_validation_step(
     assert first_generation in generations
     assert len(generations) == 2
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         referenced = sync_module.referenced_asset_generations(conn, database_path)
         assert first_generation not in referenced
         warnings = sync_module.cleanup_asset_generations(conn, database_path)
         assert warnings == []
-    finally:
-        conn.close()
     generations_after = {path for path in generations_root.iterdir() if path.is_dir()}
     assert first_generation not in generations_after
     assert generations_after == referenced
@@ -453,13 +415,10 @@ def test_explicit_asset_generation_cleanup_reports_leaks_without_corrupting_db(
         "_rmtree_dir_at",
         lambda *a, **k: (_ for _ in ()).throw(OSError("cleanup denied")),
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         warnings = sync_module.cleanup_asset_generations(conn, database_path)
         assert any("cleanup denied" in warning for warning in warnings)
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_cleanup_asset_generations_removes_stale_generation_with_descriptor_cleanup(
@@ -481,14 +440,11 @@ def test_cleanup_asset_generations_removes_stale_generation_with_descriptor_clea
         embedder=make_embedder(),
     )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         warnings = sync_module.cleanup_asset_generations(conn, database_path)
         assert warnings == []
         assert not first_generation.exists()
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_cleanup_asset_generations_unsupported_dirfd_warns_and_retains_all_assets(
@@ -517,8 +473,7 @@ def test_cleanup_asset_generations_unsupported_dirfd_warns_and_retains_all_asset
         raise OSError("dir_fd unavailable")
 
     monkeypatch.setattr(sync_module, "_require_dirfd_primitives", unsupported)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         plan = sync_module.plan_prune(conn, selected_paths=["keep.pdf"])
         warnings = sync_module.apply_prune(conn, database_path, plan)
         assert any("dir_fd unavailable" in warning for warning in warnings)
@@ -529,8 +484,6 @@ def test_cleanup_asset_generations_unsupported_dirfd_warns_and_retains_all_asset
             if path.is_file()
         )
         assert after_paths == before_paths
-    finally:
-        conn.close()
 
 
 def test_cleanup_asset_generations_unlinks_replaced_generation_symlink_without_traversal(
@@ -566,15 +519,12 @@ def test_cleanup_asset_generations_unlinks_replaced_generation_symlink_without_t
     monkeypatch.setattr(
         sync_module, "referenced_asset_generations", replace_after_reference_scan
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         warnings = sync_module.cleanup_asset_generations(conn, database_path)
         assert warnings == []
         assert sentinel.read_text(encoding="utf-8") == "do not delete"
         assert not first_generation.exists()
         assert not first_generation.is_symlink()
-    finally:
-        conn.close()
 
 
 def test_prune_rejects_absolute_traversal_sibling_and_symlink_targets_atomically(
@@ -614,8 +564,7 @@ def test_prune_rejects_absolute_traversal_sibling_and_symlink_targets_atomically
         outside.mkdir(exist_ok=True)
         (outside / "absolute.png").write_text("outside", encoding="utf-8")
 
-        conn = schema.connect(database)
-        try:
+        with closing(schema.connect(database)) as conn:
             remove_pk = conn.execute(
                 "SELECT source_pk FROM sources WHERE path = 'remove.pdf'"
             ).fetchone()["source_pk"]
@@ -636,8 +585,6 @@ def test_prune_rejects_absolute_traversal_sibling_and_symlink_targets_atomically
                 row["path"]
                 for row in conn.execute("SELECT path FROM sources ORDER BY path")
             ] == before_sources
-        finally:
-            conn.close()
         # The valid keep asset remains and the external sentinel was not deleted.
         assert all(
             schema.resolve_asset_path(database, path).exists()
@@ -673,8 +620,7 @@ def test_prune_rejects_mixed_valid_and_invalid_candidate_before_db_or_fs_mutatio
         next(path for source, _, path in before_assets if source == "remove-ok.pdf"),
     ).parent
 
-    conn = schema.connect(database)
-    try:
+    with closing(schema.connect(database)) as conn:
         bad_pk = conn.execute(
             "SELECT source_pk FROM sources WHERE path = 'remove-bad.pdf'"
         ).fetchone()["source_pk"]
@@ -690,8 +636,6 @@ def test_prune_rejects_mixed_valid_and_invalid_candidate_before_db_or_fs_mutatio
         assert _source_paths(database) == before_sources
         assert _asset_rows(database) == before_assets
         assert remove_ok_dir.exists()
-    finally:
-        conn.close()
 
 
 def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path, make_embedder):
@@ -705,8 +649,7 @@ def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path, make_embe
     sync_module.sync(corpus, manifest, database, embedder=make_embedder())
     before_sources = _source_paths(database)
 
-    conn = schema.connect(database)
-    try:
+    with closing(schema.connect(database)) as conn:
         remove_pk = conn.execute(
             "SELECT source_pk FROM sources WHERE path = 'remove.pdf'"
         ).fetchone()["source_pk"]
@@ -721,8 +664,6 @@ def test_prune_rejects_shallow_identifier_before_db_mutation(tmp_path, make_embe
             sync_module.apply_prune(conn, database, plan)
         assert _source_paths(database) == before_sources
         assert _asset_rows(database) == before_assets
-    finally:
-        conn.close()
 
 
 def test_prune_cleanup_revalidates_after_touch_config_symlink_replacement(
@@ -736,8 +677,7 @@ def test_prune_cleanup_revalidates_after_touch_config_symlink_replacement(
     build_pdf(corpus / "remove.pdf", [["Remove", "Replacement probe asset."]])
     write_manifest(manifest, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
     sync_module.sync(corpus, manifest, database, embedder=make_embedder())
-    conn = schema.connect(database)
-    try:
+    with closing(schema.connect(database)) as conn:
         remove_asset = conn.execute(
             "SELECT asset_path FROM assets JOIN sources USING (source_pk) WHERE sources.path = 'remove.pdf'"
         ).fetchone()["asset_path"]
@@ -763,8 +703,6 @@ def test_prune_cleanup_revalidates_after_touch_config_symlink_replacement(
         assert not remove_dir.exists()
         assert not remove_dir.is_symlink()
         assert _source_paths(database) == ["keep.pdf"]
-    finally:
-        conn.close()
 
 
 def test_prune_cleanup_revalidates_generation_ancestor_symlink_replacement(
@@ -780,8 +718,7 @@ def test_prune_cleanup_revalidates_generation_ancestor_symlink_replacement(
     )
     write_manifest(manifest, {"keep.pdf": "keep.pdf", "remove.pdf": "remove.pdf"})
     sync_module.sync(corpus, manifest, database, embedder=make_embedder())
-    conn = schema.connect(database)
-    try:
+    with closing(schema.connect(database)) as conn:
         remove_asset = conn.execute(
             "SELECT asset_path FROM assets JOIN sources USING (source_pk) WHERE sources.path = 'remove.pdf'"
         ).fetchone()["asset_path"]
@@ -808,8 +745,6 @@ def test_prune_cleanup_revalidates_generation_ancestor_symlink_replacement(
         assert not generation_dir.exists()
         assert not generation_dir.is_symlink()
         assert _source_paths(database) == ["keep.pdf"]
-    finally:
-        conn.close()
 
 
 def test_trusted_asset_resolver_accepts_relative_identifier_under_imgs(tmp_path):

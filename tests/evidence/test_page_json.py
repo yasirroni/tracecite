@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import closing
 from pathlib import Path
 
 from conftest import FakeEmbedder, build_pdf_with_image_only_page, write_manifest
@@ -101,15 +102,12 @@ def test_page_json_fails_on_missing_or_escaped_assets_before_stdout(
     corpus_dir, manifest_path, database_path, monkeypatch, capsys
 ):
     _sync_pdf_with_assets(corpus_dir, manifest_path, database_path, monkeypatch)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         asset_row = conn.execute(
             "SELECT asset_id, asset_path FROM assets LIMIT 1"
         ).fetchone()
         asset_path = schema.resolve_asset_path(database_path, asset_row["asset_path"])
         asset_path.unlink()
-    finally:
-        conn.close()
 
     exit_code = cli.main(
         [
@@ -133,13 +131,10 @@ def test_page_json_fails_on_asset_hash_mismatch_before_stdout(
     corpus_dir, manifest_path, database_path, monkeypatch, capsys
 ):
     _sync_pdf_with_assets(corpus_dir, manifest_path, database_path, monkeypatch)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         asset_row = conn.execute("SELECT asset_path FROM assets LIMIT 1").fetchone()
         asset_path = schema.resolve_asset_path(database_path, asset_row["asset_path"])
         asset_path.write_bytes(asset_path.read_bytes() + b"tampered")
-    finally:
-        conn.close()
 
     exit_code = cli.main(
         [
@@ -164,8 +159,7 @@ def test_page_json_fails_on_escaped_asset_paths_before_stdout(
     corpus_dir, manifest_path, database_path, monkeypatch, capsys
 ):
     _sync_pdf_with_assets(corpus_dir, manifest_path, database_path, monkeypatch)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         asset_id = conn.execute(
             "SELECT asset_id FROM assets WHERE asset_type = 'page-render' LIMIT 1"
         ).fetchone()["asset_id"]
@@ -174,8 +168,6 @@ def test_page_json_fails_on_escaped_asset_paths_before_stdout(
             (asset_id,),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     exit_code = cli.main(
         [

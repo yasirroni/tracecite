@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -42,10 +43,7 @@ class FakeEmbedder:
 
 @pytest.fixture
 def make_embedder():
-    def _make() -> FakeEmbedder:
-        return FakeEmbedder()
-
-    return _make
+    return FakeEmbedder
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path]:
@@ -102,8 +100,7 @@ def _touch_future_mtime(path: Path) -> None:
 
 
 def _index_snapshot(database_path: Path) -> dict[str, object]:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         sources = [
             row["path"]
             for row in conn.execute("SELECT path FROM sources ORDER BY path")
@@ -123,8 +120,6 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
                 for row in chunks
             ],
         }
-    finally:
-        conn.close()
 
 
 def test_mirror_preserves_relative_paths_and_augments_tables(tmp_path: Path) -> None:
@@ -326,23 +321,17 @@ def test_same_database_chunk_uuids_remain_stable_on_repeat_sync(
     contract = load_docs_contract(config, repo_root=root)
     embedder = make_embedder()
     sync_docs_index(contract, repo_root=root, embedder=embedder)
-    conn = schema.connect(contract.index_output)
-    try:
+    with closing(schema.connect(contract.index_output)) as conn:
         first_ids = [
             row["chunk_id"]
             for row in conn.execute("SELECT chunk_id FROM chunks ORDER BY chunk_id")
         ]
-    finally:
-        conn.close()
     sync_docs_index(contract, repo_root=root, embedder=embedder)
-    conn = schema.connect(contract.index_output)
-    try:
+    with closing(schema.connect(contract.index_output)) as conn:
         second_ids = [
             row["chunk_id"]
             for row in conn.execute("SELECT chunk_id FROM chunks ORDER BY chunk_id")
         ]
-    finally:
-        conn.close()
     assert first_ids == second_ids
 
 

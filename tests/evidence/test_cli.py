@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
 from conftest import FakeEmbedder, build_pdf, write_manifest
@@ -45,8 +46,7 @@ def _write_manifest(path: Path, text: str) -> Path:
 
 
 def _insert_source(database_path: Path, stored_path: str) -> None:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         conn.execute(
             """
@@ -62,20 +62,15 @@ def _insert_source(database_path: Path, stored_path: str) -> None:
             (stored_path,),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _source_paths(database_path: Path) -> list[str]:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         return [
             row["path"]
             for row in conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
         ]
-    finally:
-        conn.close()
 
 
 def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
@@ -585,8 +580,7 @@ def test_cli_verify_report_emits_citation_binding(tmp_path, capsys):
     )
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "doc.md")
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         source_pk = conn.execute(
             "SELECT source_pk FROM sources WHERE path = 'doc.md'"
         ).fetchone()[0]
@@ -600,8 +594,6 @@ def test_cli_verify_report_emits_citation_binding(tmp_path, capsys):
             (source_pk, "Evidence sentence retained on page one."),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     report_path = root / "report.md"
     report_path.write_text(

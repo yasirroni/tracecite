@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -14,8 +15,7 @@ from tracecite.evidence import schema
 def _insert_pdf_source(
     database_path: Path, source_path: str, source_pdf: Path, page_count: int
 ) -> None:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         conn.execute(
             """
@@ -44,8 +44,6 @@ def _insert_pdf_source(
                 (source_pk, physical_page, f"Page {physical_page} text"),
             )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _extract_summary(stdout: str) -> dict:

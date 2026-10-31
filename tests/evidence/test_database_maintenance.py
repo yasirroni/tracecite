@@ -6,6 +6,7 @@ import json
 import shutil
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -26,8 +27,7 @@ def load_script(name: str):
 def make_db(path: Path, *, bloat: bool = False, vectors: bool = True) -> Path:
     from tracecite.evidence import schema, vector_backend
 
-    conn = schema.connect(path)
-    try:
+    with closing(schema.connect(path)) as conn:
         schema.ensure_schema(conn)
         conn.execute(
             """
@@ -83,8 +83,6 @@ def make_db(path: Path, *, bloat: bool = False, vectors: bool = True) -> Path:
             )
             conn.execute("DROP TABLE transient_bloat")
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    finally:
-        conn.close()
     return path
 
 

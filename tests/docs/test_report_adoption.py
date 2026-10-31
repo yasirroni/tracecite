@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -101,8 +102,7 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
     # generated ``chunk_id`` UUID: two independent syncs assign different
     # random chunk ids to the same logical chunks, so ordering by chunk_id
     # would make row order (not content) differ between fresh copies.
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         sources = [
             row["path"]
             for row in conn.execute("SELECT path FROM sources ORDER BY path")
@@ -121,8 +121,6 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
                 for row in chunks
             ],
         }
-    finally:
-        conn.close()
 
 
 def _extract_local_destination(text: str, pdf_name: str, page: int) -> str:

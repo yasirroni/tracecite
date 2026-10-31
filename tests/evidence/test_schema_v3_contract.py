@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -9,8 +10,7 @@ from tracecite.evidence import schema
 
 
 def test_schema_v3_uses_internal_source_pk_only(database_path: Path):
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         columns = {
             table: [row["name"] for row in conn.execute(f"PRAGMA table_info({table})")]
@@ -24,8 +24,6 @@ def test_schema_v3_uses_internal_source_pk_only(database_path: Path):
         ).fetchone()[0]
         assert "source_pk INTEGER PRIMARY KEY AUTOINCREMENT" in source_sql
         assert "path TEXT NOT NULL UNIQUE" in source_sql
-    finally:
-        conn.close()
 
 
 def _tracecite_objects(conn):
@@ -58,8 +56,7 @@ class _FailingVecConnection:
 
 
 def test_schema_creation_rolls_back_partial_ddl_after_vec0_failure(database_path: Path):
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         with pytest.raises(sqlite3.DatabaseError, match="injected vec0"):
             schema.ensure_schema(_FailingVecConnection(conn))
         assert _tracecite_objects(conn) == []
@@ -69,8 +66,6 @@ def test_schema_creation_rolls_back_partial_ddl_after_vec0_failure(database_path
             conn.execute("SELECT schema_version FROM kb_config").fetchone()[0]
             == schema.SCHEMA_VERSION
         )
-    finally:
-        conn.close()
 
 
 def _replace_sources_without_source_pk(conn):
@@ -102,14 +97,11 @@ def _replace_table_with_columns(conn, table: str, columns: list[str]) -> None:
 def test_ensure_schema_rejects_incomplete_matching_version_schema(
     database_path: Path, mutator, message
 ):
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         mutator(conn)
         with pytest.raises(schema.IncompatibleDatabaseError, match=message):
             schema.ensure_schema(conn)
-    finally:
-        conn.close()
 
 
 @pytest.mark.parametrize(
@@ -136,11 +128,8 @@ def test_ensure_schema_rejects_incomplete_matching_version_schema(
 def test_ensure_schema_rejects_missing_operational_columns(
     database_path: Path, table, kept_columns, missing
 ):
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         _replace_table_with_columns(conn, table, kept_columns)
         with pytest.raises(schema.IncompatibleDatabaseError, match=missing):
             schema.ensure_schema(conn)
-    finally:
-        conn.close()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -130,8 +131,7 @@ def test_workbook_sync_and_search_expose_defensible_locator(
     )
     assert report.sources_added == ["assumptions.xlsx"]
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(conn, "brown coal retirement year", 5, 50, 50, embedder)
         assert results
         result = results[0]
@@ -144,8 +144,6 @@ def test_workbook_sync_and_search_expose_defensible_locator(
         assert result["locator"]["exact_ranges"] == ["A1:B1", "A2:C2", "A3:B3"]
         assert result["physical_page"] is None
         assert "pdf_link" not in result
-    finally:
-        conn.close()
 
 
 def test_page_command_rejects_workbook_sheet_indexes_as_pdf_pages(
@@ -203,8 +201,7 @@ def test_workbook_dropped_from_manifest_is_retained_until_prune(
     assert report.indexed_unselected_paths == ["assumptions.xlsx"]
     assert report.selected_missing_paths == []
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         workbook_chunks = "SELECT count(*) FROM chunks JOIN sources USING (source_pk) WHERE sources.path = 'assumptions.xlsx'"
         assert conn.execute(workbook_chunks).fetchone()[0] > 0
 
@@ -216,8 +213,6 @@ def test_workbook_dropped_from_manifest_is_retained_until_prune(
         }
         assert conn.execute(workbook_chunks).fetchone()[0] == 0
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_workbook_cell_change_reparses_and_replaces_searchable_chunks(
@@ -237,8 +232,7 @@ def test_workbook_cell_change_reparses_and_replaces_searchable_chunks(
     )
     assert report.sources_reparsed == ["assumptions.xlsx"]
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         body = "\n".join(row["body"] for row in conn.execute("SELECT body FROM chunks"))
         assert "B2 = 2031" in body
         assert "B2 = 2035" not in body
@@ -247,5 +241,3 @@ def test_workbook_cell_change_reparses_and_replaces_searchable_chunks(
         assert results[0]["source_path"] == "assumptions.xlsx"
         assert "B2 = 2031" in results[0]["passage"]
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
