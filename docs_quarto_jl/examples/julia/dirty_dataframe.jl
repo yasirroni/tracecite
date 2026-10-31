@@ -18,6 +18,7 @@ model.
 """
 
 # %%
+#| output: false
 using DataFrames
 using TraceCite
 

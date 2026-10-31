@@ -1,7 +1,7 @@
 {
   "files": {
     "src/examples/julia/dirty_dataframe.jl": {
-      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
+      "sha256": "55eacd33687de2342b39dd06bda7d289f8ae27df3eebe34b9651440799e27fc0",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "src/examples/workbook-vector-search/index.md": {
