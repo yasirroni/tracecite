@@ -28,7 +28,7 @@ retained-but-inactive older model's vectors never leak into ranking.
 
 ## No ANN index
 
-There is no approximate-nearest-neighbour index. `SqliteVecBackend.search()` always runs an exact `vec0` k-NN scan (`k` = every row when a bounded filter is supplied, since a smaller `k` could silently miss an allowed id that ranks outside it — filtering to the allowed set happens in Python afterward). Add quantisation, pre-filtering, or an ANN structure only after a measured retrieval-quality/latency need on a real corpus, not speculatively.
+There is no approximate-nearest-neighbour index. `SqliteVecBackend.search()` runs exact `vec0` k-NN queries, applying allowed-ID filters before ranking. Each shard returns at most `top_k` candidates, bounded by sqlite-vec's per-query limit, and Python selects the global nearest results. Filtering after truncation would silently miss eligible vectors. Add quantisation or an ANN structure only after a measured retrieval-quality/latency need on a real corpus, not speculatively.
 
 ## Metadata filters
 

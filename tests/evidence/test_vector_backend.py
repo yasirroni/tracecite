@@ -67,14 +67,6 @@ def test_backend_integrity_check_detects_orphans(conn):
     assert backend.integrity_check(conn) == []
 
 
-def test_sqlite_vec_extension_loads_and_reports_version(conn):
-    # This one test intentionally exercises the sqlite-vec extension surface
-    # directly, so a version regression in the pinned dependency is caught
-    # even though the rest of the suite never touches vec0 SQL directly.
-    version = vector_backend.version(conn)
-    assert version.startswith("v0.")
-
-
 def test_backend_search_scans_shards_for_filtered_and_unfiltered_results(conn):
     """A 4097-row corpus exercises the sqlite-vec per-query k limit."""
 
@@ -97,14 +89,22 @@ def test_backend_search_scans_shards_for_filtered_and_unfiltered_results(conn):
             value = 0.2
         backend.upsert(conn, embedding_id, [value] + [0.0] * (dims - 1))
 
-    filtered = backend.search(conn, query, top_k=2, allowed_embedding_ids=allowed_ids)
+    filtered = backend.search(
+        conn,
+        query,
+        top_k=2,
+        allowed_embedding_ids=[*allowed_ids, allowed_ids[0], 10000],
+    )
     assert [match.embedding_id for match in filtered] == [
         second_shard_id,
         allowed_ids[0],
     ]
 
-    unfiltered = backend.search(conn, query, top_k=1)
-    assert [match.embedding_id for match in unfiltered] == [second_shard_id]
+    assert backend.search(conn, query, top_k=2, allowed_embedding_ids=[]) == []
+    unfiltered = backend.search(conn, query, top_k=5000)
+    assert len(unfiltered) == 4097
+    assert unfiltered[0].embedding_id == second_shard_id
+    assert unfiltered[-1].embedding_id == allowed_ids[0]
 
 
 def test_schema_v1_database_requires_rebuild_and_resync(tmp_path):

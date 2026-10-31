@@ -6,6 +6,8 @@ All vec0 virtual-table SQL lives here; the rest of the evidence code calls
 
 from __future__ import annotations
 
+import heapq
+import json
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -78,25 +80,20 @@ class SqliteVecBackend:
         if top_k <= 0:
             return []
         packed = _sqlite_vec().serialize_float32(list(query_vector))
-        if allowed_embedding_ids is not None:
-            allowed = set(allowed_embedding_ids)
-            if not allowed:
-                return []
-            matches = []
-            for shard_id in {self._shard_id(embedding_id) for embedding_id in allowed}:
-                shard_matches = self._knn(
-                    conn, packed, shard_id, self._shard_row_count(conn, shard_id)
-                )
-                matches.extend(
-                    match for match in shard_matches if match.embedding_id in allowed
-                )
-            return sorted(matches, key=lambda match: match.distance)[:top_k]
+        shards: dict[str, list[int] | None] = {}
+        if allowed_embedding_ids is None:
+            shards = dict.fromkeys(self._shard_ids(conn))
+        else:
+            for embedding_id in set(allowed_embedding_ids):
+                shard_id = self._shard_id(embedding_id)
+                shards.setdefault(shard_id, []).append(embedding_id)
 
         matches = []
-        for shard_id in self._shard_ids(conn):
-            shard_count = self._shard_row_count(conn, shard_id)
-            matches.extend(self._knn(conn, packed, shard_id, min(top_k, shard_count)))
-        return sorted(matches, key=lambda match: match.distance)[:top_k]
+        for shard_id, allowed in shards.items():
+            matches.extend(
+                self._knn(conn, packed, shard_id, min(top_k, MAX_KNN_K), allowed)
+            )
+        return heapq.nsmallest(top_k, matches, key=lambda match: match.distance)
 
     @staticmethod
     def _shard_id(embedding_id: int) -> str:
@@ -108,31 +105,32 @@ class SqliteVecBackend:
         rows = conn.execute(f"SELECT DISTINCT shard_id FROM {VECTOR_TABLE}").fetchall()
         return [str(row[0]) for row in rows]
 
-    def _shard_row_count(self, conn: sqlite3.Connection, shard_id: str) -> int:
-        return int(
-            conn.execute(
-                f"SELECT count(*) FROM {VECTOR_TABLE} WHERE shard_id = ?", (shard_id,)
-            ).fetchone()[0]
-        )
-
     def _knn(
         self,
         conn: sqlite3.Connection,
         packed_query: bytes,
         shard_id: str,
         k: int,
+        allowed_embedding_ids: Sequence[int] | None,
     ) -> list[VectorMatch]:
         if k <= 0:
             return []
         if k > MAX_KNN_K:
             raise ValueError(f"KNN k must not exceed {MAX_KNN_K}")
+        filter_sql = ""
+        parameters = [packed_query, shard_id, k]
+        if allowed_embedding_ids is not None:
+            # Filter before ranking, without one SQL parameter per allowed ID.
+            filter_sql = "AND embedding_id IN (SELECT value FROM json_each(?))"
+            parameters.append(json.dumps(allowed_embedding_ids))
         rows = conn.execute(
             f"""
             SELECT embedding_id, distance FROM {VECTOR_TABLE}
             WHERE vector MATCH ? AND shard_id = ? AND k = ?
+            {filter_sql}
             ORDER BY distance
             """,
-            (packed_query, shard_id, k),
+            parameters,
         ).fetchall()
         return [VectorMatch(embedding_id=row[0], distance=row[1]) for row in rows]
 
