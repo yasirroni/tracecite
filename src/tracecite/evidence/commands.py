@@ -190,16 +190,15 @@ def hybrid_search(
     results = []
     for position, chunk_id in enumerate(ranked_chunk_ids, start=1):
         chunk = conn.execute(
-            "SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)
-        ).fetchone()
-        source_row = conn.execute(
-            "SELECT * FROM sources WHERE source_pk = ?", (chunk["source_pk"],)
+            "SELECT c.*, s.path AS source_path, s.source_type, s.sha256 "
+            "FROM chunks c JOIN sources s USING (source_pk) WHERE c.chunk_id = ?",
+            (chunk_id,),
         ).fetchone()
         entry = {
             "rank": position,
-            "source_path": source_row["path"],
-            "source_type": source_row["source_type"],
-            "source_sha256": source_row["sha256"],
+            "source_path": chunk["source_path"],
+            "source_type": chunk["source_type"],
+            "source_sha256": chunk["sha256"],
             "heading_path": json.loads(chunk["heading_path"])
             if chunk["heading_path"]
             else [],
@@ -221,8 +220,8 @@ def hybrid_search(
             "provenance": sorted(provenance[chunk_id]),
             "fused_score": fused_scores[chunk_id],
         }
-        if source_row["source_type"] == "pdf" and chunk["physical_page"] is not None:
-            entry["pdf_link"] = f"{source_row['path']}#page={chunk['physical_page']}"
+        if chunk["source_type"] == "pdf" and chunk["physical_page"] is not None:
+            entry["pdf_link"] = f"{chunk['source_path']}#page={chunk['physical_page']}"
         results.append(entry)
     return results
 
