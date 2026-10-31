@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
 
 class PageSelectionError(ValueError):
@@ -15,10 +15,6 @@ class PageSelectionUnavailableError(PageSelectionError):
     def __init__(self, page: int, message: str | None = None) -> None:
         self.page = page
         super().__init__(message or f"page {page} is unavailable")
-
-
-def _sorted_available_pages(available_pages: Iterable[int]) -> list[int]:
-    return sorted({int(page) for page in available_pages})
 
 
 def _validate_positive_page(text: str, *, selector: str) -> int:
@@ -48,7 +44,7 @@ def resolve_page_selection(
     *,
     default_page: int = 1,
 ) -> list[int]:
-    available = _sorted_available_pages(available_pages)
+    available = sorted({int(page) for page in available_pages})
     available_set = set(available)
     if selector is None:
         if default_page not in available_set:

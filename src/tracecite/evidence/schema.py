@@ -129,10 +129,6 @@ _REQUIRED_OBJECTS = {
 }
 
 
-def _is_known_table(name: str) -> bool:
-    return name in _KNOWN_TABLES or name.startswith(_KNOWN_TABLE_PREFIXES)
-
-
 class IncompatibleDatabaseError(RuntimeError):
     """Raised when a database path already holds data this tool did not create."""
 
@@ -168,13 +164,6 @@ def connect_existing(database_path: Path, *, read_only: bool) -> sqlite3.Connect
     return conn
 
 
-def _existing_tables(conn: sqlite3.Connection) -> set[str]:
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
-    ).fetchall()
-    return {row["name"] for row in rows}
-
-
 def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
     """Create the schema if the database is empty, or load its config.
 
@@ -182,7 +171,12 @@ def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
     that are not part of this schema.
     """
 
-    existing = _existing_tables(conn)
+    existing = {
+        row["name"]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+        )
+    }
     if "kb_config" in existing:
         _validate_schema_objects(conn)
         config = load_config(conn)
@@ -195,7 +189,11 @@ def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
             )
         return config
 
-    unknown = {name for name in existing if not _is_known_table(name)}
+    unknown = {
+        name
+        for name in existing
+        if name not in _KNOWN_TABLES and not name.startswith(_KNOWN_TABLE_PREFIXES)
+    }
     if unknown:
         raise IncompatibleDatabaseError(
             "database already contains unrecognised tables "
@@ -214,12 +212,6 @@ def _object_names(conn: sqlite3.Connection, object_type: str) -> set[str]:
         for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = ?", (object_type,)
         ).fetchall()
-    }
-
-
-def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {
-        row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
     }
 
 
@@ -245,7 +237,7 @@ def _validate_schema_objects(conn: sqlite3.Connection) -> None:
                 f"schema v{SCHEMA_VERSION} is missing required trigger {trigger}"
             )
     for table, required_columns in sorted(_REQUIRED_COLUMNS.items()):
-        columns = _columns(conn, table)
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
         missing = required_columns - columns
         if missing:
             raise IncompatibleDatabaseError(

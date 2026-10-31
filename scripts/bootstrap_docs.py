@@ -130,10 +130,6 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _project_name_for(destination: Path) -> str:
-    return Path(os.path.relpath(destination, ROOT)).parts[0]
-
-
 def _load_previous_manifest(project_dir: Path) -> dict:
     manifest_path = project_dir / MANIFEST_NAME
     if not manifest_path.is_file():
@@ -151,7 +147,7 @@ def _expected_by_project(
     """Return {project_name: {destination_relative_to_project: {source, sha256}}}."""
     expected: dict[str, dict[str, dict[str, str]]] = {}
     for mapping in mappings:
-        project = _project_name_for(mapping.destination)
+        project = Path(os.path.relpath(mapping.destination, ROOT)).parts[0]
         project_dir = ROOT / project
         relative = mapping.destination.relative_to(project_dir).as_posix()
         source_relative = mapping.source.relative_to(ROOT).as_posix()
