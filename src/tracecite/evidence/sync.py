@@ -156,6 +156,10 @@ def _parser_config_for(source_type: str, options: SyncOptions) -> dict:
     return {}
 
 
+def _identity(state: os.stat_result) -> tuple[int, int, int, int]:
+    return state.st_dev, state.st_ino, state.st_size, state.st_mtime_ns
+
+
 def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
     """Hash one stable, non-symlink file identity.
 
@@ -163,11 +167,9 @@ def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
     read.  This catches path replacement as well as ordinary in-place writes.
     """
 
-    path = Path(path)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        descriptor = os.open(path, flags)
-    except (FileNotFoundError, OSError):
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
         return None
     try:
         before = os.fstat(descriptor)
@@ -177,23 +179,15 @@ def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
         after = os.fstat(descriptor)
     finally:
         os.close(descriptor)
-    identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
-    identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
-    if identity_before != identity_after:
-        return None
     try:
         current = os.stat(path, follow_symlinks=False)
-    except (FileNotFoundError, OSError):
+    except OSError:
         return None
-    if stat.S_ISLNK(current.st_mode):
-        return None
-    current_identity = (
-        current.st_dev,
-        current.st_ino,
-        current.st_size,
-        current.st_mtime_ns,
-    )
-    if current_identity != identity_after:
+    if (
+        stat.S_ISLNK(current.st_mode)
+        or _identity(before) != _identity(after)
+        or _identity(current) != _identity(after)
+    ):
         return None
     return digest.hexdigest(), after.st_size, after.st_mtime_ns
 
@@ -209,15 +203,12 @@ class _SourceSnapshot:
 def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot | None:
     """Copy one stable source into an immutable per-sync parsing snapshot."""
 
-    path = Path(path)
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        descriptor = os.open(path, flags)
-    except (FileNotFoundError, OSError):
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
         return None
-    snapshot_path = snapshot_root / f"{uuid.uuid4().hex}{path.suffix.lower()}"
+    snapshot_path = snapshot_root / f"{uuid.uuid4().hex}{Path(path).suffix.lower()}"
     try:
-        before = os.fstat(descriptor)
         digest = hashlib.sha256()
         with snapshot_path.open("xb") as output:
             while block := os.read(descriptor, 1 << 20):
@@ -229,28 +220,8 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
         raise
     finally:
         os.close(descriptor)
-    identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
-    identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
-    if identity_before != identity_after:
-        snapshot_path.unlink(missing_ok=True)
-        return None
-    try:
-        current = os.stat(path, follow_symlinks=False)
-    except (FileNotFoundError, OSError):
-        snapshot_path.unlink(missing_ok=True)
-        return None
-    if stat.S_ISLNK(current.st_mode):
-        snapshot_path.unlink(missing_ok=True)
-        return None
-    current_identity = (
-        current.st_dev,
-        current.st_ino,
-        current.st_size,
-        current.st_mtime_ns,
-    )
-    if current_identity != identity_after:
-        snapshot_path.unlink(missing_ok=True)
-        return None
+    # Equal hashes mean the copied bytes are the file's current stable content,
+    # which also rejects writes, replacement, and symlinks during the copy.
     expected = (digest.hexdigest(), after.st_size, after.st_mtime_ns)
     if _capture_stable_file_state(path) != expected:
         snapshot_path.unlink(missing_ok=True)
@@ -258,8 +229,13 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
     return _SourceSnapshot(snapshot_path, *expected)
 
 
-def _source_matches(path: Path, expected: tuple[str, int, int]) -> bool:
-    return _capture_stable_file_state(path) == expected
+def _observed_sources_match(
+    observed_states: dict[str, tuple[Path, str, int, int]],
+) -> bool:
+    return all(
+        _capture_stable_file_state(path) == tuple(expected)
+        for path, *expected in observed_states.values()
+    )
 
 
 @dataclass
@@ -341,11 +317,9 @@ def _match_chunks(
 
 
 def _config_matches(row: sqlite3.Row, options: SyncOptions, source_type: str) -> bool:
-    parser_name = options.parser_name(source_type)
-    parser_version = options.parser_version(source_type)
     return (
-        row["parser_name"] == parser_name
-        and row["parser_version"] == parser_version
+        row["parser_name"] == options.parser_name(source_type)
+        and row["parser_version"] == options.parser_version(source_type)
         and row["chunker_version"] == options.chunker_version
         and row["normalisation_version"] == options.normalisation_version
         and json.loads(row["chunker_config"]).get("max_chunk_chars")
@@ -369,6 +343,45 @@ def _chunks_missing_active_embedding(
         """,
         (source_pk, model_id),
     ).fetchall()
+
+
+def _source_values(plan: _SourcePlan, options: SyncOptions) -> tuple:
+    return (
+        plan.source_path,
+        plan.sha256,
+        plan.size_bytes,
+        plan.mtime_ns,
+        options.parser_name(plan.source_type),
+        options.parser_version(plan.source_type),
+        json.dumps(plan.parser_config),
+        schema.CHUNKER_NAME,
+        options.chunker_version,
+        json.dumps(plan.chunker_config),
+        options.normalisation_version,
+        json.dumps(plan.normalisation_config),
+        schema.utc_now(),
+    )
+
+
+def _chunk_values(candidate: chunking.ChunkCandidate) -> tuple:
+    return (
+        candidate.logical_key,
+        candidate.ordinal,
+        json.dumps(candidate.heading_path),
+        candidate.symbol,
+        candidate.body,
+        candidate.semantic_input_hash,
+        candidate.lexical_hash,
+        candidate.content_type,
+        candidate.physical_page,
+        candidate.page_start_offset,
+        candidate.page_end_offset,
+        candidate.page_range_start,
+        candidate.page_range_end,
+        candidate.line_start,
+        candidate.line_end,
+        json.dumps(candidate.locator),
+    )
 
 
 def _validate_embedding_dimensions(
@@ -683,10 +696,7 @@ def sync(
         report.embeddings_generated = len(missing_hashes)
 
         # ---- recheck: abort if any selected source changed mid-flight ----
-        if any(
-            not _source_matches(abs_path, (file_hash, size_bytes, mtime_ns))
-            for abs_path, file_hash, size_bytes, mtime_ns in observed_states.values()
-        ):
+        if not _observed_sources_match(observed_states):
             return SyncReport(status="aborted-source-changed")
 
         nothing_to_do = (
@@ -721,32 +731,7 @@ def sync(
 
         # ==== single write transaction ====
         _asset_event("begin-immediate")
-        for new_id in renames.values():
-            abs_path, expected_hash, expected_size, expected_mtime = observed_states[
-                new_id
-            ]
-            captured = _capture_stable_file_state(abs_path)
-            if captured is None:
-                shutil.rmtree(generation_root, ignore_errors=True)
-                return SyncReport(status="aborted-source-changed")
-            file_hash, size_bytes, mtime_ns = captured
-            _asset_event("rename-final-state-captured")
-            if (file_hash, size_bytes, mtime_ns) != (
-                expected_hash,
-                expected_size,
-                expected_mtime,
-            ):
-                shutil.rmtree(generation_root, ignore_errors=True)
-                return SyncReport(status="aborted-source-changed")
-            if not _source_matches(
-                abs_path, (expected_hash, expected_size, expected_mtime)
-            ):
-                shutil.rmtree(generation_root, ignore_errors=True)
-                return SyncReport(status="aborted-source-changed")
-        if any(
-            not _source_matches(abs_path, (file_hash, size_bytes, mtime_ns))
-            for abs_path, file_hash, size_bytes, mtime_ns in observed_states.values()
-        ):
+        if not _observed_sources_match(observed_states):
             shutil.rmtree(generation_root, ignore_errors=True)
             return SyncReport(status="aborted-source-changed")
         conn.execute("BEGIN IMMEDIATE")
@@ -780,30 +765,14 @@ def sync(
                     conn.execute(
                         """
                         INSERT INTO sources (
-                            path, source_type, language, canonical_url,
-                            capture_manifest_ref, sha256, size_bytes, mtime_ns,
+                            path, sha256, size_bytes, mtime_ns,
                             parser_name, parser_version, parser_config,
                             chunker_name, chunker_version, chunker_config,
                             normalisation_version, normalisation_config,
-                            indexed_at_utc, index_status
-                        ) VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
+                            indexed_at_utc, source_type, index_status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
                         """,
-                        (
-                            plan.source_path,
-                            plan.source_type,
-                            plan.sha256,
-                            plan.size_bytes,
-                            plan.mtime_ns,
-                            options.parser_name(plan.source_type),
-                            options.parser_version(plan.source_type),
-                            json.dumps(plan.parser_config),
-                            schema.CHUNKER_NAME,
-                            options.chunker_version,
-                            json.dumps(plan.chunker_config),
-                            options.normalisation_version,
-                            json.dumps(plan.normalisation_config),
-                            schema.utc_now(),
-                        ),
+                        (*_source_values(plan, options), plan.source_type),
                     )
                     plan.source_pk = conn.execute(
                         "SELECT source_pk FROM sources WHERE path = ?",
@@ -815,16 +784,8 @@ def sync(
                             plan.source_pk
                         )
                         rendered_assets[plan.source_path] = [
-                            (
-                                physical_page,
-                                path_mapping.get(asset_path, asset_path),
-                                render,
-                                asset_type,
-                                sha256,
-                            )
-                            for physical_page, asset_path, render, asset_type, sha256 in rendered_assets.get(
-                                plan.source_path, []
-                            )
+                            (page, path_mapping.get(path, path), *rest)
+                            for page, path, *rest in rendered_assets[plan.source_path]
                         ]
                     assert plan.source_pk is not None
 
@@ -843,25 +804,7 @@ def sync(
                             line_start = ?, line_end = ?, locator_json = ?
                         WHERE chunk_id = ?
                         """,
-                        (
-                            candidate.logical_key,
-                            candidate.ordinal,
-                            json.dumps(candidate.heading_path),
-                            candidate.symbol,
-                            candidate.body,
-                            candidate.semantic_input_hash,
-                            candidate.lexical_hash,
-                            candidate.content_type,
-                            candidate.physical_page,
-                            candidate.page_start_offset,
-                            candidate.page_end_offset,
-                            candidate.page_range_start,
-                            candidate.page_range_end,
-                            candidate.line_start,
-                            candidate.line_end,
-                            json.dumps(candidate.locator),
-                            chunk_id,
-                        ),
+                        (*_chunk_values(candidate), chunk_id),
                     )
                     report.chunks_updated += 1
                     if hash_changed or options.reembed:
@@ -892,26 +835,7 @@ def sync(
                             page_range_start, page_range_end, line_start, line_end, locator_json
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (
-                            chunk_id,
-                            plan.source_pk,
-                            candidate.logical_key,
-                            candidate.ordinal,
-                            json.dumps(candidate.heading_path),
-                            candidate.symbol,
-                            candidate.body,
-                            candidate.semantic_input_hash,
-                            candidate.lexical_hash,
-                            candidate.content_type,
-                            candidate.physical_page,
-                            candidate.page_start_offset,
-                            candidate.page_end_offset,
-                            candidate.page_range_start,
-                            candidate.page_range_end,
-                            candidate.line_start,
-                            candidate.line_end,
-                            json.dumps(candidate.locator),
-                        ),
+                        (chunk_id, plan.source_pk, *_chunk_values(candidate)),
                     )
                     report.chunks_added += 1
                     embedding_id = _ensure_embedding(
@@ -964,22 +888,7 @@ def sync(
                                 indexed_at_utc = ?, index_status = 'ok'
                             WHERE source_pk = ?
                             """,
-                            (
-                                plan.source_path,
-                                plan.sha256,
-                                plan.size_bytes,
-                                plan.mtime_ns,
-                                options.parser_name(plan.source_type),
-                                options.parser_version(plan.source_type),
-                                json.dumps(plan.parser_config),
-                                schema.CHUNKER_NAME,
-                                options.chunker_version,
-                                json.dumps(plan.chunker_config),
-                                options.normalisation_version,
-                                json.dumps(plan.normalisation_config),
-                                schema.utc_now(),
-                                plan.source_pk,
-                            ),
+                            (*_source_values(plan, options), plan.source_pk),
                         )
 
                     if plan.source_type == "pdf" and options.generate_assets:
@@ -1021,10 +930,7 @@ def sync(
                 )
 
             _asset_event("pre-commit-source-check")
-            if any(
-                not _source_matches(abs_path, (file_hash, size_bytes, mtime_ns))
-                for abs_path, file_hash, size_bytes, mtime_ns in observed_states.values()
-            ):
+            if not _observed_sources_match(observed_states):
                 raise _SourceChangedDuringSync
 
             schema.touch_config(conn)
@@ -1035,18 +941,13 @@ def sync(
                 embedding_dimensions=options.embedding_dimensions,
             )
             conn.execute("COMMIT")
-        except _SourceChangedDuringSync:
-            try:
-                if conn.in_transaction:
-                    conn.execute("ROLLBACK")
-            finally:
-                shutil.rmtree(generation_root, ignore_errors=True)
-            return SyncReport(status="aborted-source-changed")
-        except Exception:
+        except Exception as exc:
             with contextlib.suppress(sqlite3.Error):
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
             shutil.rmtree(generation_root, ignore_errors=True)
+            if isinstance(exc, _SourceChangedDuringSync):
+                return SyncReport(status="aborted-source-changed")
             raise
 
         if options.cleanup_asset_generations:
@@ -1114,30 +1015,21 @@ def validate_prune_plan(
     conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
 ) -> set[Path]:
     """Return the asset directories the plan would remove, or raise if any stored asset path is unsafe."""
-    targets: set[Path] = set()
     targets_by_source: dict[int, set[Path]] = defaultdict(set)
     for path in plan.paths:
-        row = conn.execute(
-            "SELECT source_pk FROM sources WHERE path = ?", (path,)
-        ).fetchone()
-        if row is None:
-            continue
-        source_pk = row["source_pk"]
-        asset_rows = conn.execute(
-            "SELECT asset_path FROM assets WHERE source_pk = ?", (row["source_pk"],)
-        ).fetchall()
-        for asset_row in asset_rows:
-            target = _prune_asset_target(
-                database_path, source_pk, asset_row["asset_path"]
+        for row in conn.execute(
+            "SELECT source_pk, asset_path FROM assets JOIN sources USING (source_pk) WHERE path = ?",
+            (path,),
+        ):
+            targets_by_source[row["source_pk"]].add(
+                _prune_asset_target(database_path, row["source_pk"], row["asset_path"])
             )
-            targets.add(target)
-            targets_by_source[source_pk].add(target)
     for source_pk, source_targets in targets_by_source.items():
         if len(source_targets) > 1:
             raise ValueError(
                 f"asset identifiers for source_pk {source_pk} span multiple generation/source directories"
             )
-    return targets
+    return set().union(*targets_by_source.values())
 
 
 def _require_dirfd_primitives() -> None:
@@ -1181,10 +1073,8 @@ def _rmtree_dir_at(parent_fd: int, name: str) -> None:
 
 def _quarantine_fd_at(generations_fd: int) -> int:
     quarantine_root = ".prune-quarantine"
-    try:
+    with contextlib.suppress(FileExistsError):
         os.mkdir(quarantine_root, dir_fd=generations_fd)
-    except FileExistsError:
-        pass
     try:
         return _open_dir_at(generations_fd, quarantine_root)
     except OSError:
@@ -1205,16 +1095,22 @@ def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
         raise
     else:
         os.close(generation_fd)
+    _quarantine_and_remove(
+        generations_fd,
+        generations_fd,
+        generation,
+        f"{generation}-{uuid.uuid4().hex}",
+        f"quarantined asset generation is not a directory: {generation}",
+    )
 
+
+def _quarantine_and_remove(
+    generations_fd: int, parent_fd: int, name: str, quarantine_name: str, error: str
+) -> None:
+    """Move ``name`` into the quarantine, then delete it, restoring it on failure."""
     quarantine_fd = _quarantine_fd_at(generations_fd)
-    quarantine_name = f"{generation}-{uuid.uuid4().hex}"
     try:
-        os.rename(
-            generation,
-            quarantine_name,
-            src_dir_fd=generations_fd,
-            dst_dir_fd=quarantine_fd,
-        )
+        os.rename(name, quarantine_name, src_dir_fd=parent_fd, dst_dir_fd=quarantine_fd)
         try:
             mode = os.stat(
                 quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False
@@ -1224,24 +1120,20 @@ def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
             elif stat.S_ISDIR(mode):
                 _rmtree_dir_at(quarantine_fd, quarantine_name)
             else:
-                raise ValueError(
-                    f"quarantined asset generation is not a directory: {generation}"
-                )
+                raise ValueError(error)
         except Exception:
             with contextlib.suppress(OSError):
                 os.rename(
                     quarantine_name,
-                    generation,
+                    name,
                     src_dir_fd=quarantine_fd,
-                    dst_dir_fd=generations_fd,
+                    dst_dir_fd=parent_fd,
                 )
             raise
     finally:
         os.close(quarantine_fd)
-    try:
+    with contextlib.suppress(OSError):
         os.rmdir(".prune-quarantine", dir_fd=generations_fd)
-    except OSError:
-        pass
 
 
 def _remove_source_entry_at(
@@ -1267,70 +1159,32 @@ def _remove_source_entry_at(
             return
         if not stat.S_ISDIR(mode):
             raise ValueError(f"pruned asset path is not a directory: {source_dir}")
-        quarantine_fd = _quarantine_fd_at(generations_fd)
-        quarantine_name = f"{generation}-{source_pk}-{uuid.uuid4().hex}"
-        try:
-            os.rename(
-                source_pk,
-                quarantine_name,
-                src_dir_fd=generation_fd,
-                dst_dir_fd=quarantine_fd,
-            )
-            try:
-                mode = os.stat(
-                    quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False
-                ).st_mode
-                if stat.S_ISLNK(mode):
-                    os.unlink(quarantine_name, dir_fd=quarantine_fd)
-                elif stat.S_ISDIR(mode):
-                    _rmtree_dir_at(quarantine_fd, quarantine_name)
-                else:
-                    raise ValueError(
-                        f"quarantined asset path is not a directory: {source_dir}"
-                    )
-            except Exception:
-                with contextlib.suppress(OSError):
-                    os.rename(
-                        quarantine_name,
-                        source_pk,
-                        src_dir_fd=quarantine_fd,
-                        dst_dir_fd=generation_fd,
-                    )
-                raise
-        finally:
-            os.close(quarantine_fd)
-        try:
-            os.rmdir(".prune-quarantine", dir_fd=generations_fd)
-        except OSError:
-            pass
+        _quarantine_and_remove(
+            generations_fd,
+            generation_fd,
+            source_pk,
+            f"{generation}-{source_pk}-{uuid.uuid4().hex}",
+            f"quarantined asset path is not a directory: {source_dir}",
+        )
     finally:
         os.close(generation_fd)
 
 
 def _with_generations_fd(database_path: Path, action) -> None:
     _require_dirfd_primitives()
-    database_parent = Path(database_path).resolve().parent
-    parent_fd = os.open(database_parent, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        imgs_fd = _open_dir_at(parent_fd, "imgs")
-        try:
-            generations_fd = _open_dir_at(imgs_fd, "generations")
-            try:
-                action(generations_fd)
-            finally:
-                os.close(generations_fd)
-        finally:
-            os.close(imgs_fd)
-    finally:
-        os.close(parent_fd)
+    with contextlib.ExitStack() as stack:
+        fd = os.open(Path(database_path).resolve().parent, os.O_RDONLY | os.O_DIRECTORY)
+        stack.callback(os.close, fd)
+        for name in ("imgs", "generations"):
+            fd = _open_dir_at(fd, name)
+            stack.callback(os.close, fd)
+        action(fd)
 
 
 def _safe_remove_asset_generation(database_path: Path, generation_dir: Path) -> None:
-    database_parent = Path(database_path).resolve().parent
-    generations_root = database_parent / "imgs" / "generations"
-    generation_dir = Path(generation_dir)
+    generations_root = Path(database_path).resolve().parent / "imgs" / "generations"
     try:
-        generation = generation_dir.relative_to(generations_root).parts
+        generation = Path(generation_dir).relative_to(generations_root).parts
     except ValueError as exc:
         raise ValueError(
             f"asset generation escapes image root: {generation_dir}"
@@ -1339,35 +1193,28 @@ def _safe_remove_asset_generation(database_path: Path, generation_dir: Path) -> 
         raise ValueError(
             f"asset generation cleanup expects a generation directory: {generation_dir}"
         )
-
-    def action(generations_fd: int) -> None:
-        _remove_generation_entry_at(generations_fd, generation[0])
-
-    _with_generations_fd(database_path, action)
+    _with_generations_fd(
+        database_path, lambda fd: _remove_generation_entry_at(fd, generation[0])
+    )
 
 
 def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None:
-    database_parent = Path(database_path).resolve().parent
-    generations_root = database_parent / "imgs" / "generations"
-    source_dir = Path(source_dir)
+    generations_root = Path(database_path).resolve().parent / "imgs" / "generations"
     try:
-        source_dir.relative_to(generations_root)
+        relative_parts = Path(source_dir).relative_to(generations_root).parts
     except ValueError as exc:
         raise ValueError(
             f"pruned asset directory escapes image root: {source_dir}"
         ) from exc
-
-    relative_parts = source_dir.relative_to(generations_root).parts
     if len(relative_parts) != 2:
         raise ValueError(
             f"pruned asset directory must be a generation/source directory: {source_dir}"
         )
     generation, source_pk = relative_parts
-
-    def action(generations_fd: int) -> None:
-        _remove_source_entry_at(generations_fd, generation, source_pk, source_dir)
-
-    _with_generations_fd(database_path, action)
+    _with_generations_fd(
+        database_path,
+        lambda fd: _remove_source_entry_at(fd, generation, source_pk, source_dir),
+    )
 
 
 def apply_prune(
@@ -1377,13 +1224,9 @@ def apply_prune(
     conn.execute("BEGIN IMMEDIATE")
     try:
         pruned_asset_targets = validate_prune_plan(conn, database_path, plan)
-        for path in plan.paths:
-            row = conn.execute(
-                "SELECT source_pk FROM sources WHERE path = ?", (path,)
-            ).fetchone()
-            if row is None:
-                continue
-            conn.execute("DELETE FROM sources WHERE source_pk = ?", (row["source_pk"],))
+        conn.executemany(
+            "DELETE FROM sources WHERE path = ?", [(path,) for path in plan.paths]
+        )
         orphan_rows = conn.execute(
             "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
         ).fetchall()
@@ -1464,10 +1307,8 @@ def _render_assets(
     generation_root = _asset_generation_root(database_path, generation)
     staging_dir = None
     if plan.source_pk is None:
-        base_dir = generation_root / f".staging-{uuid.uuid4().hex}"
-        staging_dir = base_dir
-    else:
-        base_dir = generation_root / str(plan.source_pk)
+        staging_dir = generation_root / f".staging-{uuid.uuid4().hex}"
+    base_dir = staging_dir or generation_root / str(plan.source_pk)
     base_dir.mkdir(parents=True, exist_ok=False)
     rendered = []
     physical_pages = sorted({page.physical_page for page in plan.pages})
@@ -1497,17 +1338,32 @@ def _persist_assets(
 ) -> None:
     assert plan.source_pk is not None
     conn.execute("DELETE FROM assets WHERE source_pk = ?", (plan.source_pk,))
+    database_parent = Path(database_path).resolve().parent
     for physical_page, asset_path, render, asset_type, sha256 in rendered_assets:
-        _insert_asset(
-            conn,
-            plan.source_pk,
-            plan.source_path,
-            physical_page,
-            asset_path,
-            render,
-            asset_type,
-            sha256,
-            database_path,
+        asset_identifier = asset_path.resolve().relative_to(database_parent).as_posix()
+        schema.resolve_asset_path(database_path, asset_identifier)
+        # NOTE: ocr_text and visual_description are always NULL; OCR fallback
+        # writes page and chunk text only.
+        conn.execute(
+            """
+            INSERT INTO assets (
+                asset_id, source_pk, physical_page, asset_path, sha256, width, height,
+                asset_type, label, caption, nearby_text, ocr_text, visual_description, bbox_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?)
+            """,
+            (
+                f"{plan.source_path}:{asset_path.stem}",
+                plan.source_pk,
+                physical_page,
+                asset_identifier,
+                sha256,
+                render.width,
+                render.height,
+                asset_type,
+                render.label,
+                render.nearby_text,
+                json.dumps(render.bbox) if render.bbox else None,
+            ),
         )
 
 
@@ -1540,67 +1396,21 @@ def cleanup_asset_generations(
         return leaks
     referenced = referenced_asset_generations(conn, database_path)
     for generation in root.iterdir():
-        if generation.name == ".prune-quarantine":
+        symlink = generation.is_symlink()
+        if generation.name == ".prune-quarantine" or (
+            not symlink and generation in referenced
+        ):
             continue
-        if generation.is_symlink():
-            try:
-                _safe_remove_asset_generation(database_path, generation)
-            except Exception as exc:  # noqa: BLE001
-                leaks.append(
-                    f"failed to remove invalid asset generation symlink {generation}: {exc}"
-                )
-            continue
-        if generation not in referenced:
-            try:
-                _safe_remove_asset_generation(database_path, generation)
-            except Exception as exc:  # noqa: BLE001
-                leaks.append(
-                    f"failed to remove unreferenced asset generation {generation}: {exc}"
-                )
+        kind = (
+            "invalid asset generation symlink"
+            if symlink
+            else "unreferenced asset generation"
+        )
+        try:
+            _safe_remove_asset_generation(database_path, generation)
+        except Exception as exc:  # noqa: BLE001
+            leaks.append(f"failed to remove {kind} {generation}: {exc}")
     return leaks
-
-
-def _insert_asset(
-    conn,
-    source_pk: int,
-    source_path: str,
-    physical_page,
-    asset_path: Path,
-    render,
-    asset_type: str,
-    sha256: str,
-    database_path: Path,
-) -> None:
-    asset_id = f"{source_path}:{asset_path.stem}"
-    asset_identifier = (
-        asset_path.resolve()
-        .relative_to(Path(database_path).resolve().parent)
-        .as_posix()
-    )
-    schema.resolve_asset_path(database_path, asset_identifier)
-    # NOTE: ocr_text and visual_description are always NULL; OCR fallback
-    # writes page and chunk text only.
-    conn.execute(
-        """
-        INSERT INTO assets (
-            asset_id, source_pk, physical_page, asset_path, sha256, width, height,
-            asset_type, label, caption, nearby_text, ocr_text, visual_description, bbox_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?)
-        """,
-        (
-            asset_id,
-            source_pk,
-            physical_page,
-            asset_identifier,
-            sha256,
-            render.width,
-            render.height,
-            asset_type,
-            render.label,
-            render.nearby_text,
-            json.dumps(render.bbox) if render.bbox else None,
-        ),
-    )
 
 
 def integrity_check(conn: sqlite3.Connection) -> list[str]:
@@ -1620,12 +1430,12 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
         LEFT JOIN chunks c ON c.chunk_id = ce.chunk_id
         WHERE c.chunk_id IS NULL
         """
-    ).fetchall()
-    for row in orphan_chunk_embeddings:
-        issues.append(f"chunk_embeddings references missing chunk {row['chunk_id']}")
-
-    backend = vector_backend.SqliteVecBackend()
-    issues.extend(backend.integrity_check(conn))
+    )
+    issues += [
+        f"chunk_embeddings references missing chunk {row['chunk_id']}"
+        for row in orphan_chunk_embeddings
+    ]
+    issues += vector_backend.SqliteVecBackend().integrity_check(conn)
 
     for row in conn.execute(
         "SELECT asset_id, asset_path, sha256 FROM assets"

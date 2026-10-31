@@ -369,78 +369,6 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
     assert repair.indexed_unselected_paths == ["doc.pdf"]
 
 
-def test_rename_target_mutation_after_final_hash_capture_aborts_without_side_effects(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
-):
-    embedder = make_embedder()
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
-    renamed_path = corpus_dir / "doc-renamed.pdf"
-    one_pdf_corpus.rename(renamed_path)
-    write_manifest(manifest_path, {"doc-renamed.pdf": "doc-renamed.pdf"})
-    conn = schema.connect(database_path)
-    try:
-        before_sources = [
-            dict(row)
-            for row in conn.execute(
-                "SELECT * FROM sources ORDER BY source_pk"
-            ).fetchall()
-        ]
-        before_chunks = [
-            dict(row)
-            for row in conn.execute("SELECT * FROM chunks ORDER BY chunk_id").fetchall()
-        ]
-        before_config = dict(conn.execute("SELECT * FROM kb_config").fetchone())
-        before_sidecars = (
-            database_path.with_name(database_path.name + "-wal").exists(),
-            database_path.with_name(database_path.name + "-shm").exists(),
-        )
-    finally:
-        conn.close()
-
-    def mutate_after_final_capture(event):
-        if event == "rename-final-state-captured":
-            build_pdf(
-                renamed_path,
-                [["Changed", "Rename target changed after final hash capture."]],
-            )
-
-    sync_module.ASSET_EVENT_HOOK = mutate_after_final_capture
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=embedder
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
-
-    assert report.status == "aborted-source-changed"
-    conn = schema.connect(database_path)
-    try:
-        assert not conn.in_transaction
-        assert [
-            dict(row)
-            for row in conn.execute(
-                "SELECT * FROM sources ORDER BY source_pk"
-            ).fetchall()
-        ] == before_sources
-        assert [
-            dict(row)
-            for row in conn.execute("SELECT * FROM chunks ORDER BY chunk_id").fetchall()
-        ] == before_chunks
-        assert dict(conn.execute("SELECT * FROM kb_config").fetchone()) == before_config
-        assert (
-            database_path.with_name(database_path.name + "-wal").exists(),
-            database_path.with_name(database_path.name + "-shm").exists(),
-        ) == before_sidecars
-    finally:
-        conn.close()
-
-    repair = sync_module.sync(
-        corpus_dir, manifest_path, database_path, embedder=embedder
-    )
-    assert repair.sources_added == ["doc-renamed.pdf"]
-    assert repair.indexed_unselected_paths == ["doc.pdf"]
-
-
 def test_ambiguous_same_hash_paths_not_misclassified_as_rename(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
@@ -1266,7 +1194,7 @@ def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
         conn.close()
 
 
-def test_rename_mutation_after_final_capture_with_restored_metadata_aborts(
+def test_rename_mutation_with_restored_metadata_aborts(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     import os
@@ -1284,7 +1212,7 @@ def test_rename_mutation_after_final_capture_with_restored_metadata_aborts(
     write_manifest(manifest_path, {"new.md": "new.md"})
 
     def mutate_after_capture(event):
-        if event == "rename-final-state-captured":
+        if event == "begin-immediate":
             info = new_path.stat()
             new_path.write_text(replacement, encoding="utf-8")
             os.utime(new_path, ns=(info.st_atime_ns, info.st_mtime_ns))
