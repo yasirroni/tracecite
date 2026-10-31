@@ -310,6 +310,7 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
             dict(row)
             for row in conn.execute("SELECT * FROM chunks ORDER BY chunk_id").fetchall()
         ]
+        before_config = dict(conn.execute("SELECT * FROM kb_config").fetchone())
         before_wal = (
             database_path.with_name(database_path.name + "-wal").exists(),
             database_path.with_name(database_path.name + "-shm").exists(),
@@ -353,6 +354,7 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
             database_path.with_name(database_path.name + "-shm").exists(),
         )
         assert after_wal == before_wal
+        assert dict(conn.execute("SELECT * FROM kb_config").fetchone()) == before_config
 
     repair = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=embedder
