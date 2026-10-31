@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from contextlib import closing
 from pathlib import Path
 
@@ -120,14 +119,14 @@ def test_mtime_only_touch_rechecks_hash_but_does_not_reparse(
 
 
 def test_parser_metadata_change_reparses_without_byte_change(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
 
-    options = SyncOptions(parser_version_pdf="2")
+    monkeypatch.setattr(schema, "PARSER_VERSION_PDF", "2")
     report = sync_module.sync(
-        corpus_dir, manifest_path, database_path, options=options, embedder=embedder
+        corpus_dir, manifest_path, database_path, embedder=embedder
     )
     assert report.sources_reparsed == ["doc.pdf"]
 
@@ -712,7 +711,7 @@ def test_source_changes_mid_embedding_aborts(
 
 
 def test_embedding_model_change_invalidates_only_relevant_cache(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
@@ -725,9 +724,7 @@ def test_embedding_model_change_invalidates_only_relevant_cache(
     conn.close()
     assert original_embedding_count == 2
 
-    other_options = SyncOptions(
-        embedding_model=schema.EMBEDDING_MODEL, embedding_revision="fake-revision-2"
-    )
+    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "fake-revision-2")
     # Reuse the same warm underlying model (revision differs only in label
     # for this test) so no network access is required.
     new_embedder = make_embedder()
@@ -735,7 +732,6 @@ def test_embedding_model_change_invalidates_only_relevant_cache(
         corpus_dir,
         manifest_path,
         database_path,
-        options=other_options,
         embedder=new_embedder,
     )
     # Nothing about the source, parse, or chunks changed -- only the active
@@ -749,7 +745,8 @@ def test_embedding_model_change_invalidates_only_relevant_cache(
         "SELECT count(*) FROM embeddings WHERE model_id = ?", (original_model_id,)
     ).fetchone()[0]
     new_count = conn.execute(
-        "SELECT count(*) FROM embeddings WHERE model_id = ?", (other_options.model_id,)
+        "SELECT count(*) FROM embeddings WHERE model_id = ?",
+        (schema.embedding_model_id(revision="fake-revision-2"),),
     ).fetchone()[0]
     conn.close()
     assert old_count == 2  # untouched, not deleted
@@ -774,20 +771,19 @@ def test_bad_embedding_dimension_rejected_before_database_writes(
 
 
 def test_cached_model_reactivation_commits_even_without_vector_work(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
     original_id = schema.embedding_model_id()
-    b_options = SyncOptions(embedding_revision="revision-b")
-    sync_module.sync(
-        corpus_dir,
-        manifest_path,
-        database_path,
-        options=b_options,
-        embedder=make_embedder(),
-    )
+    with monkeypatch.context() as patch:
+        patch.setattr(schema, "EMBEDDING_REVISION", "revision-b")
+        sync_module.sync(
+            corpus_dir, manifest_path, database_path, embedder=make_embedder()
+        )
     with closing(schema.connect(database_path)) as conn:
-        assert schema.load_config(conn).embedding_model_id == b_options.model_id
+        assert schema.load_config(conn).embedding_model_id == schema.embedding_model_id(
+            revision="revision-b"
+        )
         original_count = conn.execute(
             "SELECT count(*) FROM embeddings WHERE model_id = ?", (original_id,)
         ).fetchone()[0]
@@ -823,13 +819,10 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
     monkeypatch.setattr(
         sync_module.schema, "activate_embedding_config", fail_activation
     )
+    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "failed-revision")
     with pytest.raises(RuntimeError, match="activation failed"):
         sync_module.sync(
-            corpus_dir,
-            manifest_path,
-            database_path,
-            options=SyncOptions(embedding_revision="failed-revision"),
-            embedder=make_embedder(),
+            corpus_dir, manifest_path, database_path, embedder=make_embedder()
         )
 
     with closing(schema.connect(database_path)) as conn:
@@ -853,14 +846,11 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
     monkeypatch.setattr(
         sync_module.vector_backend.SqliteVecBackend, "upsert", fail_if_called
     )
-    options = SyncOptions(embedding_revision="new-revision", embedding_dimensions=3)
+    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "new-revision")
+    monkeypatch.setattr(schema, "EMBEDDING_DIMENSIONS", 3)
     with pytest.raises(SyncError, match="embedding dimensions"):
         sync_module.sync(
-            corpus_dir,
-            manifest_path,
-            database_path,
-            options=options,
-            embedder=make_embedder(),
+            corpus_dir, manifest_path, database_path, embedder=make_embedder()
         )
 
     with closing(schema.connect(database_path)) as conn:
@@ -1015,41 +1005,6 @@ def test_sync_ocr_fallback_populates_pages_and_chunks(
         assert chunk_rows
         assert any("text layer" in row["body"].lower() for row in chunk_rows)
         assert sync_module.integrity_check(conn) == []
-
-
-def test_sync_ocr_lang_option_threaded_into_parser_config(
-    corpus_dir, manifest_path, database_path, make_embedder
-):
-    """``SyncOptions.ocr_lang`` (the ``--ocr-lang`` CLI flag's backing
-    option) must reach the PDF parser's config for PDF sources, and must
-    not be attached to non-PDF sources at all."""
-
-    build_pdf_with_image_only_page(corpus_dir / "scan.pdf")
-    build_markdown(
-        corpus_dir / "report.md", "# Title\n\nSome markdown body text for this test.\n"
-    )
-    write_manifest(manifest_path, {"scan.pdf": "scan.pdf", "report.md": "report.md"})
-    embedder = make_embedder()
-    options = sync_module.SyncOptions(ocr_lang="eng")
-    report = sync_module.sync(
-        corpus_dir, manifest_path, database_path, embedder=embedder, options=options
-    )
-    assert set(report.sources_added) == {"scan.pdf", "report.md"}
-
-    with closing(schema.connect(database_path)) as conn:
-        pdf_config = json.loads(
-            conn.execute(
-                "SELECT parser_config FROM sources WHERE path = 'scan.pdf'"
-            ).fetchone()["parser_config"]
-        )
-        assert pdf_config == {"ocr_lang": "eng"}
-
-        markdown_config = json.loads(
-            conn.execute(
-                "SELECT parser_config FROM sources WHERE path = 'report.md'"
-            ).fetchone()["parser_config"]
-        )
-        assert markdown_config == {}
 
 
 def test_sync_figure_crop_nearby_text_lands_in_assets_table(

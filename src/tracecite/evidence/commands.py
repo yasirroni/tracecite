@@ -51,7 +51,6 @@ def cmd_sync(args: argparse.Namespace) -> int:
         generate_assets=not args.no_assets,
         full=args.full,
         reembed=args.reembed,
-        ocr_lang=args.ocr_lang,
     )
     only_paths = {Path(args.path).as_posix()} if args.path else None
     report = sync_module.sync(

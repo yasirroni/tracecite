@@ -44,7 +44,6 @@ DEFAULT_LIMIT = 10
 DEFAULT_FTS_LIMIT = 50
 DEFAULT_VECTOR_LIMIT = 50
 DEFAULT_MAX_CHUNK_CHARS = 1200
-DEFAULT_OCR_LANG = "eng"
 
 
 def _add_evidence_common_args(parser: argparse.ArgumentParser) -> None:
@@ -88,7 +87,6 @@ def _add_evidence_parsers(
     sync_parser.add_argument(
         "--no-assets", action="store_true", help="Skip PDF page render/crop generation."
     )
-    sync_parser.add_argument("--ocr-lang", default=DEFAULT_OCR_LANG)
 
     search_parser = subparsers.add_parser("search", help="Hybrid FTS + vector search.")
     _add_evidence_common_args(search_parser)
