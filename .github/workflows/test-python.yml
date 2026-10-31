@@ -61,3 +61,6 @@ jobs:
 
       - name: Run Python tests
         run: uv run --no-sync pytest -q
+
+      - name: Run Julia tests
+        run: julia --project=. -e 'using Pkg; Pkg.test()'
