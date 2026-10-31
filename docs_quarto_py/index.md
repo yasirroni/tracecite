@@ -15,10 +15,10 @@ TraceCite treats generated documentation as a reusable analytical knowledge laye
 retained Markdown
     -> `tracecite prepare` CLI/package
     -> raw table evidence + normalised row text
-    -> future FTS/vector/SQLite ingestion
+    -> FTS and vector evidence index (`tracecite docs index`)
 ```
 
-The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact normalised retrieval text prepared for a future embedding pipeline; it does not contain vectors.
+The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact normalised retrieval text that `tracecite docs index` embeds; it does not contain vectors.
 
 ## Build boundary
 

@@ -29,7 +29,7 @@
       "source": "docs/examples/python/dirty_dataframe.html.md"
     },
     "examples/python/hottest_temperature.html.md": {
-      "sha256": "5be73a3514384ee66306dcdd56464712adced6cc4e6ddd91136983f50acd7ed7",
+      "sha256": "945b125df597ec515ec4396d1bbf9cecbec1c940588fbb658ac53e3234b81c59",
       "source": "docs/examples/python/hottest_temperature.html.md"
     },
     "examples/python/quarto_code_visibility.html.md": {
@@ -85,7 +85,7 @@
       "source": "docs/guide/searchable-evidence.md"
     },
     "index.md": {
-      "sha256": "e94a0fc4d7c9fc634c09d3124bf8c29f62a5524b9ea942867de3e3e1670b365b",
+      "sha256": "58dcc3ddb9db76b4a45e0f6da7c84500910aa63efbdebb4365faf4d8d893472c",
       "source": "docs/index.md"
     }
   },
