@@ -34,7 +34,7 @@ import sqlite3
 import stat
 import tempfile
 import uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -268,7 +268,7 @@ class _SourcePlan:
     source_pk: int | None
     abs_path: Path
     source_type: str
-    action: str  # "add" | "reparse" | "rechunk" | "renormalise-only"
+    action: str  # "add" | "reparse" | "rechunk"
     sha256: str
     size_bytes: int
     mtime_ns: int
@@ -292,7 +292,7 @@ def _match_chunks(
     rows are deleted.
     """
 
-    existing_by_key: dict[str, list[sqlite3.Row]] = defaultdict(list)
+    existing_by_key: dict[str, deque[sqlite3.Row]] = defaultdict(deque)
     for row in existing_rows:
         existing_by_key[row["logical_key"]].append(row)
 
@@ -301,12 +301,9 @@ def _match_chunks(
     remaining_candidates: list[chunking.ChunkCandidate] = []
 
     for candidate in candidates:
-        row = None
-        for bucket_row in existing_by_key.get(candidate.logical_key, []):
-            if bucket_row["chunk_id"] not in used_existing_ids:
-                row = bucket_row
-                break
-        if row is not None:
+        bucket = existing_by_key[candidate.logical_key]
+        if bucket:
+            row = bucket.popleft()
             used_existing_ids.add(row["chunk_id"])
             matched.append((row, candidate))
         else:
@@ -389,13 +386,6 @@ class PrunePlan:
     paths: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class _PruneAssetTarget:
-    generation: str
-    source_pk: int
-    source_dir: Path
-
-
 def sync(
     sources_dir: Path,
     manifest_path: Path | Sequence[Path],
@@ -464,15 +454,12 @@ def sync(
         # ---- rename detection: gone id <-> added id sharing an unambiguous hash ----
         observed_states: dict[str, tuple[Path, str, int, int]] = {}
         renames: dict[str, str] = {}
-        rename_rechecks: dict[str, tuple[Path, str, int, int]] = {}
         rename_candidates = missing_selected_paths | indexed_unselected_paths
         if rename_candidates and added_ids:
             by_hash_gone: dict[str, list[str]] = defaultdict(list)
             for sid in rename_candidates:
                 by_hash_gone[existing_sources[sid]["sha256"]].append(sid)
             by_hash_added: dict[str, list[str]] = defaultdict(list)
-            added_hashes: dict[str, str] = {}
-            added_stats: dict[str, tuple[int, int]] = {}
             for sid in added_ids:
                 added_abs = sources_dir / sid
                 captured = _capture_stable_file_state(added_abs)
@@ -480,21 +467,11 @@ def sync(
                     return SyncReport(status="aborted-source-changed")
                 file_hash, size_bytes, mtime_ns = captured
                 observed_states[sid] = (added_abs, file_hash, size_bytes, mtime_ns)
-                added_hashes[sid] = file_hash
-                added_stats[sid] = (size_bytes, mtime_ns)
                 by_hash_added[file_hash].append(sid)
             for file_hash, gone_list in by_hash_gone.items():
                 added_list = by_hash_added.get(file_hash, [])
                 if len(gone_list) == 1 and len(added_list) == 1:
                     renames[gone_list[0]] = added_list[0]
-                    new_id = added_list[0]
-                    size_bytes, mtime_ns = added_stats[new_id]
-                    rename_rechecks[new_id] = (
-                        sources_dir / new_id,
-                        file_hash,
-                        size_bytes,
-                        mtime_ns,
-                    )
 
         renamed_new_ids = set(renames.values())
         true_added_ids = added_ids - renamed_new_ids
@@ -558,41 +535,26 @@ def sync(
             observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
 
             config_matches = _config_matches(row, options, source_type)
-            fast_unchanged = (
-                not options.full
-                and not options.reembed
-                and config_matches
-                and file_hash == row["sha256"]
-                and size_bytes == row["size_bytes"]
-                and mtime_ns == row["mtime_ns"]
-            )
-            if fast_unchanged:
-                missing_rows = _chunks_missing_active_embedding(
-                    conn, source_pk, options.model_id
-                )
-                if not missing_rows:
-                    report.sources_unchanged.append(source_path)
-                    continue
-                # Nothing about the source, its parse, or its chunks changed
-                # -- only the active embedding model lacks coverage for it.
-                # Top up embeddings for exactly these chunks; do not reparse
-                # or rechunk, and do not touch any other model's rows.
-                for missing_row in missing_rows:
-                    reembed_only_chunks.append(
-                        (missing_row["chunk_id"], missing_row["semantic_input_hash"])
-                    )
-                    pending_embeddings.setdefault(
-                        missing_row["semantic_input_hash"], missing_row["body"]
-                    )
-                continue
-
             content_changed = file_hash != row["sha256"]
-
             if not content_changed and config_matches and not options.full:
                 if size_bytes != row["size_bytes"] or mtime_ns != row["mtime_ns"]:
                     hint_updates.append((source_path, size_bytes, mtime_ns))
                 if not options.reembed:
-                    report.sources_unchanged.append(source_path)
+                    missing_rows = _chunks_missing_active_embedding(
+                        conn, source_pk, options.model_id
+                    )
+                    if not missing_rows:
+                        report.sources_unchanged.append(source_path)
+                    for missing_row in missing_rows:
+                        reembed_only_chunks.append(
+                            (
+                                missing_row["chunk_id"],
+                                missing_row["semantic_input_hash"],
+                            )
+                        )
+                        pending_embeddings.setdefault(
+                            missing_row["semantic_input_hash"], missing_row["body"]
+                        )
                     continue
 
             needs_full_reparse = (
@@ -616,12 +578,6 @@ def sync(
                     != captured
                 ):
                     return SyncReport(status="aborted-source-changed")
-                observed_states[source_path] = (
-                    abs_path,
-                    snapshot.sha256,
-                    snapshot.size_bytes,
-                    snapshot.mtime_ns,
-                )
             plans.append(
                 _SourcePlan(
                     source_path=source_path,
@@ -694,7 +650,7 @@ def sync(
             diff = {
                 "matched": [],
                 "to_delete_ids": to_delete_ids,
-                "new": [],
+                "new": new_candidates,
             }
             for row, candidate in matched:
                 hash_changed = (
@@ -704,7 +660,6 @@ def sync(
                 if hash_changed or options.reembed:
                     pending_embeddings[candidate.semantic_input_hash] = candidate.body
             for candidate in new_candidates:
-                diff["new"].append(candidate)
                 pending_embeddings[candidate.semantic_input_hash] = candidate.body
 
             source_diffs[plan.source_path] = diff
@@ -766,12 +721,10 @@ def sync(
 
         # ==== single write transaction ====
         _asset_event("begin-immediate")
-        for (
-            abs_path,
-            expected_hash,
-            expected_size,
-            expected_mtime,
-        ) in rename_rechecks.values():
+        for new_id in renames.values():
+            abs_path, expected_hash, expected_size, expected_mtime = observed_states[
+                new_id
+            ]
             captured = _capture_stable_file_state(abs_path)
             if captured is None:
                 shutil.rmtree(generation_root, ignore_errors=True)
@@ -810,7 +763,7 @@ def sync(
 
             # renames: relabel path while retaining internal source_pk
             for old_id, new_id in sorted(renames.items()):
-                _, _, size_bytes, mtime_ns = rename_rechecks[new_id]
+                _, _, size_bytes, mtime_ns = observed_states[new_id]
                 conn.execute(
                     "UPDATE sources SET path = ?, size_bytes = ?, mtime_ns = ? WHERE path = ?",
                     (new_id, size_bytes, mtime_ns, old_id),
@@ -1138,7 +1091,7 @@ def _prune_asset_target(
     stored_asset_path: str,
     *,
     validate_filesystem: bool = True,
-) -> _PruneAssetTarget:
+) -> Path:
     parts = _canonical_asset_parts(
         database_path, stored_asset_path, validate_filesystem=validate_filesystem
     )
@@ -1152,20 +1105,17 @@ def _prune_asset_target(
         raise ValueError(
             f"asset identifier source association does not match source_pk {source_pk}: {stored_asset_path!r}"
         )
-    source_dir = (
+    return (
         schema.imgs_dir(database_path) / "generations" / generation / stored_source_pk
-    )
-    return _PruneAssetTarget(
-        generation=generation, source_pk=source_pk, source_dir=source_dir
     )
 
 
 def validate_prune_plan(
     conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
-) -> set[_PruneAssetTarget]:
+) -> set[Path]:
     """Return the asset directories the plan would remove, or raise if any stored asset path is unsafe."""
-    targets: set[_PruneAssetTarget] = set()
-    targets_by_source: dict[int, set[_PruneAssetTarget]] = defaultdict(set)
+    targets: set[Path] = set()
+    targets_by_source: dict[int, set[Path]] = defaultdict(set)
     for path in plan.paths:
         row = conn.execute(
             "SELECT source_pk FROM sources WHERE path = ?", (path,)
@@ -1456,11 +1406,10 @@ def apply_prune(
             row["source_pk"],
             row["asset_path"],
             validate_filesystem=False,
-        ).source_dir
+        )
         for row in conn.execute("SELECT source_pk, asset_path FROM assets").fetchall()
     }
-    for target in sorted(pruned_asset_targets, key=lambda item: str(item.source_dir)):
-        asset_dir = target.source_dir
+    for asset_dir in sorted(pruned_asset_targets, key=str):
         if asset_dir in referenced_dirs:
             continue
         try:

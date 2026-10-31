@@ -99,6 +99,11 @@ def test_mtime_only_touch_rechecks_hash_but_does_not_reparse(
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
     calls_before = len(embedder.calls)
+    conn = schema.connect(database_path)
+    chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+    conn.execute("DELETE FROM chunk_embeddings")
+    conn.commit()
+    conn.close()
 
     _touch_future_mtime(one_pdf_corpus)
     report = sync_module.sync(
@@ -108,6 +113,12 @@ def test_mtime_only_touch_rechecks_hash_but_does_not_reparse(
     assert report.sources_reparsed == []
     assert report.sources_added == []
     assert len(embedder.calls) == calls_before
+    conn = schema.connect(database_path)
+    assert (
+        conn.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0]
+        == chunk_count
+    )
+    conn.close()
 
 
 def test_parser_metadata_change_reparses_without_byte_change(
