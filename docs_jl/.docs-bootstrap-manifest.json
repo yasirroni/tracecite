@@ -4,6 +4,14 @@
       "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
+    "src/examples/workbook-vector-search/index.md": {
+      "sha256": "50823a3f0d48f5351d6ccaf48b53ffa65b6026fc17854a62d4f254e6bbc340dc",
+      "source": "docs/examples/workbook-vector-search/index.md"
+    },
+    "src/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx": {
+      "sha256": "5fb01b7eb8861d20a50d02628fdb686bae83f7f046a5288f2f62cb27126eb246",
+      "source": "docs/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"
+    },
     "src/formats/diagnostics.md": {
       "sha256": "1d17977d4a986aae261489e75bb20f49030b1e4ae0f239be9949d190adf076f8",
       "source": "docs/formats/diagnostics.md"
