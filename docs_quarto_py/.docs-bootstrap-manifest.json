@@ -1,7 +1,7 @@
 {
   "files": {
     "examples/julia/dirty_dataframe.html.md": {
-      "sha256": "76565eeb729ce35a5d69098abfb82691a4b2e0ddbda1cdda8201adab50150691",
+      "sha256": "a753782e517541ec89d5ef83e021c492f3a3da498da39757ffbab063d8945ea1",
       "source": "docs/examples/julia/dirty_dataframe.html.md"
     },
     "examples/literate_documenter/Project.toml": {
@@ -17,7 +17,7 @@
       "source": "docs/examples/literate_documenter/index.md"
     },
     "examples/python/dirty_dataframe.py": {
-      "sha256": "b3e7f812e76dc3031f173928535d170975c9b7f17c31bde8470d178b89b8e86a",
+      "sha256": "e035353fb8628f499097dd9c5e7e232e26745db1475ddf2d321b49ff221bdd62",
       "source": "docs/examples/python/dirty_dataframe.py"
     },
     "examples/python/hottest_temperature.py": {

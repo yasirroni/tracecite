@@ -18,7 +18,7 @@ and stable identifiers for retrieval.
 #| label: dirty-dataframe-setup
 import pandas as pd
 
-from tracecite.tables import knowledge_table
+from tracecite.tables import computed_first_row_summary, knowledge_table
 
 dirty_table = pd.DataFrame(
     {
@@ -76,9 +76,9 @@ print(
 
 # %% [markdown]
 """
-The minimal call above and advanced call below show the optional caption,
-metadata, stable row identity, and data-derived finding. TraceCite can also normalise
-tables produced by other libraries; this helper is a convenient Pandoc output
+The advanced call below controls presentation, retrieval context, stable row
+identity, and the data-derived finding. TraceCite can also normalise tables
+produced by other libraries; this helper is a convenient Pandoc Markdown output
 route.
 """
 
@@ -115,12 +115,61 @@ print(
     )
 )
 
+# %% [markdown]
+"""
+`computed_first_row_summary()` returns the finding on its own, for prose outside
+a table. With a single field, the finding states that field's value.
+"""
+
+# %%
+#| label: dirty-dataframe-first-row-summary
+#| output: asis
+
+print(computed_first_row_summary(dirty_table, columns=["status"]))
+
 # %%
 #| label: dirty-dataframe-assertions
 #| include: false
 
-assert dirty_table.shape == (5, 5)
-assert "Battery | BESS" in dirty_table["technology"].tolist()
+from datetime import date
+
+from tracecite.tables import TableContext, normalise_pandoc_table
+
+minimal = normalise_pandoc_table(
+    knowledge_table(dirty_table, table_id="dirty-dataframe-python-minimal"),
+    context=TableContext(document_path="dirty_dataframe.md"),
+)
+assert minimal.table_id == "dirty-dataframe-python-minimal"
+assert minimal.caption is None
+
+assert (
+    computed_first_row_summary(dirty_table, columns=[])
+    == "**First-row finding.** No fields were selected."
+)
+assert (
+    computed_first_row_summary(dirty_table.iloc[0:0], columns=["status"])
+    == "**First-row finding.** The table contains no rows."
+)
+assert knowledge_table(
+    dirty_table, table_id="tbl-no-summary-fields", summary=[]
+).endswith("\n**First-row finding.** No fields were selected.")
+
+events = pd.DataFrame(
+    {
+        "place": ["North", "North"],
+        "date": [date(1960, 1, 2), date(1961, 3, 4)],
+        "temperature": [50.7, 49.1],
+    }
+)
+event_table = knowledge_table(
+    events,
+    table_id="tbl-events",
+    ordering="temperature descending",
+    row_identity=["place", "date"],
+)
+assert "| 1960-01-02 |" in event_table
+assert '"ordering": "temperature descending"' in event_table
+assert '"row_identity": ["place", "date"]' in event_table
 
 # %% [markdown]
 """

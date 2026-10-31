@@ -44,7 +44,10 @@ dirty_table = DataFrame(
 
 ## Evidence route 1: HTML MIME
 
-The native Julia engine can retain a rich HTML table representation. TraceCite handles it through the same HTML adapter used for Literate and Documenter output.
+A bare DataFrame is a normal Julia evidence route. Its retained HTML is
+preserved, and TraceCite can convert it to canonical Markdown and retrieval
+records without requiring the native helper. The same HTML adapter handles
+Literate and Documenter output.
 
 ````@example dirty_dataframe
 dirty_table
@@ -56,7 +59,7 @@ dirty_table
 the minimal form emits a bare pipe table without a numbered Quarto caption.
 
 ````@example dirty_dataframe
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "dirty-dataframe-julia-minimal", # Required: stable TraceCite identity.
@@ -70,7 +73,7 @@ produced by other libraries; this helper is a convenient Pandoc Markdown output
 route.
 
 ````@example dirty_dataframe
-print(
+println(
     knowledge_table(
         dirty_table;
         table_id = "tbl-dirty-julia", # Required: stable identity and Quarto target.
@@ -96,11 +99,53 @@ print(
         ],
     ),
 )
-
-
-@assert size(dirty_table) == (5, 5) # hide
-@assert "Battery | BESS" in dirty_table.technology # hide
 ````
+
+`computed_first_row_summary()` returns the finding on its own, for prose outside
+a table. With a single field, the finding states that field's value.
+
+````@example dirty_dataframe
+println(computed_first_row_summary(dirty_table; columns = ["status"]))
+
+
+using Dates # hide
+
+@assert computed_first_row_summary(dirty_table; columns = String[]) == # hide
+    "**First-row finding.** No fields were selected." # hide
+@assert computed_first_row_summary(dirty_table[1:0, :]; columns = ["status"]) == # hide
+    "**First-row finding.** The table contains no rows." # hide
+@assert endswith( # hide
+    knowledge_table(dirty_table; table_id = "tbl-no-summary-fields", summary = String[]), # hide
+    "\n**First-row finding.** No fields were selected.", # hide
+) # hide
+
+events = DataFrame( # hide
+    place = ["North", "North"], # hide
+    date = [Date("1960-01-02"), Date("1961-03-04")], # hide
+    temperature = [50.7, 49.1], # hide
+) # hide
+event_table = knowledge_table( # hide
+    events; # hide
+    table_id = "tbl-events", # hide
+    ordering = "temperature descending", # hide
+    row_identity = ["place", "date"], # hide
+) # hide
+@assert occursin("| 1960-01-02 |", event_table) # hide
+@assert occursin("\"ordering\":\"temperature descending\"", event_table) # hide
+@assert occursin("\"row_identity\":[\"place\",\"date\"]", event_table) # hide
+````
+
+## What the canonical model provides
+
+For either input route, TraceCite derives:
+
+- raw source evidence;
+- canonical Markdown;
+- normalised retrieval text;
+- table-level and row-level records; and
+- diagnostics, identifiers, and source hashes.
+
+These are retrieval representations, not embedding vectors.
 
 ---
 

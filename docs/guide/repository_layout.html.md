@@ -102,8 +102,6 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   ├── _quarto.yml
 │   ├── index.html.md
 │   └── index.md
-├── fixtures/
-│   └── sample-report.md
 ├── scripts/
 │   ├── bootstrap_docs.py
 │   └── render_repository_tree.py
@@ -117,8 +115,6 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   ├── __main__.py
 │   │   └── cli.py
 │   └── TraceCite.jl
-├── test/
-│   └── runtests.jl
 ├── tests/
 │   ├── docs/
 │   │   ├── __init__.py
@@ -155,7 +151,8 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   └── test_workbook.py
 │   ├── fixtures/
 │   │   ├── docs-vector/
-│   │   └── publish-only/
+│   │   ├── publish-only/
+│   │   └── sample-report.md
 │   ├── test_bootstrap_docs.py
 │   ├── test_build_docs.py
 │   ├── test_docs.py

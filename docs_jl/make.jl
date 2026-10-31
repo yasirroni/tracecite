@@ -70,7 +70,7 @@ function quarto_percent_to_literate(content::AbstractString)
             index += 1
             continue
         elseif startswith(line, "#|")
-            hide_cell = strip(line) == "#| include: false"
+            strip(line) == "#| include: false" && (hide_cell = true)
             index += 1
             continue
         end

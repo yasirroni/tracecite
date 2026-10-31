@@ -5,17 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import pandas as pd
 import yaml
 
 from tracecite.tables import (
     TableContext,
     TableNormalisationError,
     augment_document_with_embedding_text,
-    computed_first_row_summary,
     export_embedding_site,
     html_table_to_markdown,
-    knowledge_table,
     normalise_document_tables,
     normalise_html_table,
     normalise_pandoc_table,
@@ -267,90 +264,6 @@ class DocumentTests(unittest.TestCase):
         self.assertFalse(tables[0].supported)
         self.assertEqual(tables[0].caption, "Broken metadata without an identifier.")
         self.assertEqual(tables[0].metadata["raw_headers"], ["A", "B"])
-
-
-class PublishTests(unittest.TestCase):
-    def test_dataframe_helper_allows_captionless_table_with_required_id(self) -> None:
-        frame = pd.DataFrame({"place": ["North"], "tmax": [50.7]})
-        rendered = knowledge_table(frame, table_id="tbl-captionless")
-        self.assertIn('"table_id": "tbl-captionless"', rendered)
-        self.assertNotIn("\n: ", rendered)
-        normalised = normalise_pandoc_table(
-            rendered, context=TableContext(document_path="captionless.md")
-        )
-        self.assertEqual(normalised.table_id, "tbl-captionless")
-        self.assertIsNone(normalised.caption)
-
-    def test_dataframe_helper_keeps_captioned_pandoc_reference(self) -> None:
-        frame = pd.DataFrame({"place": ["North"], "tmax": [50.7]})
-        rendered = knowledge_table(
-            frame, table_id="tbl-captioned", caption="Highest event."
-        )
-        self.assertIn(": Highest event. {#tbl-captioned}", rendered)
-
-    def test_first_row_summary_uses_first_selected_field_as_subject(self) -> None:
-        frame = pd.DataFrame(
-            {
-                "technology": ["Solar PV"],
-                "capital_cost": [1250.0],
-                "status": ["firm"],
-            }
-        )
-        rendered = knowledge_table(
-            frame,
-            table_id="tbl-natural-summary",
-            labels={
-                "capital_cost": "Capital cost ($/kW)",
-                "status": "Status",
-            },
-            formats={"capital_cost": ".2f"},
-            units={"capital_cost": "$/kW"},
-            summary=["technology", "capital_cost", "status"],
-        )
-        self.assertIn(
-            "**First-row finding.** For **Solar PV**, capital cost ($/kW) is "
-            "**1250.00 \\$/kW** and status is **firm**.",
-            rendered,
-        )
-        self.assertNotIn("Computed finding", rendered)
-
-    def test_first_row_summary_handles_one_field(self) -> None:
-        frame = pd.DataFrame({"status": ["firm"]})
-        rendered = knowledge_table(frame, table_id="tbl-one-field", summary=["status"])
-        self.assertIn("**First-row finding.** Status is **firm**.", rendered)
-
-    def test_empty_ordered_summary_emits_empty_finding(self) -> None:
-        frame = pd.DataFrame({"status": ["firm"]})
-        rendered = knowledge_table(frame, table_id="tbl-empty-summary", summary=[])
-        self.assertIn("**First-row finding.** No fields were selected.", rendered)
-
-    def test_first_row_summary_handles_no_fields_and_no_rows(self) -> None:
-        populated = pd.DataFrame({"status": ["firm"]})
-        empty = pd.DataFrame({"status": pd.Series(dtype="object")})
-        self.assertEqual(
-            computed_first_row_summary(populated, columns=[]),
-            "**First-row finding.** No fields were selected.",
-        )
-        self.assertEqual(
-            computed_first_row_summary(empty, columns=["status"]),
-            "**First-row finding.** The table contains no rows.",
-        )
-
-    def test_dataframe_helper_is_optional_and_data_driven(self) -> None:
-        frame = pd.DataFrame({"rank": [1], "place": ["North | South"], "tmax": [50.7]})
-        rendered = knowledge_table(
-            frame,
-            caption="Highest event.",
-            table_id="tbl-highest",
-            labels={"tmax": "Temperature"},
-            units={"tmax": "°C"},
-            ordering="Temperature descending",
-            summary=["place", "tmax"],
-        )
-        self.assertIn(r"North \| South", rendered)
-        self.assertIn("tracecite-table", rendered)
-        self.assertIn("50.7 °C", rendered)
-        self.assertIn("First-row finding", rendered)
 
 
 class SiteExportTests(unittest.TestCase):

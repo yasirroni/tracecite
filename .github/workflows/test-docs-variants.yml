@@ -1,25 +1,9 @@
 name: Test documentation variants
 
 on:
+  pull_request:
   push:
     branches: [main]
-    paths:
-      - docs/**
-      - docs_quarto_py/**
-      - docs_quarto_jl/**
-      - docs_jl/**
-      - scripts/bootstrap_docs.py
-      - docs/bootstrap.toml
-      - .github/workflows/test-docs-variants.yml
-  pull_request:
-    paths:
-      - docs/**
-      - docs_quarto_py/**
-      - docs_quarto_jl/**
-      - docs_jl/**
-      - scripts/bootstrap_docs.py
-      - docs/bootstrap.toml
-      - .github/workflows/test-docs-variants.yml
   workflow_dispatch:
 
 jobs:

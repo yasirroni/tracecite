@@ -1,7 +1,7 @@
 {
   "files": {
     "examples/julia/dirty_dataframe.jl": {
-      "sha256": "55eacd33687de2342b39dd06bda7d289f8ae27df3eebe34b9651440799e27fc0",
+      "sha256": "04310ea75bfc589366a2d9646baccaf9a864b3b9b0b3cd92570acc1cf03e94b0",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "examples/literate_documenter/Project.toml": {
@@ -25,7 +25,7 @@
       "source": "docs/examples/literate_documenter/src/temperature_eda.jl"
     },
     "examples/python/dirty_dataframe.html.md": {
-      "sha256": "fce801cb2d04d2dcecf7fb95c937fbd8d331ecc4be31a0f790c888514244d65e",
+      "sha256": "3bbc59cb88de0d52f81207698cd0f3fb378b857376bddbbff9c0994793c7ffb1",
       "source": "docs/examples/python/dirty_dataframe.html.md"
     },
     "examples/python/hottest_temperature.html.md": {
@@ -77,7 +77,7 @@
       "source": "docs/guide/embedding-site.md"
     },
     "guide/repository_layout.html.md": {
-      "sha256": "e7fe78e0789a1367a53f58ea57f1a34418da7e33b32ca60829a55d357352c51a",
+      "sha256": "71cc53a835e2b66e0d573e184e28ca11f5d86e2d4e620fb5a4c74099cdaf5276",
       "source": "docs/guide/repository_layout.html.md"
     },
     "guide/searchable-evidence.md": {
