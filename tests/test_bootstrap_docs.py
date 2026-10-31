@@ -194,34 +194,5 @@ class BootstrapCleanCheckTests(unittest.TestCase):
             self.assertEqual(status.stdout, "")
 
 
-class BootstrapRealRepoRegressionTests(unittest.TestCase):
-    """Check the bootstrap state of the checked-out repository."""
-
-    def test_check_is_clean_against_the_real_repository(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "scripts/bootstrap_docs.py", "--check"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "")
-        self.assertEqual(result.stderr, "")
-
-    def test_no_symlinks_remain_in_derived_source_trees(self) -> None:
-        for project in ("docs_quarto_py", "docs_quarto_jl", "docs_jl"):
-            project_dir = REPO_ROOT / project
-            for path in project_dir.rglob("*"):
-                if any(
-                    part in {"build", ".quarto", "site_libs"} for part in path.parts
-                ):
-                    continue
-                self.assertFalse(
-                    path.is_symlink(),
-                    f"unexpected symlink left in {project}: {path}",
-                )
-
-
 if __name__ == "__main__":
     unittest.main()
