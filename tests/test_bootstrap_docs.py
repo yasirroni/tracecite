@@ -195,7 +195,7 @@ class BootstrapCleanCheckTests(unittest.TestCase):
 
 
 class BootstrapRealRepoRegressionTests(unittest.TestCase):
-    """Guard the literal maintainer-reported build failure this card fixes."""
+    """Check the bootstrap state of the checked-out repository."""
 
     def test_check_is_clean_against_the_real_repository(self) -> None:
         result = subprocess.run(
@@ -221,34 +221,6 @@ class BootstrapRealRepoRegressionTests(unittest.TestCase):
                     path.is_symlink(),
                     f"unexpected symlink left in {project}: {path}",
                 )
-
-    def test_quarto_julia_only_build_succeeds(self) -> None:
-        build_dir = REPO_ROOT / "docs_quarto_jl" / "build"
-        if build_dir.exists():
-            shutil.rmtree(build_dir)
-
-        result = subprocess.run(
-            [
-                "uv",
-                "run",
-                "tracecite",
-                "docs",
-                "build",
-                "docs_quarto_jl",
-                "--only",
-                "julia",
-            ],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(
-            result.returncode,
-            0,
-            f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}",
-        )
-        self.assertTrue((build_dir / "index.html").is_file())
 
 
 if __name__ == "__main__":

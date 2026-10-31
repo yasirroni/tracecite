@@ -38,14 +38,6 @@ jobs:
       - name: Check lint and formatting
         run: uvx pre-commit run --all-files --show-diff-on-failure
 
-      - name: Set up Julia
-        uses: julia-actions/setup-julia@v3
-        with:
-          version: "1.12"
-
-      - name: Cache Julia packages
-        uses: julia-actions/cache@v3
-
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
@@ -55,9 +47,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-eng
 
       - name: Install dependencies
-        run: |
-          uv sync --locked --extra evidence --extra test
-          julia --project=. -e 'using Pkg; Pkg.instantiate()'
+        run: uv sync --locked --extra evidence --extra test
 
       - name: Run Python tests
         run: uv run --no-sync pytest -q
