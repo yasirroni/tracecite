@@ -1,7 +1,7 @@
 {
   "files": {
     "src/examples/julia/dirty_dataframe.jl": {
-      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
+      "sha256": "55eacd33687de2342b39dd06bda7d289f8ae27df3eebe34b9651440799e27fc0",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "src/examples/workbook-vector-search/index.md": {
@@ -41,7 +41,7 @@
       "source": "docs/guide/searchable-evidence.md"
     },
     "src/index.md": {
-      "sha256": "e94a0fc4d7c9fc634c09d3124bf8c29f62a5524b9ea942867de3e3e1670b365b",
+      "sha256": "58dcc3ddb9db76b4a45e0f6da7c84500910aa63efbdebb4365faf4d8d893472c",
       "source": "docs/index.md"
     }
   },

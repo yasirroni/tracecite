@@ -67,41 +67,20 @@ class _SourceChangedDuringSync(RuntimeError):
 @dataclass
 class SyncOptions:
     max_chunk_chars: int = chunking.DEFAULT_MAX_CHUNK_CHARS
-    parser_version_pdf: str = schema.PARSER_VERSION_PDF
-    parser_version_markdown: str = schema.PARSER_VERSION_MARKDOWN
-    parser_version_workbook: str = schema.PARSER_VERSION_WORKBOOK
-    chunker_version: str = schema.CHUNKER_VERSION
-    normalisation_version: str = schema.NORMALISATION_VERSION
-    embedding_model: str = schema.EMBEDDING_MODEL
-    embedding_revision: str = schema.EMBEDDING_REVISION
-    embedding_dimensions: int = schema.EMBEDDING_DIMENSIONS
     generate_assets: bool = True
     cleanup_asset_generations: bool = True
     full: bool = False
     reembed: bool = False
-    ocr_lang: str = pdf_parser.DEFAULT_OCR_LANG
 
-    @property
-    def model_id(self) -> str:
-        return schema.embedding_model_id(self.embedding_model, self.embedding_revision)
 
-    def parser_version(self, source_type: str) -> str:
-        if source_type == "pdf":
-            return self.parser_version_pdf
-        if source_type == "markdown":
-            return self.parser_version_markdown
-        if source_type == "workbook":
-            return self.parser_version_workbook
-        raise SyncError(f"unsupported source type: {source_type}")
-
-    def parser_name(self, source_type: str) -> str:
-        if source_type == "pdf":
-            return schema.PARSER_NAME_PDF
-        if source_type == "markdown":
-            return schema.PARSER_NAME_MARKDOWN
-        if source_type == "workbook":
-            return schema.PARSER_NAME_WORKBOOK
-        raise SyncError(f"unsupported source type: {source_type}")
+def _parser_identity(source_type: str) -> tuple[str, str]:
+    if source_type == "pdf":
+        return schema.PARSER_NAME_PDF, schema.PARSER_VERSION_PDF
+    if source_type == "markdown":
+        return schema.PARSER_NAME_MARKDOWN, schema.PARSER_VERSION_MARKDOWN
+    if source_type == "workbook":
+        return schema.PARSER_NAME_WORKBOOK, schema.PARSER_VERSION_WORKBOOK
+    raise SyncError(f"unsupported source type: {source_type}")
 
 
 @dataclass
@@ -150,9 +129,9 @@ def load_manifest_rules(
     return manifest_module.merge_manifests(paths)
 
 
-def _parser_config_for(source_type: str, options: SyncOptions) -> dict:
+def _parser_config_for(source_type: str) -> dict:
     if source_type == "pdf":
-        return {"ocr_lang": options.ocr_lang}
+        return {"ocr_lang": pdf_parser.DEFAULT_OCR_LANG}
     return {}
 
 
@@ -318,10 +297,9 @@ def _match_chunks(
 
 def _config_matches(row: sqlite3.Row, options: SyncOptions, source_type: str) -> bool:
     return (
-        row["parser_name"] == options.parser_name(source_type)
-        and row["parser_version"] == options.parser_version(source_type)
-        and row["chunker_version"] == options.chunker_version
-        and row["normalisation_version"] == options.normalisation_version
+        (row["parser_name"], row["parser_version"]) == _parser_identity(source_type)
+        and row["chunker_version"] == schema.CHUNKER_VERSION
+        and row["normalisation_version"] == schema.NORMALISATION_VERSION
         and json.loads(row["chunker_config"]).get("max_chunk_chars")
         == options.max_chunk_chars
     )
@@ -345,19 +323,18 @@ def _chunks_missing_active_embedding(
     ).fetchall()
 
 
-def _source_values(plan: _SourcePlan, options: SyncOptions) -> tuple:
+def _source_values(plan: _SourcePlan) -> tuple:
     return (
         plan.source_path,
         plan.sha256,
         plan.size_bytes,
         plan.mtime_ns,
-        options.parser_name(plan.source_type),
-        options.parser_version(plan.source_type),
+        *_parser_identity(plan.source_type),
         json.dumps(plan.parser_config),
         schema.CHUNKER_NAME,
-        options.chunker_version,
+        schema.CHUNKER_VERSION,
         json.dumps(plan.chunker_config),
-        options.normalisation_version,
+        schema.NORMALISATION_VERSION,
         json.dumps(plan.normalisation_config),
         schema.utc_now(),
     )
@@ -426,15 +403,17 @@ def sync(
                 dir=database_path.resolve().parent,
             )
         )
-        if options.embedding_dimensions != config.embedding_dimensions:
+        if schema.EMBEDDING_DIMENSIONS != config.embedding_dimensions:
             raise SyncError(
-                f"embedding dimensions {options.embedding_dimensions} are incompatible with schema v{config.schema_version} "
+                f"embedding dimensions {schema.EMBEDDING_DIMENSIONS} are incompatible with schema v{config.schema_version} "
                 f"database dimensions {config.embedding_dimensions}"
             )
         active_config_changed = (
-            options.embedding_model != config.embedding_model
-            or options.embedding_revision != config.embedding_revision
-            or options.embedding_dimensions != config.embedding_dimensions
+            schema.EMBEDDING_MODEL != config.embedding_model
+            or schema.EMBEDDING_REVISION != config.embedding_revision
+        )
+        model_id = schema.embedding_model_id(
+            schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION
         )
 
         if embedder is None:
@@ -442,7 +421,7 @@ def sync(
                 Path(database_path).resolve().parent / "model-cache"
             )
             embedder = EmbeddingModel(
-                options.embedding_model, options.embedding_revision, cache_dir
+                schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION, cache_dir
             )
 
         existing_sources = {
@@ -529,7 +508,7 @@ def sync(
                     sha256=file_hash,
                     size_bytes=size_bytes,
                     mtime_ns=mtime_ns,
-                    parser_config=_parser_config_for(source_type, options),
+                    parser_config=_parser_config_for(source_type),
                     chunker_config={"max_chunk_chars": options.max_chunk_chars},
                     normalisation_config={},
                     snapshot_path=snapshot.path,
@@ -554,7 +533,7 @@ def sync(
                     hint_updates.append((source_path, size_bytes, mtime_ns))
                 if not options.reembed:
                     missing_rows = _chunks_missing_active_embedding(
-                        conn, source_pk, options.model_id
+                        conn, source_pk, model_id
                     )
                     if not missing_rows:
                         report.sources_unchanged.append(source_path)
@@ -572,8 +551,8 @@ def sync(
 
             needs_full_reparse = (
                 content_changed
-                or row["parser_name"] != options.parser_name(source_type)
-                or row["parser_version"] != options.parser_version(source_type)
+                or (row["parser_name"], row["parser_version"])
+                != _parser_identity(source_type)
                 or options.full
             )
 
@@ -601,7 +580,7 @@ def sync(
                     sha256=file_hash,
                     size_bytes=size_bytes,
                     mtime_ns=mtime_ns,
-                    parser_config=_parser_config_for(source_type, options),
+                    parser_config=_parser_config_for(source_type),
                     chunker_config={"max_chunk_chars": options.max_chunk_chars},
                     normalisation_config={},
                     snapshot_path=snapshot.path if snapshot is not None else None,
@@ -651,7 +630,7 @@ def sync(
             candidates = chunking.build_chunk_candidates(
                 groups,
                 source_type=plan.source_type,
-                normalisation_version=options.normalisation_version,
+                normalisation_version=schema.NORMALISATION_VERSION,
             )
             existing_rows = conn.execute(
                 "SELECT * FROM chunks WHERE source_pk = ?", (plan.source_pk,)
@@ -683,7 +662,7 @@ def sync(
             cached_rows = conn.execute(
                 f"SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
                 f"AND semantic_input_hash IN ({placeholders})",
-                (options.model_id, *pending_embeddings.keys()),
+                (model_id, *pending_embeddings.keys()),
             ).fetchall()
             for row in cached_rows:
                 pending_embeddings.pop(row["semantic_input_hash"], None)
@@ -691,7 +670,7 @@ def sync(
         missing_hashes = list(pending_embeddings)
         missing_texts = [pending_embeddings[h] for h in missing_hashes]
         vectors = embedder.embed(missing_texts) if missing_texts else []
-        _validate_embedding_dimensions(vectors, options.embedding_dimensions)
+        _validate_embedding_dimensions(vectors, schema.EMBEDDING_DIMENSIONS)
         hash_to_vector = dict(zip(missing_hashes, vectors))
         report.embeddings_generated = len(missing_hashes)
 
@@ -772,7 +751,7 @@ def sync(
                             indexed_at_utc, source_type, index_status
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
                         """,
-                        (*_source_values(plan, options), plan.source_type),
+                        (*_source_values(plan), plan.source_type),
                     )
                     plan.source_pk = conn.execute(
                         "SELECT source_pk FROM sources WHERE path = ?",
@@ -811,7 +790,7 @@ def sync(
                         embedding_id = _ensure_embedding(
                             conn,
                             backend,
-                            options.model_id,
+                            model_id,
                             candidate.semantic_input_hash,
                             hash_to_vector,
                         )
@@ -841,7 +820,7 @@ def sync(
                     embedding_id = _ensure_embedding(
                         conn,
                         backend,
-                        options.model_id,
+                        model_id,
                         candidate.semantic_input_hash,
                         hash_to_vector,
                     )
@@ -888,7 +867,7 @@ def sync(
                                 indexed_at_utc = ?, index_status = 'ok'
                             WHERE source_pk = ?
                             """,
-                            (*_source_values(plan, options), plan.source_pk),
+                            (*_source_values(plan), plan.source_pk),
                         )
 
                     if plan.source_type == "pdf" and options.generate_assets:
@@ -909,9 +888,9 @@ def sync(
                         """,
                         (
                             schema.CHUNKER_NAME,
-                            options.chunker_version,
+                            schema.CHUNKER_VERSION,
                             json.dumps(plan.chunker_config),
-                            options.normalisation_version,
+                            schema.NORMALISATION_VERSION,
                             json.dumps(plan.normalisation_config),
                             schema.utc_now(),
                             plan.source_pk,
@@ -922,7 +901,7 @@ def sync(
             # invalidation is a changed active embedding model
             for chunk_id, semantic_input_hash in reembed_only_chunks:
                 embedding_id = _ensure_embedding(
-                    conn, backend, options.model_id, semantic_input_hash, hash_to_vector
+                    conn, backend, model_id, semantic_input_hash, hash_to_vector
                 )
                 conn.execute(
                     "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
@@ -936,9 +915,9 @@ def sync(
             schema.touch_config(conn)
             schema.activate_embedding_config(
                 conn,
-                embedding_model=options.embedding_model,
-                embedding_revision=options.embedding_revision,
-                embedding_dimensions=options.embedding_dimensions,
+                embedding_model=schema.EMBEDDING_MODEL,
+                embedding_revision=schema.EMBEDDING_REVISION,
+                embedding_dimensions=schema.EMBEDDING_DIMENSIONS,
             )
             conn.execute("COMMIT")
         except Exception as exc:

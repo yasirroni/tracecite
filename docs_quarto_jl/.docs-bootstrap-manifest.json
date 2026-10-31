@@ -1,7 +1,7 @@
 {
   "files": {
     "examples/julia/dirty_dataframe.jl": {
-      "sha256": "8b6915c6619c12852e2fb0bb9a151c8419293ed9d02e1641317c5ec01622a56e",
+      "sha256": "55eacd33687de2342b39dd06bda7d289f8ae27df3eebe34b9651440799e27fc0",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "examples/literate_documenter/Project.toml": {
@@ -29,7 +29,7 @@
       "source": "docs/examples/python/dirty_dataframe.html.md"
     },
     "examples/python/hottest_temperature.html.md": {
-      "sha256": "5be73a3514384ee66306dcdd56464712adced6cc4e6ddd91136983f50acd7ed7",
+      "sha256": "945b125df597ec515ec4396d1bbf9cecbec1c940588fbb658ac53e3234b81c59",
       "source": "docs/examples/python/hottest_temperature.html.md"
     },
     "examples/python/quarto_code_visibility.html.md": {
@@ -77,7 +77,7 @@
       "source": "docs/guide/embedding-site.md"
     },
     "guide/repository_layout.html.md": {
-      "sha256": "d71f32c29cfb67d511e1e9d474b657a2793d37f1b2435817338535604501a860",
+      "sha256": "e7fe78e0789a1367a53f58ea57f1a34418da7e33b32ca60829a55d357352c51a",
       "source": "docs/guide/repository_layout.html.md"
     },
     "guide/searchable-evidence.md": {
@@ -85,7 +85,7 @@
       "source": "docs/guide/searchable-evidence.md"
     },
     "index.md": {
-      "sha256": "e94a0fc4d7c9fc634c09d3124bf8c29f62a5524b9ea942867de3e3e1670b365b",
+      "sha256": "58dcc3ddb9db76b4a45e0f6da7c84500910aa63efbdebb4365faf4d8d893472c",
       "source": "docs/index.md"
     }
   },

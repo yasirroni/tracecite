@@ -1,8 +1,10 @@
 # TraceCite
 
-TraceCite provides source-linked table normalisation and hybrid evidence retrieval for Markdown, PDF, `.xlsx`, and `.xlsm` sources.
+TraceCite makes executable documentation, and the source documents behind it, searchable and checkable evidence.
 
-For executable documentation, TraceCite preserves the original table as evidence and derives deterministic, self-describing text for indexing. For source collections, it stores retained extraction, source hashes, full-text search records, semantic vectors, and source-specific locators such as PDF pages, Markdown lines, and workbook worksheet ranges.
+Its core is source-linked table normalisation. Each table in a rendered Python or Julia documentation page stays in the site as the original evidence, and TraceCite derives deterministic, self-describing row text from it for search, so generated tables become retrievable without changing what readers see.
+
+Around that core, TraceCite indexes source collections of Markdown, PDF, `.xlsx`, and `.xlsm` files. It stores retained extraction, source hashes, full-text and vector search records, and source-specific locators such as PDF pages, Markdown lines, and workbook worksheet ranges, and it verifies quotations and report citations against them. The documentation commands join the two parts: `tracecite docs index` adds a project's retained documentation, with its normalised tables, to an evidence index, and `tracecite docs stage` routes source links to local files or public URLs.
 
 ## Core architecture
 

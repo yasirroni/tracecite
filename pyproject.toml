@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tracecite"
 version = "0.0.1"
-description = "Source-linked table normalisation for executable documentation and retrieval"
+description = "Source-linked table normalisation and evidence retrieval for executable documentation"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

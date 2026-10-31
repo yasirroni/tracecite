@@ -88,8 +88,7 @@ print(ranked_markdown)
 
 The debug renderer shows raw Markdown, canonical Markdown, normalised retrieval
 text, and row records together. This inspection representation is the exact
-text prepared for retrieval or a future embedding pipeline; it is not an
-embedding vector, and TraceCite does not currently generate or display vectors.
+text that the evidence index embeds; it is not an embedding vector.
 """
 
 # %%
