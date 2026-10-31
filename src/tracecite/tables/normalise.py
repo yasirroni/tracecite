@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
-from functools import cmp_to_key
 from hashlib import sha256
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -243,6 +244,7 @@ def _render_retrieval_text(
     if row_identity:
         context_lines.append(f"Row identity columns: {'; '.join(row_identity)}")
     context_lines.append(f"Columns: {'; '.join(headers)}")
+    context_text = " ".join(_sentence(line) for line in context_lines)
 
     ordinal = _ordinal_index(headers)
     row_ids: list[str] = []
@@ -279,9 +281,7 @@ def _render_retrieval_text(
         )
         row_paragraphs.append(sentence)
         row_ids.append(row_id)
-        row_records.append(
-            " ".join(_sentence(line) for line in context_lines) + " " + sentence
-        )
+        row_records.append(context_text + " " + sentence)
 
     if not rows:
         row_paragraphs.append("This table contains no data rows.")
@@ -306,7 +306,7 @@ def _validate_table(
     normalised_headers = [normalise_label(value) for value in headers]
 
     duplicates = sorted(
-        {value for value in normalised_headers if normalised_headers.count(value) > 1}
+        value for value, count in Counter(normalised_headers).items() if count > 1
     )
     if duplicates:
         diagnostics.append(
@@ -450,14 +450,12 @@ def _unit_diagnostics(
                 )
             )
 
-        observed: dict[str, tuple[str, list[int]]] = {}
+        observed: dict[str, str] = {}
         for row_number, row in enumerate(rows, start=1):
             unit = cell_unit(row[column]) if column < len(row) else None
             if unit:
                 unit_key = _unit_key(unit)
-                if unit_key not in observed:
-                    observed[unit_key] = (unit, [])
-                observed[unit_key][1].append(row_number)
+                observed.setdefault(unit_key, unit)
                 if declared and _unit_key(unit) != _unit_key(declared):
                     diagnostics.append(
                         TableDiagnostic(
@@ -469,10 +467,7 @@ def _unit_diagnostics(
                         )
                     )
         if len(observed) > 1:
-            labels = sorted(
-                (label for label, _rows in observed.values()),
-                key=str.casefold,
-            )
+            labels = sorted(observed.values(), key=str.casefold)
             diagnostics.append(
                 TableDiagnostic(
                     "table.mixed-units",
@@ -506,11 +501,7 @@ def _ordering_diagnostic(
     if len(rows) < 2:
         return None
 
-    expected = sorted(
-        range(len(rows)),
-        key=cmp_to_key(lambda a, b: _compare_rows(rows[a], rows[b], clauses)),
-    )
-    if expected != list(range(len(rows))):
+    if any(_compare_rows(left, right, clauses) > 0 for left, right in pairwise(rows)):
         return TableDiagnostic(
             "table.ordering-mismatch",
             "error",
