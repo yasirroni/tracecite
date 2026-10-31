@@ -18,8 +18,10 @@ from ._text import (
     escape_pipe_cell,
     header_unit,
     is_missing,
+    is_pipe_table_start,
     normalise_label,
     slug,
+    split_pipe_row,
     strip_caption_id,
 )
 from .models import (
@@ -99,28 +101,7 @@ def normalise_parsed_table(
 ) -> NormalisedTable:
     """Build the public normal form from an already parsed Pandoc table."""
 
-    result = _build_normalised_table(
-        parsed,
-        raw_source=raw_source,
-        source_format=source_format,
-        context=context,
-        metadata=dict(metadata or {}),
-        extra_diagnostics=list(extra_diagnostics),
-    )
-    if strict and result.has_errors:
-        raise TableNormalisationError(_strict_message(result))
-    return result
-
-
-def _build_normalised_table(
-    parsed: ParsedPandocTable,
-    *,
-    raw_source: str,
-    source_format: str,
-    context: TableContext,
-    metadata: Mapping[str, Any],
-    extra_diagnostics: Iterable[TableDiagnostic],
-) -> NormalisedTable:
+    metadata = dict(metadata or {})
     labels = _string_map(metadata.get("labels"))
     units = _string_map(metadata.get("units"))
     row_identity = _string_list(metadata.get("row_identity"))
@@ -180,7 +161,7 @@ def _build_normalised_table(
         for item in diagnostics
     )
     merged_metadata = {
-        **dict(metadata),
+        **metadata,
         "labels": labels,
         "units": units,
         "row_identity": row_identity,
@@ -191,7 +172,7 @@ def _build_normalised_table(
     if description:
         merged_metadata["description"] = description
 
-    return NormalisedTable(
+    result = NormalisedTable(
         table_id=table_id,
         caption=caption,
         section_path=context.section_path,
@@ -212,6 +193,12 @@ def _build_normalised_table(
         source_end_line=_optional_int(metadata.get("source_end_line")),
         metadata=merged_metadata,
     )
+    if strict and result.has_errors:
+        errors = [item.message for item in diagnostics if item.severity == "error"]
+        raise TableNormalisationError(
+            f"Table {table_id} failed strict normalisation: " + "; ".join(errors)
+        )
+    return result
 
 
 def _render_retrieval_text(
@@ -682,19 +669,11 @@ def _pipe_source_diagnostics(source: str) -> list[TableDiagnostic]:
             elif marker == fence[0] and length >= fence[1]:
                 fence = None
             continue
-        if fence is not None:
-            continue
-        if "|" not in lines[index] or "|" not in lines[index + 1]:
-            continue
-        headers = _split_pipe_row(lines[index])
-        separators = _split_pipe_row(lines[index + 1])
-        if not headers or len(headers) != len(separators):
-            continue
-        if not all(re.fullmatch(r":?-{3,}:?", item.strip()) for item in separators):
+        if fence is not None or not is_pipe_table_start(lines, index):
             continue
 
         diagnostics: list[TableDiagnostic] = []
-        expected = len(headers)
+        expected = len(split_pipe_row(lines[index]))
         cursor = index + 2
         row_number = 0
         while cursor < len(lines):
@@ -703,7 +682,7 @@ def _pipe_source_diagnostics(source: str) -> list[TableDiagnostic]:
             if not stripped or stripped.startswith(":") or "|" not in line:
                 break
             row_number += 1
-            width = len(_split_pipe_row(line))
+            width = len(split_pipe_row(line))
             if width != expected:
                 diagnostics.append(
                     TableDiagnostic(
@@ -720,25 +699,17 @@ def _pipe_source_diagnostics(source: str) -> list[TableDiagnostic]:
 
 def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
     lines = source.splitlines()
-    candidates = []
-    for index in range(len(lines) - 1):
-        if "|" not in lines[index] or "|" not in lines[index + 1]:
-            continue
-        headers = _split_pipe_row(lines[index])
-        separators = _split_pipe_row(lines[index + 1])
-        if len(headers) == len(separators) and all(
-            re.fullmatch(r":?-{3,}:?", item.strip()) for item in separators
-        ):
-            candidates.append(index)
+    candidates = [
+        index for index in range(len(lines)) if is_pipe_table_start(lines, index)
+    ]
     if len(candidates) != 1:
         raise TableNormalisationError(
             f"Reduced fallback expects one ordinary pipe table; found {len(candidates)}"
         )
     index = candidates[0]
-    headers = _split_pipe_row(lines[index])
+    headers = split_pipe_row(lines[index], collapse_space)
     alignments = []
-    for item in _split_pipe_row(lines[index + 1]):
-        item = item.strip()
+    for item in split_pipe_row(lines[index + 1]):
         if item.startswith(":") and item.endswith(":"):
             alignments.append("center")
         elif item.startswith(":"):
@@ -750,7 +721,7 @@ def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
     rows = []
     cursor = index + 2
     while cursor < len(lines) and "|" in lines[cursor]:
-        row = _split_pipe_row(lines[cursor])
+        row = split_pipe_row(lines[cursor], collapse_space)
         if len(row) != len(headers):
             break
         rows.append(row)
@@ -770,31 +741,6 @@ def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
         diagnostics=[],
         attributes={},
     )
-
-
-def _split_pipe_row(line: str) -> list[str]:
-    stripped = line.strip()
-    stripped = stripped.removeprefix("|")
-    if stripped.endswith("|") and not stripped.endswith("\\|"):
-        stripped = stripped[:-1]
-    cells: list[str] = []
-    current: list[str] = []
-    escaped = False
-    for character in stripped:
-        if escaped:
-            current.append(character)
-            escaped = False
-        elif character == "\\":
-            escaped = True
-        elif character == "|":
-            cells.append(collapse_space("".join(current)))
-            current = []
-        else:
-            current.append(character)
-    if escaped:
-        current.append("\\")
-    cells.append(collapse_space("".join(current)))
-    return cells
 
 
 def _ordinal_index(headers: list[str]) -> int | None:
@@ -838,8 +784,3 @@ def _optional_int(value: Any) -> int | None:
 
 def _unit_key(value: str) -> str:
     return collapse_space(value).replace(" ", "").casefold()
-
-
-def _strict_message(table: NormalisedTable) -> str:
-    errors = [item.message for item in table.diagnostics if item.severity == "error"]
-    return f"Table {table.table_id} failed strict normalisation: " + "; ".join(errors)

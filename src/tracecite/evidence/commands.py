@@ -176,16 +176,12 @@ def hybrid_search(
 
     fused_scores: dict[str, float] = defaultdict(float)
     provenance: dict[str, set[str]] = defaultdict(set)
-    for chunk_id, rank in fts_rank.items():
-        fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
-        provenance[chunk_id].add("lexical")
-    for chunk_id, rank in vector_rank.items():
-        fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
-        provenance[chunk_id].add("vector")
+    for retrieval, ranks in (("lexical", fts_rank), ("vector", vector_rank)):
+        for chunk_id, rank in ranks.items():
+            fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
+            provenance[chunk_id].add(retrieval)
 
-    ranked_chunk_ids = sorted(
-        fused_scores, key=lambda cid: fused_scores[cid], reverse=True
-    )[:limit]
+    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)[:limit]
 
     results = []
     for position, chunk_id in enumerate(ranked_chunk_ids, start=1):
@@ -405,20 +401,20 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             result = verify.QuoteVerification("not-found", args.page, args.quote)
         else:
             result = verify.verify_quote(conn, source_path, args.page, args.quote)
-        print(
-            json.dumps(
-                {
-                    "status": result.status,
-                    "page": result.physical_page,
-                    "quote": result.quote,
-                    "citation_key": result.citation_key,
-                    "source_path": result.source_path,
-                }
-            )
-        )
+        print(json.dumps(_quote_json(result)))
     finally:
         conn.close()
     return 0 if result.status in {"exact", "normalised"} else 1
+
+
+def _quote_json(result) -> dict:
+    return {
+        "status": result.status,
+        "page": result.physical_page,
+        "quote": result.quote,
+        "citation_key": result.citation_key,
+        "source_path": result.source_path,
+    }
 
 
 def cmd_verify_report(args: argparse.Namespace) -> int:
@@ -442,16 +438,7 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
                     "citation_issues": [
                         issue.__dict__ for issue in result.citation_issues
                     ],
-                    "quote_results": [
-                        {
-                            "status": q.status,
-                            "page": q.physical_page,
-                            "quote": q.quote,
-                            "citation_key": q.citation_key,
-                            "source_path": q.source_path,
-                        }
-                        for q in result.quote_results
-                    ],
+                    "quote_results": [_quote_json(q) for q in result.quote_results],
                     "source_link_issues": result.source_link_issues,
                     "ok": result.ok,
                 },
