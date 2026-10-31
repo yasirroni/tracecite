@@ -287,8 +287,8 @@ python -m pytest
 uv build
 ```
 
-Julia test:
+The Julia package is tested by its documentation example, `docs/examples/julia/dirty_dataframe.jl`. Building the documentation runs the example, including its hidden checks:
 
 ```sh
-julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+tracecite docs build docs
 ```

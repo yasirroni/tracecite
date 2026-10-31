@@ -96,10 +96,40 @@ print(
         ],
     ),
 )
+````
+
+`computed_first_row_summary()` returns the finding on its own, for prose outside
+a table. With a single field, the finding states that field's value.
+
+````@example dirty_dataframe
+print(computed_first_row_summary(dirty_table; columns = ["status"]))
 
 
-@assert size(dirty_table) == (5, 5) # hide
-@assert "Battery | BESS" in dirty_table.technology # hide
+using Dates # hide
+
+@assert computed_first_row_summary(dirty_table; columns = String[]) == # hide
+    "**First-row finding.** No fields were selected." # hide
+@assert computed_first_row_summary(dirty_table[1:0, :]; columns = ["status"]) == # hide
+    "**First-row finding.** The table contains no rows." # hide
+@assert endswith( # hide
+    knowledge_table(dirty_table; table_id = "tbl-no-summary-fields", summary = String[]), # hide
+    "\n**First-row finding.** No fields were selected.", # hide
+) # hide
+
+events = DataFrame( # hide
+    place = ["North", "North"], # hide
+    date = [Date("1960-01-02"), Date("1961-03-04")], # hide
+    temperature = [50.7, 49.1], # hide
+) # hide
+event_table = knowledge_table( # hide
+    events; # hide
+    table_id = "tbl-events", # hide
+    ordering = "temperature descending", # hide
+    row_identity = ["place", "date"], # hide
+) # hide
+@assert occursin("| North | 1960-01-02 | 50.7 |", event_table) # hide
+@assert occursin("\"ordering\":\"temperature descending\"", event_table) # hide
+@assert occursin("\"row_identity\":[\"place\",\"date\"]", event_table) # hide
 ````
 
 ---

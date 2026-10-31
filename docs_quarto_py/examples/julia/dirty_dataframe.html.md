@@ -133,5 +133,14 @@ print(
 **First-row finding.** For **Solar PV**, capital cost ($/kW) is **1250.00 \$/kW** and status is **firm**.
 
 
+`computed_first_row_summary()` returns the finding on its own, for prose outside
+a table. With a single field, the finding states that field's value.
+
+``` {.julia .cell-code}
+print(computed_first_row_summary(dirty_table; columns = ["status"]))
+```
+**First-row finding.** Status is **firm**.
+
+
 
 

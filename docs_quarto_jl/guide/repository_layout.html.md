@@ -115,8 +115,6 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   ├── __main__.py
 │   │   └── cli.py
 │   └── TraceCite.jl
-├── test/
-│   └── runtests.jl
 ├── tests/
 │   ├── docs/
 │   │   ├── __init__.py

@@ -109,8 +109,42 @@ print(
     ),
 )
 
+# %% [markdown]
+"""
+`computed_first_row_summary()` returns the finding on its own, for prose outside
+a table. With a single field, the finding states that field's value.
+"""
+
+# %%
+#| output: asis
+
+print(computed_first_row_summary(dirty_table; columns = ["status"]))
+
 # %%
 #| include: false
 
-@assert size(dirty_table) == (5, 5)
-@assert "Battery | BESS" in dirty_table.technology
+using Dates
+
+@assert computed_first_row_summary(dirty_table; columns = String[]) ==
+    "**First-row finding.** No fields were selected."
+@assert computed_first_row_summary(dirty_table[1:0, :]; columns = ["status"]) ==
+    "**First-row finding.** The table contains no rows."
+@assert endswith(
+    knowledge_table(dirty_table; table_id = "tbl-no-summary-fields", summary = String[]),
+    "\n**First-row finding.** No fields were selected.",
+)
+
+events = DataFrame(
+    place = ["North", "North"],
+    date = [Date("1960-01-02"), Date("1961-03-04")],
+    temperature = [50.7, 49.1],
+)
+event_table = knowledge_table(
+    events;
+    table_id = "tbl-events",
+    ordering = "temperature descending",
+    row_identity = ["place", "date"],
+)
+@assert occursin("| North | 1960-01-02 | 50.7 |", event_table)
+@assert occursin("\"ordering\":\"temperature descending\"", event_table)
+@assert occursin("\"row_identity\":[\"place\",\"date\"]", event_table)

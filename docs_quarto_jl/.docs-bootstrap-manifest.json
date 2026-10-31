@@ -1,7 +1,7 @@
 {
   "files": {
     "examples/julia/dirty_dataframe.jl": {
-      "sha256": "55eacd33687de2342b39dd06bda7d289f8ae27df3eebe34b9651440799e27fc0",
+      "sha256": "8f2b76f0ced041f064e9279a1deb003c6e359325932fc0f5f7803ad2da04dc61",
       "source": "docs/examples/julia/dirty_dataframe.jl"
     },
     "examples/literate_documenter/Project.toml": {
@@ -77,7 +77,7 @@
       "source": "docs/guide/embedding-site.md"
     },
     "guide/repository_layout.html.md": {
-      "sha256": "8cb5904f224cb46abdf117cc15c218aab5fdddb411aa16c30621255cca01aeb4",
+      "sha256": "71cc53a835e2b66e0d573e184e28ca11f5d86e2d4e620fb5a4c74099cdaf5276",
       "source": "docs/guide/repository_layout.html.md"
     },
     "guide/searchable-evidence.md": {
