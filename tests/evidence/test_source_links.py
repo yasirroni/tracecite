@@ -323,21 +323,25 @@ public_url = "{bad_url}"
         assert issues, bad_url
 
 
-def test_non_empty_string_fields_are_required(tmp_path: Path) -> None:
+@pytest.mark.parametrize("field", ["name", "local_path", "public_url"])
+@pytest.mark.parametrize("value", ['""', "7", "[]"])
+def test_non_empty_string_fields_are_required(tmp_path: Path, field, value) -> None:
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
+    fields = {
+        "name": '"report"',
+        "local_path": '"sources/report.pdf"',
+        "public_url": '"https://example.invalid/report.pdf"',
+    }
+    fields[field] = value
     registry_path = _write(
         tmp_path / "source-links.toml",
-        """schema_version = 3
-
-[[source]]
-name = ""
-local_path = "sources/report.pdf"
-public_url = "https://example.invalid/report.pdf"
-""",
+        "schema_version = 3\n\n[[source]]\n"
+        + "\n".join(f"{name} = {item}" for name, item in fields.items())
+        + "\n",
     )
     _, issues = load_source_links(registry_path, tmp_path)
-    assert any("non-empty string" in issue and "name" in issue for issue in issues)
+    assert any("non-empty string" in issue and field in issue for issue in issues)
 
 
 def test_malformed_candidate_entry_reports_table_error(tmp_path: Path) -> None:

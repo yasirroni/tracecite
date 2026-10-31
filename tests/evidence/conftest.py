@@ -9,6 +9,7 @@ import pymupdf
 import pytest
 
 from tracecite.evidence import schema
+from tracecite.evidence import sync as sync_module
 
 
 class FakeEmbedder:
@@ -30,11 +31,7 @@ class FakeEmbedder:
 @pytest.fixture
 def make_embedder():
     """Factory for a fresh, call-counting fake embedder."""
-
-    def _make() -> FakeEmbedder:
-        return FakeEmbedder()
-
-    return _make
+    return FakeEmbedder
 
 
 def write_manifest(path: Path, entries: dict[str, str]) -> Path:
@@ -43,6 +40,32 @@ def write_manifest(path: Path, entries: dict[str, str]) -> Path:
         lines.extend(["[[source]]", f'path = "{relative_path}"'])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+def insert_source(
+    conn, path: str, source_type: str = "pdf", sha256: str = "sha"
+) -> int:
+    """Insert a minimal indexed source row and return its ``source_pk``."""
+    return conn.execute(
+        """
+        INSERT INTO sources (
+            path, source_type, sha256, size_bytes, mtime_ns,
+            parser_name, parser_version, parser_config,
+            chunker_name, chunker_version, chunker_config,
+            normalisation_version, normalisation_config, indexed_at_utc, index_status
+        ) VALUES (?, ?, ?, 1, 1, 'parser', '1', '{}', 'chunker', '1', '{}', '1', '{}', 'now', 'ok')
+        """,
+        (path, source_type, sha256),
+    ).lastrowid
+
+
+def sync_with_fake_model(monkeypatch, corpus_dir, manifest_path, database_path) -> None:
+    """Index the corpus with the fake embedder, which the CLI also loads."""
+    monkeypatch.setattr(sync_module, "EmbeddingModel", lambda *a, **k: FakeEmbedder())
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
+    )
+    assert report.status == "ok"
 
 
 def read_manifest(path: Path) -> dict[str, str]:

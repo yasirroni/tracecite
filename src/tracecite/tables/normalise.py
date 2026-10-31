@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
-from functools import cmp_to_key
 from hashlib import sha256
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,10 @@ from ._text import (
     escape_pipe_cell,
     header_unit,
     is_missing,
+    is_pipe_table_start,
     normalise_label,
     slug,
+    split_pipe_row,
     strip_caption_id,
 )
 from .models import (
@@ -98,28 +101,7 @@ def normalise_parsed_table(
 ) -> NormalisedTable:
     """Build the public normal form from an already parsed Pandoc table."""
 
-    result = _build_normalised_table(
-        parsed,
-        raw_source=raw_source,
-        source_format=source_format,
-        context=context,
-        metadata=dict(metadata or {}),
-        extra_diagnostics=list(extra_diagnostics),
-    )
-    if strict and result.has_errors:
-        raise TableNormalisationError(_strict_message(result))
-    return result
-
-
-def _build_normalised_table(
-    parsed: ParsedPandocTable,
-    *,
-    raw_source: str,
-    source_format: str,
-    context: TableContext,
-    metadata: Mapping[str, Any],
-    extra_diagnostics: Iterable[TableDiagnostic],
-) -> NormalisedTable:
+    metadata = dict(metadata or {})
     labels = _string_map(metadata.get("labels"))
     units = _string_map(metadata.get("units"))
     row_identity = _string_list(metadata.get("row_identity"))
@@ -179,7 +161,7 @@ def _build_normalised_table(
         for item in diagnostics
     )
     merged_metadata = {
-        **dict(metadata),
+        **metadata,
         "labels": labels,
         "units": units,
         "row_identity": row_identity,
@@ -190,7 +172,7 @@ def _build_normalised_table(
     if description:
         merged_metadata["description"] = description
 
-    return NormalisedTable(
+    result = NormalisedTable(
         table_id=table_id,
         caption=caption,
         section_path=context.section_path,
@@ -211,6 +193,12 @@ def _build_normalised_table(
         source_end_line=_optional_int(metadata.get("source_end_line")),
         metadata=merged_metadata,
     )
+    if strict and result.has_errors:
+        errors = [item.message for item in diagnostics if item.severity == "error"]
+        raise TableNormalisationError(
+            f"Table {table_id} failed strict normalisation: " + "; ".join(errors)
+        )
+    return result
 
 
 def _render_retrieval_text(
@@ -243,6 +231,7 @@ def _render_retrieval_text(
     if row_identity:
         context_lines.append(f"Row identity columns: {'; '.join(row_identity)}")
     context_lines.append(f"Columns: {'; '.join(headers)}")
+    context_text = " ".join(_sentence(line) for line in context_lines)
 
     ordinal = _ordinal_index(headers)
     row_ids: list[str] = []
@@ -279,9 +268,7 @@ def _render_retrieval_text(
         )
         row_paragraphs.append(sentence)
         row_ids.append(row_id)
-        row_records.append(
-            " ".join(_sentence(line) for line in context_lines) + " " + sentence
-        )
+        row_records.append(context_text + " " + sentence)
 
     if not rows:
         row_paragraphs.append("This table contains no data rows.")
@@ -306,7 +293,7 @@ def _validate_table(
     normalised_headers = [normalise_label(value) for value in headers]
 
     duplicates = sorted(
-        {value for value in normalised_headers if normalised_headers.count(value) > 1}
+        value for value, count in Counter(normalised_headers).items() if count > 1
     )
     if duplicates:
         diagnostics.append(
@@ -450,14 +437,12 @@ def _unit_diagnostics(
                 )
             )
 
-        observed: dict[str, tuple[str, list[int]]] = {}
+        observed: dict[str, str] = {}
         for row_number, row in enumerate(rows, start=1):
             unit = cell_unit(row[column]) if column < len(row) else None
             if unit:
                 unit_key = _unit_key(unit)
-                if unit_key not in observed:
-                    observed[unit_key] = (unit, [])
-                observed[unit_key][1].append(row_number)
+                observed.setdefault(unit_key, unit)
                 if declared and _unit_key(unit) != _unit_key(declared):
                     diagnostics.append(
                         TableDiagnostic(
@@ -469,10 +454,7 @@ def _unit_diagnostics(
                         )
                     )
         if len(observed) > 1:
-            labels = sorted(
-                (label for label, _rows in observed.values()),
-                key=str.casefold,
-            )
+            labels = sorted(observed.values(), key=str.casefold)
             diagnostics.append(
                 TableDiagnostic(
                     "table.mixed-units",
@@ -506,11 +488,7 @@ def _ordering_diagnostic(
     if len(rows) < 2:
         return None
 
-    expected = sorted(
-        range(len(rows)),
-        key=cmp_to_key(lambda a, b: _compare_rows(rows[a], rows[b], clauses)),
-    )
-    if expected != list(range(len(rows))):
+    if any(_compare_rows(left, right, clauses) > 0 for left, right in pairwise(rows)):
         return TableDiagnostic(
             "table.ordering-mismatch",
             "error",
@@ -691,19 +669,11 @@ def _pipe_source_diagnostics(source: str) -> list[TableDiagnostic]:
             elif marker == fence[0] and length >= fence[1]:
                 fence = None
             continue
-        if fence is not None:
-            continue
-        if "|" not in lines[index] or "|" not in lines[index + 1]:
-            continue
-        headers = _split_pipe_row(lines[index])
-        separators = _split_pipe_row(lines[index + 1])
-        if not headers or len(headers) != len(separators):
-            continue
-        if not all(re.fullmatch(r":?-{3,}:?", item.strip()) for item in separators):
+        if fence is not None or not is_pipe_table_start(lines, index):
             continue
 
         diagnostics: list[TableDiagnostic] = []
-        expected = len(headers)
+        expected = len(split_pipe_row(lines[index]))
         cursor = index + 2
         row_number = 0
         while cursor < len(lines):
@@ -712,7 +682,7 @@ def _pipe_source_diagnostics(source: str) -> list[TableDiagnostic]:
             if not stripped or stripped.startswith(":") or "|" not in line:
                 break
             row_number += 1
-            width = len(_split_pipe_row(line))
+            width = len(split_pipe_row(line))
             if width != expected:
                 diagnostics.append(
                     TableDiagnostic(
@@ -729,25 +699,17 @@ def _pipe_source_diagnostics(source: str) -> list[TableDiagnostic]:
 
 def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
     lines = source.splitlines()
-    candidates = []
-    for index in range(len(lines) - 1):
-        if "|" not in lines[index] or "|" not in lines[index + 1]:
-            continue
-        headers = _split_pipe_row(lines[index])
-        separators = _split_pipe_row(lines[index + 1])
-        if len(headers) == len(separators) and all(
-            re.fullmatch(r":?-{3,}:?", item.strip()) for item in separators
-        ):
-            candidates.append(index)
+    candidates = [
+        index for index in range(len(lines)) if is_pipe_table_start(lines, index)
+    ]
     if len(candidates) != 1:
         raise TableNormalisationError(
             f"Reduced fallback expects one ordinary pipe table; found {len(candidates)}"
         )
     index = candidates[0]
-    headers = _split_pipe_row(lines[index])
+    headers = split_pipe_row(lines[index], collapse_space)
     alignments = []
-    for item in _split_pipe_row(lines[index + 1]):
-        item = item.strip()
+    for item in split_pipe_row(lines[index + 1]):
         if item.startswith(":") and item.endswith(":"):
             alignments.append("center")
         elif item.startswith(":"):
@@ -759,7 +721,7 @@ def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
     rows = []
     cursor = index + 2
     while cursor < len(lines) and "|" in lines[cursor]:
-        row = _split_pipe_row(lines[cursor])
+        row = split_pipe_row(lines[cursor], collapse_space)
         if len(row) != len(headers):
             break
         rows.append(row)
@@ -779,31 +741,6 @@ def _parse_pipe_fallback(source: str) -> ParsedPandocTable:
         diagnostics=[],
         attributes={},
     )
-
-
-def _split_pipe_row(line: str) -> list[str]:
-    stripped = line.strip()
-    stripped = stripped.removeprefix("|")
-    if stripped.endswith("|") and not stripped.endswith("\\|"):
-        stripped = stripped[:-1]
-    cells: list[str] = []
-    current: list[str] = []
-    escaped = False
-    for character in stripped:
-        if escaped:
-            current.append(character)
-            escaped = False
-        elif character == "\\":
-            escaped = True
-        elif character == "|":
-            cells.append(collapse_space("".join(current)))
-            current = []
-        else:
-            current.append(character)
-    if escaped:
-        current.append("\\")
-    cells.append(collapse_space("".join(current)))
-    return cells
 
 
 def _ordinal_index(headers: list[str]) -> int | None:
@@ -847,8 +784,3 @@ def _optional_int(value: Any) -> int | None:
 
 def _unit_key(value: str) -> str:
     return collapse_space(value).replace(" ", "").casefold()
-
-
-def _strict_message(table: NormalisedTable) -> str:
-    errors = [item.message for item in table.diagnostics if item.severity == "error"]
-    return f"Table {table.table_id} failed strict normalisation: " + "; ".join(errors)

@@ -6,9 +6,10 @@ import json
 import os
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
-from conftest import FakeEmbedder, build_pdf, write_manifest
+from conftest import FakeEmbedder, build_pdf, insert_source, write_manifest
 
 from tracecite import cli
 from tracecite.evidence import schema
@@ -35,6 +36,20 @@ def _make_corpus(tmp_path: Path):
     return corpus_dir, manifest_path, database_path
 
 
+def _sync(root: Path, manifest_path: Path, database_path: Path) -> int:
+    return cli.main(
+        [
+            "sync",
+            "--root",
+            str(root),
+            "--manifest",
+            str(manifest_path),
+            "--database",
+            str(database_path),
+        ]
+    )
+
+
 def _fake_model(*args, **kwargs):
     return FakeEmbedder()
 
@@ -45,54 +60,26 @@ def _write_manifest(path: Path, text: str) -> Path:
 
 
 def _insert_source(database_path: Path, stored_path: str) -> None:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
-        conn.execute(
-            """
-            INSERT INTO sources (
-                path, source_type, language, canonical_url,
-                capture_manifest_ref, sha256, size_bytes, mtime_ns,
-                parser_name, parser_version, parser_config,
-                chunker_name, chunker_version, chunker_config,
-                normalisation_version, normalisation_config,
-                indexed_at_utc, index_status
-            ) VALUES (?, 'markdown', NULL, NULL, NULL, 'sha', 1, 1, 'parser', '1', '{}', 'chunker', '1', '{}', '1', '{}', 'now', 'ok')
-            """,
-            (stored_path,),
-        )
+        insert_source(conn, stored_path, "markdown")
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _source_paths(database_path: Path) -> list[str]:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         return [
             row["path"]
             for row in conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
         ]
-    finally:
-        conn.close()
 
 
 def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
 
-    exit_code = cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
+    exit_code = _sync(corpus_dir, manifest_path, database_path)
     assert exit_code == 0
 
     exit_code = cli.main(["doctor", "--database", str(database_path)])
@@ -102,20 +89,7 @@ def test_cli_sync_and_doctor_via_main(tmp_path, monkeypatch):
 def test_cli_verify_quote_exit_codes_and_json_contract(tmp_path, capsys, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    assert (
-        cli.main(
-            [
-                "sync",
-                "--root",
-                str(corpus_dir),
-                "--manifest",
-                str(manifest_path),
-                "--database",
-                str(database_path),
-            ]
-        )
-        == 0
-    )
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
     capsys.readouterr()
 
     cases = [
@@ -157,20 +131,7 @@ def test_cli_page_and_quote_normalise_paths_and_reject_escapes(
     outside.write_text("outside", encoding="utf-8")
     (corpus_dir / "escape.pdf").symlink_to(outside)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    assert (
-        cli.main(
-            [
-                "sync",
-                "--root",
-                str(corpus_dir),
-                "--manifest",
-                str(manifest_path),
-                "--database",
-                str(database_path),
-            ]
-        )
-        == 0
-    )
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
 
     assert (
         cli.main(
@@ -251,17 +212,7 @@ def test_cli_page_and_quote_normalise_paths_and_reject_escapes(
 def test_cli_search_returns_json(tmp_path, capsys, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    cli.main(
-        [
-            "sync",
-            "--root",
-            str(corpus_dir),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
+    _sync(corpus_dir, manifest_path, database_path)
     exit_code = cli.main(
         [
             "search",
@@ -291,20 +242,7 @@ def test_cli_search_percentage_query_keeps_json_on_stdout(
     monkeypatch.setattr(
         sync_module, "EmbeddingModel", lambda *args, **kwargs: CapturingEmbedder()
     )
-    assert (
-        cli.main(
-            [
-                "sync",
-                "--root",
-                str(corpus_dir),
-                "--manifest",
-                str(manifest_path),
-                "--database",
-                str(database_path),
-            ]
-        )
-        == 0
-    )
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
     capsys.readouterr()
 
     query = "10%, 50%, and 90%"
@@ -383,17 +321,7 @@ def test_cli_sync_prints_structured_missing_and_unmatched_warnings(
     )
     database_path = tmp_path / "tracecite.sqlite"
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    exit_code = cli.main(
-        [
-            "sync",
-            "--root",
-            str(root),
-            "--manifest",
-            str(manifest_path),
-            "--database",
-            str(database_path),
-        ]
-    )
+    exit_code = _sync(root, manifest_path, database_path)
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "selected-missing: ['missing.pdf']" in out
@@ -585,8 +513,7 @@ def test_cli_verify_report_emits_citation_binding(tmp_path, capsys):
     )
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "doc.md")
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         source_pk = conn.execute(
             "SELECT source_pk FROM sources WHERE path = 'doc.md'"
         ).fetchone()[0]
@@ -600,8 +527,6 @@ def test_cli_verify_report_emits_citation_binding(tmp_path, capsys):
             (source_pk, "Evidence sentence retained on page one."),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     report_path = root / "report.md"
     report_path.write_text(

@@ -2,37 +2,42 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import closing
 from pathlib import Path
 
 import pytest
-from conftest import build_pdf
+from conftest import build_pdf, insert_source
 
 from tracecite import cli
 from tracecite.evidence import schema
 
 
+def _extract_pages(root, database_path, output_dir, source, *selector) -> int:
+    return cli.main(
+        [
+            "extract-pages",
+            "--root",
+            str(root),
+            "--database",
+            str(database_path),
+            source,
+            *selector,
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+
 def _insert_pdf_source(
     database_path: Path, source_path: str, source_pdf: Path, page_count: int
 ) -> None:
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
-        conn.execute(
-            """
-            INSERT INTO sources (
-                path, source_type, language, canonical_url,
-                capture_manifest_ref, sha256, size_bytes, mtime_ns,
-                parser_name, parser_version, parser_config,
-                chunker_name, chunker_version, chunker_config,
-                normalisation_version, normalisation_config,
-                indexed_at_utc, index_status
-            ) VALUES (?, 'pdf', NULL, NULL, NULL, ?, 1, 1, 'parser', '1', '{}', 'chunker', '1', '{}', '1', '{}', 'now', 'ok')
-            """,
-            (source_path, hashlib.sha256(source_pdf.read_bytes()).hexdigest()),
+        source_pk = insert_source(
+            conn,
+            source_path,
+            sha256=hashlib.sha256(source_pdf.read_bytes()).hexdigest(),
         )
-        source_pk = conn.execute(
-            "SELECT source_pk FROM sources WHERE path = ?", (source_path,)
-        ).fetchone()["source_pk"]
         for physical_page in range(1, page_count + 1):
             conn.execute(
                 """
@@ -44,8 +49,6 @@ def _insert_pdf_source(
                 (source_pk, physical_page, f"Page {physical_page} text"),
             )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _extract_summary(stdout: str) -> dict:
@@ -67,18 +70,7 @@ def test_extract_pages_defaults_to_page_one_and_writes_manifest(
     output_dir = database_path.parent / "exports"
     output_dir.mkdir()
 
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(output_dir),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, output_dir, "source.pdf")
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -127,18 +119,8 @@ def test_extract_pages_supports_closed_open_list_and_all(
     output_dir = database_path.parent / "exports"
     output_dir.mkdir()
 
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            selector,
-            "--output-dir",
-            str(output_dir),
-        ]
+    exit_code = _extract_pages(
+        corpus_dir, database_path, output_dir, "source.pdf", selector
     )
     captured = capsys.readouterr()
 
@@ -165,36 +147,14 @@ def test_extract_pages_rejects_missing_indexed_pages_and_pdf_mismatch(
     output_dir = database_path.parent / "exports"
     output_dir.mkdir()
 
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "3",
-            "--output-dir",
-            str(output_dir),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, output_dir, "source.pdf", "3")
     captured = capsys.readouterr()
     assert exit_code == 1
     assert captured.out == ""
 
     build_pdf(corpus_dir / "source.pdf", [["Page 1"]])
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "1-2",
-            "--output-dir",
-            str(output_dir),
-        ]
+    exit_code = _extract_pages(
+        corpus_dir, database_path, output_dir, "source.pdf", "1-2"
     )
     captured = capsys.readouterr()
     assert exit_code == 2
@@ -208,36 +168,14 @@ def test_extract_pages_refuses_overwrite_overlap_symlink_and_atomic_failure(
     _insert_pdf_source(database_path, "source.pdf", source_pdf, 2)
 
     overlap_dir = corpus_dir
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(overlap_dir),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, overlap_dir, "source.pdf")
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
 
     nested_output = corpus_dir / "exports"
     nested_output.mkdir()
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(nested_output),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, nested_output, "source.pdf")
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
@@ -246,34 +184,12 @@ def test_extract_pages_refuses_overwrite_overlap_symlink_and_atomic_failure(
     real_output.mkdir()
     symlink_output = database_path.parent / "exports-link"
     symlink_output.symlink_to(real_output)
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(symlink_output),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, symlink_output, "source.pdf")
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
 
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(real_output),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, real_output, "source.pdf")
     captured = capsys.readouterr()
     assert exit_code == 0
     summary = _extract_summary(captured.out)
@@ -281,18 +197,7 @@ def test_extract_pages_refuses_overwrite_overlap_symlink_and_atomic_failure(
     assert Path(summary["manifest_path"]).is_file()
 
     # overwrite refusal on repeat run
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(real_output),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, real_output, "source.pdf")
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
@@ -306,18 +211,7 @@ def test_extract_pages_refuses_overwrite_overlap_symlink_and_atomic_failure(
     )
     fresh_output = database_path.parent / "exports-2"
     fresh_output.mkdir()
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(fresh_output),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, fresh_output, "source.pdf")
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
@@ -333,18 +227,7 @@ def test_extract_pages_rejects_source_changed_since_indexing(
     output_dir = database_path.parent / "exports"
     output_dir.mkdir()
 
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(output_dir),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, output_dir, "source.pdf")
     captured = capsys.readouterr()
 
     assert exit_code == 2
@@ -370,18 +253,7 @@ def test_extract_pages_preserves_racing_existing_output(
         return original_promote(staged_pdf, staged_manifest, final_pdf, final_manifest)
 
     monkeypatch.setattr(page_extraction, "promote_staged_outputs", race_with_manifest)
-    exit_code = cli.main(
-        [
-            "extract-pages",
-            "--root",
-            str(corpus_dir),
-            "--database",
-            str(database_path),
-            "source.pdf",
-            "--output-dir",
-            str(output_dir),
-        ]
-    )
+    exit_code = _extract_pages(corpus_dir, database_path, output_dir, "source.pdf")
     captured = capsys.readouterr()
 
     assert exit_code == 2

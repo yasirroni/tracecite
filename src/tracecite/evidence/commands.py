@@ -176,30 +176,25 @@ def hybrid_search(
 
     fused_scores: dict[str, float] = defaultdict(float)
     provenance: dict[str, set[str]] = defaultdict(set)
-    for chunk_id, rank in fts_rank.items():
-        fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
-        provenance[chunk_id].add("lexical")
-    for chunk_id, rank in vector_rank.items():
-        fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
-        provenance[chunk_id].add("vector")
+    for retrieval, ranks in (("lexical", fts_rank), ("vector", vector_rank)):
+        for chunk_id, rank in ranks.items():
+            fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
+            provenance[chunk_id].add(retrieval)
 
-    ranked_chunk_ids = sorted(
-        fused_scores, key=lambda cid: fused_scores[cid], reverse=True
-    )[:limit]
+    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)[:limit]
 
     results = []
     for position, chunk_id in enumerate(ranked_chunk_ids, start=1):
         chunk = conn.execute(
-            "SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)
-        ).fetchone()
-        source_row = conn.execute(
-            "SELECT * FROM sources WHERE source_pk = ?", (chunk["source_pk"],)
+            "SELECT c.*, s.path AS source_path, s.source_type, s.sha256 "
+            "FROM chunks c JOIN sources s USING (source_pk) WHERE c.chunk_id = ?",
+            (chunk_id,),
         ).fetchone()
         entry = {
             "rank": position,
-            "source_path": source_row["path"],
-            "source_type": source_row["source_type"],
-            "source_sha256": source_row["sha256"],
+            "source_path": chunk["source_path"],
+            "source_type": chunk["source_type"],
+            "source_sha256": chunk["sha256"],
             "heading_path": json.loads(chunk["heading_path"])
             if chunk["heading_path"]
             else [],
@@ -221,8 +216,8 @@ def hybrid_search(
             "provenance": sorted(provenance[chunk_id]),
             "fused_score": fused_scores[chunk_id],
         }
-        if source_row["source_type"] == "pdf" and chunk["physical_page"] is not None:
-            entry["pdf_link"] = f"{source_row['path']}#page={chunk['physical_page']}"
+        if chunk["source_type"] == "pdf" and chunk["physical_page"] is not None:
+            entry["pdf_link"] = f"{chunk['source_path']}#page={chunk['physical_page']}"
         results.append(entry)
     return results
 
@@ -406,20 +401,20 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             result = verify.QuoteVerification("not-found", args.page, args.quote)
         else:
             result = verify.verify_quote(conn, source_path, args.page, args.quote)
-        print(
-            json.dumps(
-                {
-                    "status": result.status,
-                    "page": result.physical_page,
-                    "quote": result.quote,
-                    "citation_key": result.citation_key,
-                    "source_path": result.source_path,
-                }
-            )
-        )
+        print(json.dumps(_quote_json(result)))
     finally:
         conn.close()
     return 0 if result.status in {"exact", "normalised"} else 1
+
+
+def _quote_json(result) -> dict:
+    return {
+        "status": result.status,
+        "page": result.physical_page,
+        "quote": result.quote,
+        "citation_key": result.citation_key,
+        "source_path": result.source_path,
+    }
 
 
 def cmd_verify_report(args: argparse.Namespace) -> int:
@@ -443,16 +438,7 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
                     "citation_issues": [
                         issue.__dict__ for issue in result.citation_issues
                     ],
-                    "quote_results": [
-                        {
-                            "status": q.status,
-                            "page": q.physical_page,
-                            "quote": q.quote,
-                            "citation_key": q.citation_key,
-                            "source_path": q.source_path,
-                        }
-                        for q in result.quote_results
-                    ],
+                    "quote_results": [_quote_json(q) for q in result.quote_results],
                     "source_link_issues": result.source_link_issues,
                     "ok": result.ok,
                 },

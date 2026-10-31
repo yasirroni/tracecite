@@ -11,6 +11,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from ._text import is_pipe_table_start, split_pipe_row
 from .html import normalise_html_table
 from .models import (
     NormalisedTable,
@@ -29,7 +30,6 @@ _RAW_HTML_FENCE_RE = re.compile(
     r"^\s*(`{3,}|~{3,})\s*(?:@raw\s+html|\{=html\})\s*$",
     re.IGNORECASE,
 )
-_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 _METADATA_RE = re.compile(
     r"^\s*<!--\s*(?:knowledge-table|tracecite-table)\s*:\s*(\{.*\})\s*-->\s*$"
 )
@@ -332,7 +332,7 @@ def _scan_tables(markdown: str) -> list[_Candidate]:
             index = cursor
             continue
 
-        if _looks_like_pipe_table(lines, index):
+        if is_pipe_table_start(lines, index):
             start = pending_metadata[0] if pending_metadata else index
             cursor = index + 2
             while cursor < len(lines):
@@ -364,47 +364,6 @@ def _scan_tables(markdown: str) -> list[_Candidate]:
         index += 1
 
     return candidates
-
-
-def _looks_like_pipe_table(lines: list[str], index: int) -> bool:
-    if (
-        index + 1 >= len(lines)
-        or "|" not in lines[index]
-        or "|" not in lines[index + 1]
-    ):
-        return False
-    headers = _split_pipe_row(lines[index])
-    separator = _split_pipe_row(lines[index + 1])
-    return (
-        len(headers) == len(separator)
-        and bool(headers)
-        and all(_SEPARATOR_RE.fullmatch(value.strip()) for value in separator)
-    )
-
-
-def _split_pipe_row(line: str) -> list[str]:
-    stripped = line.strip()
-    stripped = stripped.removeprefix("|")
-    if stripped.endswith("|") and not stripped.endswith("\\|"):
-        stripped = stripped[:-1]
-    cells: list[str] = []
-    current: list[str] = []
-    escaped = False
-    for character in stripped:
-        if escaped:
-            current.append(character)
-            escaped = False
-        elif character == "\\":
-            escaped = True
-        elif character == "|":
-            cells.append("".join(current).strip())
-            current = []
-        else:
-            current.append(character)
-    if escaped:
-        current.append("\\")
-    cells.append("".join(current).strip())
-    return cells
 
 
 def _update_fence(line: str, fence: tuple[str, int] | None) -> tuple[str, int] | None:
@@ -538,16 +497,16 @@ def _candidate_pipe_signature(
         return [], []
     lines = candidate.source.splitlines()
     for index in range(len(lines) - 1):
-        if not _looks_like_pipe_table(lines, index):
+        if not is_pipe_table_start(lines, index):
             continue
-        headers = _split_pipe_row(lines[index])
+        headers = split_pipe_row(lines[index])
         rows: list[list[str]] = []
         cursor = index + 2
         while cursor < len(lines):
             stripped = lines[cursor].strip()
             if not stripped or stripped.startswith(":") or "|" not in lines[cursor]:
                 break
-            row = _split_pipe_row(lines[cursor])
+            row = split_pipe_row(lines[cursor])
             if len(row) != len(headers):
                 break
             rows.append(row)

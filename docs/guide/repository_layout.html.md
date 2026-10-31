@@ -124,6 +124,7 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 ├── tests/
 │   ├── docs/
 │   │   ├── __init__.py
+│   │   ├── conftest.py
 │   │   ├── test_config.py
 │   │   ├── test_contract.py
 │   │   ├── test_docs_cli.py

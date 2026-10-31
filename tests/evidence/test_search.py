@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 
 from conftest import build_markdown, build_pdf, write_manifest
 
@@ -51,8 +52,7 @@ def test_search_source_type_filter_restricts_lexical_and_vector_results(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     _sync_mixed_type_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         unfiltered = hybrid_search(
             conn, "coal plant retirement", 5, 50, 50, make_embedder()
         )
@@ -81,30 +81,24 @@ def test_search_source_type_filter_restricts_lexical_and_vector_results(
         )
         assert markdown_only
         assert {result["source_type"] for result in markdown_only} == {"markdown"}
-    finally:
-        conn.close()
 
 
 def test_fts_initial_population_and_integrity(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
         fts_count = conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0]
         assert chunk_count == fts_count > 0
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def test_exact_lexical_search_finds_specific_terms(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             """
             SELECT chunks.chunk_id FROM chunks_fts
@@ -113,22 +107,17 @@ def test_exact_lexical_search_finds_specific_terms(
             """
         ).fetchall()
         assert len(rows) == 1
-    finally:
-        conn.close()
 
 
 def test_search_preserves_raw_fts_phrase_and_prefix_expressions(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         phrase_results = hybrid_search(conn, '"coal plant"', 5, 50, 50, make_embedder())
         prefix_results = hybrid_search(conn, "retire*", 5, 50, 50, make_embedder())
         assert any("Retirement" in result["heading_path"] for result in phrase_results)
         assert any("Retirement" in result["heading_path"] for result in prefix_results)
-    finally:
-        conn.close()
 
 
 def test_search_percentage_text_falls_back_without_changing_vector_query(
@@ -137,11 +126,8 @@ def test_search_percentage_text_falls_back_without_changing_vector_query(
     embedder = make_embedder()
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
     query = "10%, 50%, and 90%"
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(conn, query, 5, 50, 50, embedder)
-    finally:
-        conn.close()
     assert results
     assert "original query" in capsys.readouterr().err
 
@@ -164,15 +150,12 @@ def test_semantic_search_finds_paraphrase(
 ):
     embedder = make_embedder()
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(
             conn, "when will coal power stations shut down", 5, 50, 50, embedder
         )
         assert results
         assert any("Retirement" in r["heading_path"] for r in results)
-    finally:
-        conn.close()
 
 
 def test_hybrid_rank_fusion_combines_lexical_and_vector_provenance(
@@ -180,8 +163,7 @@ def test_hybrid_rank_fusion_combines_lexical_and_vector_provenance(
 ):
     embedder = make_embedder()
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(
             conn, "coal plant retirement dates", 5, 50, 50, embedder
         )
@@ -189,8 +171,6 @@ def test_hybrid_rank_fusion_combines_lexical_and_vector_provenance(
         top = results[0]
         assert "lexical" in top["provenance"] or "vector" in top["provenance"]
         assert top["pdf_link"].endswith("#page=1")
-    finally:
-        conn.close()
 
 
 def test_search_respects_configurable_limits(
@@ -198,12 +178,9 @@ def test_search_respects_configurable_limits(
 ):
     embedder = make_embedder()
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(conn, "report", 1, 50, 50, embedder)
         assert len(results) <= 1
-    finally:
-        conn.close()
 
 
 def test_search_contract_for_pdf_result_omits_internal_keys_and_exposes_page_range(
@@ -211,8 +188,7 @@ def test_search_contract_for_pdf_result_omits_internal_keys_and_exposes_page_ran
 ):
     embedder = make_embedder()
     _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(conn, "retirement dates", 1, 50, 50, embedder)
         assert results
         result = results[0]
@@ -223,8 +199,6 @@ def test_search_contract_for_pdf_result_omits_internal_keys_and_exposes_page_ran
         assert result["page_offsets"]["start"] is not None
         assert result["page_offsets"]["end"] is not None
         assert result["pdf_link"] == "doc.pdf#page=1"
-    finally:
-        conn.close()
 
 
 def test_search_contract_for_markdown_result_exposes_line_locator(
@@ -237,8 +211,7 @@ def test_search_contract_for_markdown_result_exposes_line_locator(
     write_manifest(manifest_path, {"note.md": "note.md"})
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(conn, "hydrogen storage", 1, 50, 50, embedder)
         assert results
         result = results[0]
@@ -247,8 +220,6 @@ def test_search_contract_for_markdown_result_exposes_line_locator(
         assert result["line_range"]["start"] is not None
         assert result["line_range"]["end"] is not None
         assert "pdf_link" not in result
-    finally:
-        conn.close()
 
 
 def test_search_uses_atomically_activated_embedding_model_ids(
@@ -265,8 +236,7 @@ def test_search_uses_atomically_activated_embedding_model_ids(
         embedder=make_embedder(),
     )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         config = schema.load_config(conn)
         assert config.embedding_revision == "activated-revision"
         new_ids = [
@@ -296,8 +266,6 @@ def test_search_uses_atomically_activated_embedding_model_ids(
         )
         hybrid_search(conn, "retirement dates", 1, 50, 50, embedder)
         assert captured["allowed"] == new_ids
-    finally:
-        conn.close()
 
 
 def test_search_constructs_active_model_and_returns_results_after_cached_reactivation(
@@ -325,8 +293,7 @@ def test_search_constructs_active_model_and_returns_results_after_cached_reactiv
             return self.inner.embed(texts)
 
     monkeypatch.setattr(sync_module, "EmbeddingModel", FakeEmbeddingModel)
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         results = hybrid_search(
             conn,
             "coal plant retirement dates",
@@ -340,5 +307,3 @@ def test_search_constructs_active_model_and_returns_results_after_cached_reactiv
         assert constructed == [
             (schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION, tmp_path / "cache")
         ]
-    finally:
-        conn.close()

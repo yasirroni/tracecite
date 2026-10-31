@@ -89,7 +89,7 @@ jobs:
           grep -Eq 'Retained Markdown pages: [1-9][0-9]*' /tmp/docs-quarto-jl.log
           test -f docs_quarto_py/examples/python/dirty_dataframe.html.md
           test -f docs_quarto_jl/examples/julia/dirty_dataframe.html.md
-          python - <<'PY'
+          uv run --no-sync python - <<'PY'
           from pathlib import Path
           from bs4 import BeautifulSoup
 

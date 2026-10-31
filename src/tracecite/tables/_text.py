@@ -13,6 +13,7 @@ _NUMBER_WITH_UNIT_RE = re.compile(
     r"([A-Za-zµμΩ°%$€£¥][A-Za-z0-9µμΩ°/%$€£¥·^*._-]*)\s*$"
 )
 _HEADER_UNIT_RE = re.compile(r"(?:\(([^()]*)\)|\[([^\[\]]*)\])\s*$")
+_PIPE_SEPARATOR_RE = re.compile(r":?-{3,}:?")
 _COMMON_LOWER_UNITS = {
     "bar",
     "degc",
@@ -46,6 +47,45 @@ def strip_caption_id(caption: str) -> tuple[str, str | None]:
 
 def collapse_space(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def split_pipe_row(line: str, clean=str.strip) -> list[str]:
+    """Split one Markdown pipe-table row, honouring backslash escapes."""
+    stripped = line.strip().removeprefix("|")
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for character in stripped:
+        if escaped:
+            current.append(character)
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "|":
+            cells.append(clean("".join(current)))
+            current = []
+        else:
+            current.append(character)
+    if escaped:
+        current.append("\\")
+    cells.append(clean("".join(current)))
+    return cells
+
+
+def is_pipe_table_start(lines: list[str], index: int) -> bool:
+    """Whether ``lines[index]`` is a pipe-table header followed by its separator row."""
+    if (
+        index + 1 >= len(lines)
+        or "|" not in lines[index]
+        or "|" not in lines[index + 1]
+    ):
+        return False
+    separator = split_pipe_row(lines[index + 1])
+    return len(split_pipe_row(lines[index])) == len(separator) and all(
+        _PIPE_SEPARATOR_RE.fullmatch(value) for value in separator
+    )
 
 
 def strip_html(value: str) -> str:

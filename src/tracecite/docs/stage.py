@@ -85,10 +85,6 @@ _HTML_BLOCK_TAGS = {
 _TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
 
 
-def _in_inline_code(line: str, index: int) -> bool:
-    return line[:index].count("`") % 2 == 1
-
-
 def _protected_ranges(
     line: str, in_comment: bool
 ) -> tuple[list[tuple[int, int]], bool]:
@@ -282,7 +278,7 @@ def _rewrite_markdown(
         cursor = 0
         pieces: list[str] = []
         for match in _INLINE.finditer(bare):
-            if _in_inline_code(bare, match.start()):
+            if bare[: match.start()].count("`") % 2 == 1:
                 continue
             if any(
                 start < match.end() and match.start() < end for start, end in protected

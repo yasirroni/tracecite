@@ -196,7 +196,7 @@ def parse_table_node(node: dict[str, Any]) -> ParsedPandocTable:
         table_id=table_id or None,
         caption=caption,
         headers=headers,
-        rows=[_fit_width(row, len(headers)) for row in expanded_rows],
+        rows=[(row + [""] * len(headers))[: len(headers)] for row in expanded_rows],
         alignments=alignments[: len(headers)],
         diagnostics=diagnostics,
         attributes=attributes,
@@ -407,12 +407,6 @@ def _combine_header_rows(rows: list[list[str]], ncols: int) -> list[str]:
                 values.append(value)
         combined.append(" / ".join(values))
     return combined
-
-
-def _fit_width(row: list[str], width: int) -> list[str]:
-    if len(row) < width:
-        return [*row, *([""] * (width - len(row)))]
-    return row[:width]
 
 
 def _alignment(value: Any) -> str:

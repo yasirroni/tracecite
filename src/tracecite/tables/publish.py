@@ -168,10 +168,10 @@ def computed_first_row_summary(
         fields.append((label, _escape_inline(value)))
     if len(fields) == 1:
         label, value = fields[0]
-        return f"**{prefix}.** {_upper_initial(label)} is **{value}**."
+        return f"**{prefix}.** {label[:1].upper() + label[1:]} is **{value}**."
     subject = fields[0][1]
     predicates = [
-        f"{_lower_initial(label)} is **{value}**" for label, value in fields[1:]
+        f"{label[:1].lower() + label[1:]} is **{value}**" for label, value in fields[1:]
     ]
     return f"**{prefix}.** For **{subject}**, {_join(predicates)}."
 
@@ -212,14 +212,6 @@ def _escape_inline(value: str) -> str:
 
 def _humanise(name: str) -> str:
     return str(name).replace("_", " ").strip()
-
-
-def _lower_initial(value: str) -> str:
-    return value[:1].lower() + value[1:]
-
-
-def _upper_initial(value: str) -> str:
-    return value[:1].upper() + value[1:]
 
 
 def _require_columns(table: pd.DataFrame, columns: Sequence[str]) -> None:

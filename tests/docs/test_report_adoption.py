@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -54,30 +55,6 @@ PUBLIC_2026_URL = (
 _GENERATED_NAMES = (".quarto", ".tracecite", ".tracecite-stage", "__pycache__", ".git")
 
 
-class FakeEmbedder:
-    def __init__(self) -> None:
-        self.calls: list[list[str]] = []
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        self.calls.append(list(texts))
-        vectors: list[list[float]] = []
-        for text in texts:
-            seed = sum((index + 1) * ord(char) for index, char in enumerate(text))
-            vector = [0.0] * schema.EMBEDDING_DIMENSIONS
-            vector[seed % schema.EMBEDDING_DIMENSIONS] = 1.0
-            vector[(seed // 7) % schema.EMBEDDING_DIMENSIONS] = 0.5
-            vectors.append(vector)
-        return vectors
-
-
-@pytest.fixture
-def make_embedder():
-    def _make() -> FakeEmbedder:
-        return FakeEmbedder()
-
-    return _make
-
-
 def _copy_example(tmp_path: Path, name: str = "copy") -> Path:
     destination = tmp_path / name
     shutil.copytree(
@@ -101,8 +78,7 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
     # generated ``chunk_id`` UUID: two independent syncs assign different
     # random chunk ids to the same logical chunks, so ordering by chunk_id
     # would make row order (not content) differ between fresh copies.
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         sources = [
             row["path"]
             for row in conn.execute("SELECT path FROM sources ORDER BY path")
@@ -121,8 +97,6 @@ def _index_snapshot(database_path: Path) -> dict[str, object]:
                 for row in chunks
             ],
         }
-    finally:
-        conn.close()
 
 
 def _extract_local_destination(text: str, pdf_name: str, page: int) -> str:

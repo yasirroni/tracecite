@@ -3,6 +3,7 @@ report/source-links verification tests."""
 
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -13,12 +14,6 @@ from tracecite.evidence import sync as sync_module
 
 
 def _index_report_corpus(corpus_dir, manifest_path, database_path, embedder):
-    build_pdf(
-        corpus_dir / "AEMO_2026_ISP.pdf",
-        [["Front", "Cover page."]]
-        + [["Retirement", "The retirement trajectory differs between planning cycles."]]
-        * 0,
-    )
     # Build a 65-page-ish document cheaply: just enough pages so page 65 exists.
     pages = [
         ["Section", f"Filler paragraph number {i} for padding purposes only today."]
@@ -39,23 +34,19 @@ def test_pdf_physical_page_retrieval(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         row = conn.execute(
             "SELECT text FROM pages JOIN sources USING (source_pk) WHERE sources.path = 'AEMO_2026_ISP.pdf' AND physical_page = 65"
         ).fetchone()
         assert row is not None
         assert "retirement trajectory" in row["text"].lower()
-    finally:
-        conn.close()
 
 
 def test_verify_quote_exact_and_normalised(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         exact = verify.verify_quote(
             conn,
             "AEMO_2026_ISP.pdf",
@@ -76,8 +67,6 @@ def test_verify_quote_exact_and_normalised(
             conn, "AEMO_2026_ISP.pdf", 65, "this text does not appear anywhere"
         )
         assert not_found.status == "not-found"
-    finally:
-        conn.close()
 
 
 def test_image_and_crop_asset_validation(
@@ -87,8 +76,7 @@ def test_image_and_crop_asset_validation(
         corpus_dir, manifest_path, database_path, make_embedder()
     )
     assert report.sources_added == ["AEMO_2026_ISP.pdf"]
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
             "SELECT asset_path, asset_type, width, height, assets.sha256 FROM assets "
             "JOIN sources USING (source_pk) WHERE sources.path = 'AEMO_2026_ISP.pdf' AND physical_page = 65"
@@ -104,8 +92,6 @@ def test_image_and_crop_asset_validation(
 
         assert hashlib.sha256(path.read_bytes()).hexdigest() == render["sha256"]
         assert sync_module.integrity_check(conn) == []
-    finally:
-        conn.close()
 
 
 def _write_report(report_path: Path, sources_dir: Path) -> None:
@@ -129,15 +115,12 @@ def test_report_citation_and_quote_verification(
     report_path = tmp_path / "reports" / "example.md"
     _write_report(report_path, corpus_dir)
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
         assert result.citation_issues == []
         assert result.quote_results
         assert result.quote_results[0].status == "exact"
         assert result.ok
-    finally:
-        conn.close()
 
 
 def test_report_citation_backslash_path_normalised(
@@ -162,13 +145,10 @@ def test_report_citation_backslash_path_normalised(
 """
     report_path.write_text(text, encoding="utf-8")
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
         assert result.citation_issues == []
         assert result.ok
-    finally:
-        conn.close()
 
 
 def test_report_verification_flags_bad_citation(
@@ -182,13 +162,10 @@ def test_report_verification_flags_bad_citation(
         "[AEMO-2026-ISP-p9999]: ../sources/AEMO_2026_ISP.pdf#page=9999\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
         assert any(issue.kind == "page-not-indexed" for issue in result.citation_issues)
         assert not result.ok
-    finally:
-        conn.close()
 
 
 def test_report_definition_issue_matrix(
@@ -205,8 +182,7 @@ def test_report_definition_issue_matrix(
         "duplicate-definition": "See [ref][dup].\n\n[dup]: ../sources/AEMO_2026_ISP.pdf#page=65\n[dup]: ../sources/AEMO_2026_ISP.pdf#page=65\n",
         "ambiguous-definition": "See [ref][dup].\n\n[dup]: ../sources/AEMO_2026_ISP.pdf#page=65\n[dup]: ../sources/AEMO_2026_ISP.pdf#page=64\n",
     }
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         for expected_kind, text in cases.items():
             report_path = tmp_path / "reports" / f"{expected_kind}.md"
             report_path.parent.mkdir(exist_ok=True)
@@ -216,8 +192,6 @@ def test_report_definition_issue_matrix(
             assert any(
                 issue.kind == expected_kind for issue in result.citation_issues
             ), (expected_kind, result.citation_issues)
-    finally:
-        conn.close()
 
 
 def test_source_links_registry_consistency_without_mutating_report(
@@ -243,27 +217,21 @@ publisher = "Australian Energy Market Operator"
         encoding="utf-8",
     )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(
             conn, report_path, corpus_dir, source_links_path=source_links_path
         )
         assert result.source_link_issues == []
-    finally:
-        conn.close()
 
     assert report_path.read_text(encoding="utf-8") == original_text  # never mutated
 
     # Now make the registry inconsistent (missing entry) and confirm it's flagged.
     source_links_path.write_text("schema_version = 3\n", encoding="utf-8")
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(
             conn, report_path, corpus_dir, source_links_path=source_links_path
         )
         assert result.source_link_issues
-    finally:
-        conn.close()
     assert report_path.read_text(encoding="utf-8") == original_text
 
 
@@ -286,15 +254,12 @@ public_url = "https://example.invalid/aemo-2026-isp.pdf"
         encoding="utf-8",
     )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(
             conn, report_path, corpus_dir, source_links_path=source_links_path
         )
         assert result.source_link_issues
         assert result.source_link_issues
-    finally:
-        conn.close()
 
 
 def test_source_links_registry_root_distinct_from_evidence_root_matches_by_canonical_absolute_path(
@@ -316,8 +281,7 @@ public_url = "https://example.invalid/aemo-2026-isp.pdf"
         encoding="utf-8",
     )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(
             conn,
             report_path,
@@ -326,8 +290,6 @@ public_url = "https://example.invalid/aemo-2026-isp.pdf"
             source_links_root=registry_root,
         )
         assert result.source_link_issues == []
-    finally:
-        conn.close()
 
 
 def test_source_links_registry_cross_root_mismatch_reports_specific_issue(
@@ -352,8 +314,7 @@ public_url = "https://example.invalid/aemo-2026-isp.pdf"
 """,
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(
             conn,
             report_path,
@@ -364,82 +325,6 @@ public_url = "https://example.invalid/aemo-2026-isp.pdf"
         assert any(
             "no source-link entry" in issue for issue in result.source_link_issues
         )
-    finally:
-        conn.close()
-
-
-def test_source_links_rejects_schema_v2_unknown_field_missing_field_and_duplicates(
-    corpus_dir, manifest_path, database_path, make_embedder, tmp_path
-):
-    _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    report_path = tmp_path / "reports" / "example.md"
-    _write_report(report_path, corpus_dir)
-    source_links_path = tmp_path / "source-links.toml"
-
-    cases = [
-        ("schema_version = 1\n", "schema_version = 3"),
-        ("schema_version = 2\n", "schema_version = 3"),
-        (
-            """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP.pdf"
-publc_url = "https://example.invalid/source.pdf"
-""",
-            "unknown field",
-        ),
-        (
-            """schema_version = 3
-
-[[source]]
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-""",
-            "missing required field",
-        ),
-        (
-            """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-
-[[source]]
-name = "report-duplicate"
-local_path = "./AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source2.pdf"
-""",
-            "duplicate",
-        ),
-        (
-            """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP.pdf"
-public_url = "https://example.invalid/source.pdf"
-
-[[source]]
-name = "report"
-local_path = "AEMO_2026_ISP_2.pdf"
-public_url = "https://example.invalid/source2.pdf"
-""",
-            "duplicate source-link name",
-        ),
-    ]
-
-    conn = schema.connect(database_path)
-    try:
-        for text, expected in cases:
-            source_links_path.write_text(text, encoding="utf-8")
-            result = verify.verify_report(
-                conn, report_path, corpus_dir, source_links_path=source_links_path
-            )
-            assert any(expected in issue for issue in result.source_link_issues)
-    finally:
-        conn.close()
 
 
 def test_source_links_registry_preserves_opaque_metadata_without_affecting_verification(
@@ -469,14 +354,11 @@ depth = 1
         encoding="utf-8",
     )
 
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(
             conn, report_path, corpus_dir, source_links_path=source_links_path
         )
         assert result.source_link_issues == []
-    finally:
-        conn.close()
 
 
 def test_quote_rejects_unrelated_earlier_citation_scope(
@@ -492,11 +374,8 @@ def test_quote_rejects_unrelated_earlier_citation_scope(
         "[B]: ../sources/AEMO_2026_ISP.pdf#page=65\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert len(result.quote_results) == 1
     assert result.quote_results[0].status == "exact"
     assert result.quote_results[0].citation_key == "B"
@@ -516,11 +395,8 @@ def test_wrapped_citation_paragraph_binds_contiguous_multiline_quote(
         "[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert len(result.quote_results) == 1
     quote = result.quote_results[0]
     assert quote.status == "normalised"
@@ -546,11 +422,8 @@ def test_quote_scope_resets_at_all_documented_boundaries(
         "[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert [quote.status for quote in result.quote_results] == ["structural-error"]
 
 
@@ -567,11 +440,8 @@ def test_multiple_viable_citation_groups_fail_structurally(
         "[B]: ../sources/AEMO_2026_ISP.pdf#page=65\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert result.quote_results[0].status == "structural-error"
 
 
@@ -585,11 +455,8 @@ def test_raw_empty_quote_fails_structurally(
         'Evidence [source][A].\n\n> ""\n\n[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n',
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert result.quote_results[0].status == "structural-error"
 
 
@@ -603,30 +470,9 @@ def test_whitespace_empty_quote_fails_structurally(
         'Evidence [source][A].\n\n> "   "\n\n[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n',
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert result.quote_results[0].status == "structural-error"
-
-
-def test_empty_and_whitespace_quotes_fail_structurally(
-    corpus_dir, manifest_path, database_path, make_embedder, tmp_path
-):
-    _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    report_path = tmp_path / "reports" / "empty.md"
-    report_path.parent.mkdir(parents=True)
-    report_path.write_text(
-        'Evidence [A].\n\n> ""\n> "   "\n\n[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n',
-        encoding="utf-8",
-    )
-    conn = schema.connect(database_path)
-    try:
-        result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
-    assert [quote.status for quote in result.quote_results] == ["structural-error"]
 
 
 def test_code_and_comments_are_ignored_by_citation_scanner(
@@ -652,51 +498,11 @@ def test_code_and_comments_are_ignored_by_citation_scanner(
         "[A]: ../sources/AEMO_2026_ISP.pdf#page=65\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     issue_keys = {issue.key for issue in result.citation_issues}
     assert issue_keys == {"TILDE", "LONG", "SHORT"}
     assert len(result.quote_results) == 1
-
-
-@pytest.mark.parametrize("field", ["name", "local_path", "public_url"])
-@pytest.mark.parametrize("value", ["", 7, [], None])
-def test_source_link_fields_reject_non_string_and_empty_values(
-    field, value, corpus_dir, manifest_path, database_path, make_embedder, tmp_path
-):
-    _index_report_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    report_path = tmp_path / "reports" / "source-links.md"
-    report_path.parent.mkdir(parents=True)
-    _write_report(report_path, corpus_dir)
-    values = {
-        "name": "report",
-        "local_path": "AEMO_2026_ISP.pdf",
-        "public_url": "https://example.invalid/source.pdf",
-    }
-    values[field] = value
-    source_links_path = tmp_path / "source-links.toml"
-    lines = ["schema_version = 3", "", "[[source]]"]
-    for key, item in values.items():
-        if isinstance(item, str):
-            lines.append(f'{key} = "{item}"')
-        elif item is None:
-            lines.append(f"{key} = 0")
-        elif isinstance(item, list):
-            lines.append(f"{key} = []")
-        else:
-            lines.append(f"{key} = {item}")
-    source_links_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    conn = schema.connect(database_path)
-    try:
-        result = verify.verify_report(
-            conn, report_path, corpus_dir, source_links_path=source_links_path
-        )
-    finally:
-        conn.close()
-    assert any(f"{field}" in issue for issue in result.source_link_issues)
 
 
 def test_reference_destinations_accept_spaces_and_angle_brackets(
@@ -710,11 +516,8 @@ def test_reference_destinations_accept_spaces_and_angle_brackets(
         "[A]: <../sources/AEMO_2026_ISP.pdf#page=65>\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert result.citation_issues == []
     assert result.quote_results[0].status == "exact"
 
@@ -739,11 +542,8 @@ def test_reference_destinations_accept_true_angle_and_escaped_space_paths(
         "[A]: <../sources/AEMO 2026 ISP.pdf#page=65>\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert result.quote_results[0].status == "exact"
     assert result.quote_results[0].source_path == "AEMO 2026 ISP.pdf"
 
@@ -753,10 +553,7 @@ def test_reference_destinations_accept_true_angle_and_escaped_space_paths(
         "[B]: ../sources/AEMO\\ 2026\\ ISP.pdf#page=65\n",
         encoding="utf-8",
     )
-    conn = schema.connect(database_path)
-    try:
+    with closing(schema.connect(database_path)) as conn:
         result = verify.verify_report(conn, report_path, corpus_dir)
-    finally:
-        conn.close()
     assert result.quote_results[0].status == "exact"
     assert result.quote_results[0].source_path == "AEMO 2026 ISP.pdf"
