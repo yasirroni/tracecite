@@ -20,7 +20,7 @@ Use the installed `tracecite` console script from the active environment. Do not
 | State | Meaning | Authoring action |
 |---|---|---|
 | `exact` | The submitted text matches retained page text exactly. | Quote may be used after source-page review. |
-| `normalised` | It matches after controlled whitespace/hyphenation normalisation. | Quote may be used, but compare with the visible PDF page. |
+| `normalised` | It matches after whitespace is collapsed, curly quote marks are straightened, and case is ignored. | Quote may be used, but compare with the visible PDF page. |
 | `not-found` | The verifier cannot establish the quotation. | Do not use it as an exact quotation. |
 
 There is no `fuzzy` verifier state. Similarity search may help locate a passage, but it cannot verify exact wording.
