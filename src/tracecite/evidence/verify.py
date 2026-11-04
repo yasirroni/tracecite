@@ -66,7 +66,7 @@ def verify_quote_pages(
         """,
         (source_path, *physical_pages),
     ).fetchall()
-    if len(rows) != len(set(physical_pages)):
+    if len(rows) != len(physical_pages):
         return QuoteVerification(
             "not-found", first_page, quote, source_path=source_path
         )

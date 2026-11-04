@@ -509,11 +509,6 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
 
 def cmd_verify_quote(args: argparse.Namespace) -> int:
     from . import verify
-    from .page_selection import (
-        PageSelectionSyntaxError,
-        PageSelectionUnavailableError,
-        resolve_page_selection,
-    )
     from .paths import (
         PathAuthorityError,
         normalise_source_path,
@@ -521,6 +516,19 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
         source_row_for_path,
     )
 
+    page_range = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d+)\s*)?", args.page)
+    first, last = (
+        (int(page_range[1]), int(page_range[2] or page_range[1]))
+        if page_range
+        else (0, 0)
+    )
+    if not 1 <= first <= last:
+        print(
+            f"tracecite: verify quote takes a page or a page range such as 4-5: {args.page}",
+            file=sys.stderr,
+        )
+        return 2
+    pages = list(range(first, last + 1))
     conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
@@ -533,13 +541,9 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
             return 2
         source_row = source_row_for_path(conn, source_path)
-        pages: list[int] = []
         source_state = None
         if source_row is None:
-            leading_page = re.match(r"\s*(\d+)", args.page)
-            result = verify.QuoteVerification(
-                "not-found", int(leading_page[1]) if leading_page else 0, args.quote
-            )
+            result = verify.QuoteVerification("not-found", first, args.quote)
         else:
             source_state = source_file_state(root, source_row)
             if source_state == "changed":
@@ -549,31 +553,7 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
                     "tracecite sync to verify against the current file",
                     file=sys.stderr,
                 )
-            available_pages = [
-                row["physical_page"]
-                for row in conn.execute(
-                    "SELECT physical_page FROM pages WHERE source_pk = ?",
-                    (source_row["source_pk"],),
-                )
-            ]
-            try:
-                pages = resolve_page_selection(args.page, available_pages)
-                if args.page.strip() == "all" or pages != list(
-                    range(pages[0], pages[-1] + 1)
-                ):
-                    raise PageSelectionSyntaxError(
-                        "verify quote takes one page or a contiguous page range "
-                        f"such as 4-5: {args.page}"
-                    )
-            except PageSelectionSyntaxError as exc:
-                print(f"tracecite: {exc}", file=sys.stderr)
-                return 2
-            except PageSelectionUnavailableError as exc:
-                result = verify.QuoteVerification(
-                    "not-found", exc.page, args.quote, source_path=source_path
-                )
-            else:
-                result = verify.verify_quote_pages(conn, source_path, pages, args.quote)
+            result = verify.verify_quote_pages(conn, source_path, pages, args.quote)
         print(
             _json({**_quote_json(result), "pages": pages, "source_state": source_state})
         )
