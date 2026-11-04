@@ -173,32 +173,23 @@ def _match_rows(conn, query, fts_limit, source_types):
 
 
 def _cjk_substring_rows(conn, cjk_runs, limit, source_types):
-    """Find chunks whose text contains every CJK run, most occurrences first.
+    """Find chunks whose text contains every CJK run.
 
     This scans every chunk's text, so it is slower than MATCH on a large
     database.
     """
     type_filter, type_params = _source_type_filter(source_types)
-    occurrences = " + ".join(
-        "(length(chunks.body) - length(replace(chunks.body, ?, ''))) / length(?)"
-        for _ in cjk_runs
-    )
     contains_all = " AND ".join("instr(chunks.body, ?) > 0" for _ in cjk_runs)
     return conn.execute(
         f"""
-        SELECT chunks.chunk_id AS chunk_id, {occurrences} AS score
+        SELECT chunks.chunk_id AS chunk_id
         FROM chunks
         JOIN sources ON sources.source_pk = chunks.source_pk
         WHERE {contains_all}{type_filter}
-        ORDER BY score DESC, chunks.rowid
+        ORDER BY chunks.rowid
         LIMIT ?
         """,
-        [
-            *(run for run in cjk_runs for _ in range(2)),
-            *cjk_runs,
-            *type_params,
-            limit,
-        ],
+        [*cjk_runs, *type_params, limit],
     ).fetchall()
 
 
