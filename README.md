@@ -45,7 +45,7 @@ declared PDF, Markdown, or workbook sources
 - Quarto for documentation-site renders;
 - Julia 1.10 or newer, only for Julia documentation pages.
 
-The Python normaliser and CLI work without Julia. Automatic builds fall back to the Python overlay without it; `--only julia` builds need it.
+The Python normaliser and CLI work without Julia. Automatic builds fall back to the Python overlay when configured Julia inputs cannot run; `--only julia` builds need Julia.
 
 Evidence synchronisation and hybrid search use the optional `evidence` dependencies:
 
@@ -122,7 +122,7 @@ tracecite doctor --database .tracecite/evidence.sqlite
 - `sync` needs at least one `[[source]]` or `[[include]]` rule; without one, it stops without creating or changing the database.
 - It prints one line per added, reparsed, renamed, missing, or unselected path; `--json` prints the full report.
 - A declared `[[source]]` missing under the root is listed under `missing-sources` and makes sync exit 1; the other sources still sync. A sync of one path checks only that path.
-- PDF pages without text, such as blank or scanned pages, are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; after installing it, run `tracecite sync --full` to extract their text.
+- PDF pages without text, such as blank or scanned pages, are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores those pages without text. After installing it, run `tracecite sync --full` to extract their text.
 - `sync` is incremental and non-pruning. Sources that are gone or no longer selected stay searchable and citable until you preview and apply `tracecite prune`.
 
 #### Prune
@@ -135,7 +135,7 @@ tracecite doctor --database .tracecite/evidence.sqlite
 
 #### Search
 
-`search --source-type` (`pdf`, `markdown`, or `workbook`; repeatable) filters candidates before ranking and the `--limit` cut, not after:
+`search --source-type` (`pdf`, `markdown`, or `workbook`; repeatable) filters lexical and vector candidates before ranking and the `--limit` cut, not after:
 
 ```sh
 tracecite search "coal retirement" \
@@ -145,11 +145,11 @@ tracecite search "coal retirement" \
 
 - An empty query exits with status 2.
 - `--lexical-only` uses full-text search alone and skips loading the embedding model.
-- Chinese, Japanese, and Korean (CJK) text has no spaces, so lexical search also matches each CJK run of the query as a substring. This reads every passage and is slower on a large database.
+- Chinese, Japanese, and Korean (CJK) text has no spaces, so lexical search also matches each CJK run of the query as a substring of the indexed text. This reads every passage, so it is slower than ordinary full-text search on a large database.
 - The embedding model is English-only, so CJK queries rely on lexical matching.
 - Byte-identical files at different paths give one hit, under the best-ranked path, with the others in `duplicate_paths`.
 
-Each result includes retrieval provenance and a source-specific locator, as in this abbreviated workbook result (the worksheet and ranges vary with the workbook and chunk settings):
+Each result includes retrieval provenance and a source-specific locator. This abbreviated workbook result shows the stable fields; the worksheet and ranges vary with the workbook and chunk settings:
 
 ```json
 {
@@ -173,11 +173,11 @@ A portable workbook citation is the path, SHA-256, worksheet, and A1 ranges. Ope
 
 #### Workbook boundaries
 
-- Supports `.xlsx` and `.xlsm` OOXML packages, not legacy binary `.xls`.
-- Keeps stored text, numeric, Boolean, error, formula, and cached formula values. Formulae are not recalculated.
-- Reads stored package content only; it does not run VBA or refresh external links, Power Query, pivot caches, or data connections.
-- Ignores style-only empty cells and does not reconstruct display formatting, so styled dates and times can stay numeric serials.
-- Chunks by row. It does not yet infer formal Excel tables or carry complex multi-row headers into every row.
+- The parser supports `.xlsx` and `.xlsm` OOXML packages, not legacy binary `.xls`.
+- It keeps stored text, numeric, Boolean, error, formula, and cached formula values. Cached values reflect the workbook's stored state; formulae are not recalculated.
+- It reads stored package content only and does not run VBA or refresh external links, Power Query, pivot caches, or data connections.
+- It ignores style-only empty cells and does not reconstruct display formatting, so styled dates and times can stay numeric serials.
+- It chunks workbooks by row and does not yet infer formal Excel tables or carry complex multi-row headers into every row.
 
 ### Retrieve retained pages and visual evidence
 
@@ -191,7 +191,7 @@ tracecite page reports/example.pdf -20 --database evidence.sqlite
 tracecite page reports/example.pdf all --database evidence.sqlite
 ```
 
-`all` selects the whole source and must stand alone. Multi-page output marks each page, and a page with no text, such as a scanned page synced without OCR, adds a note on stderr. `--format json` returns an ordered array of text, extraction metadata, a citation link, and validated page-render and figure-crop paths. Search results carry the same render and crop fields for page-local PDF matches.
+Only `all` implicitly selects the whole source, and it must stand alone. Multi-page text output marks each physical page, and a page with no text, such as a scanned page synced without OCR, adds a note on stderr. `--format json` returns an ordered array of retained text, extraction metadata, a citation link, and validated paths to the indexed page render and figure crops. Search results carry the same render and crop fields for page-local PDF matches.
 
 `extract-pages` takes the same selectors and writes a derivative PDF and provenance manifest from the indexed source PDF. The output directory must already exist outside the source root; stale sources, symlinked output directories, overlap, and overwrites are refused.
 
@@ -202,21 +202,21 @@ tracecite extract-pages reports/example.pdf 5,12-15,20 \
   --output-dir ../tracecite-exports
 ```
 
-Answer page-local questions from database text or page assets; select `all` only when you need the whole source.
+Answer page-local questions from database text or indexed page assets; select `all` only when you need the whole source.
 
 ### Verify quotations
 
-`tracecite verify quote` checks a quotation against the retained text of one page, or a contiguous range such as `4-5` for a quotation that crosses a page break:
+`tracecite verify quote` checks a quotation against the retained text of one physical page, or a contiguous range such as `4-5` for a quotation that crosses a page break:
 
 ```sh
 tracecite verify quote reports/example.pdf 4-5 "Exact quotation" --database evidence.sqlite
 ```
 
-- `exact`: verbatim.
+- `exact`: the quotation occurs verbatim.
 - `normalised`: matches after collapsing whitespace, straightening curly quotes and apostrophes, and ignoring case.
 - `not-found`: anything else, including one changed word.
 
-The JSON also reports `source_state` (`current`, `changed`, or `missing`) for the file under `--root` (default: the current directory). Verification always uses the indexed text and warns on stderr to re-sync if the file changed.
+The JSON also reports `source_state` (`current`, `changed`, or `missing`), which compares the indexed version with the file under `--root` (default: the current directory). Verification always uses the indexed text and warns on stderr to re-sync if the file changed.
 
 ### Build the documentation
 
