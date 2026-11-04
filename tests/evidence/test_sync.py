@@ -894,7 +894,7 @@ def test_sync_reports_never_indexed_missing_explicit_and_unmatched_glob(
     assert report.indexed_unselected_paths == []
 
 
-def test_sync_reports_indexed_vanished_glob_path_as_selected_missing_not_prunable(
+def test_sync_reports_indexed_vanished_glob_path_as_selected_missing(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     build_markdown(
@@ -913,10 +913,6 @@ def test_sync_reports_indexed_vanished_glob_path_as_selected_missing_not_prunabl
 
     assert report.selected_missing_paths == ["reports/keep.md"]
     assert report.indexed_unselected_paths == []
-    with closing(schema.connect(database_path)) as conn:
-        assert (
-            sync_module.plan_prune(conn, selected_paths=["reports/keep.md"]).paths == ()
-        )
 
 
 def test_sync_local_exclusion_makes_indexed_path_unselected(

@@ -66,6 +66,15 @@ def _insert_source(database_path: Path, stored_path: str) -> None:
         conn.commit()
 
 
+def _make_root(tmp_path: Path, *paths: str) -> Path:
+    root = tmp_path / "root"
+    root.mkdir(exist_ok=True)
+    for path in paths:
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text("# Source\n", encoding="utf-8")
+    return root
+
+
 def _source_paths(database_path: Path) -> list[str]:
     with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
@@ -277,19 +286,26 @@ def test_module_invocation_contract_via_subprocess():
     assert "usage: tracecite" in result.stdout
 
 
-def test_prune_preview_uses_globs_and_vanished_checkout_without_mutating(
-    tmp_path, capsys
-):
+def test_prune_preview_uses_globs_without_mutating(tmp_path, capsys):
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "checkout/docs/kept.md")
     _insert_source(database_path, "checkout/docs/pruned.md")
+    root = _make_root(tmp_path, "checkout/docs/kept.md", "checkout/docs/pruned.md")
     manifest_path = _write_manifest(
         tmp_path / "manifest.toml",
         'schema_version = 1\n\n[[include]]\nglob = "checkout/docs/kept.md"\n',
     )
 
     exit_code = cli.main(
-        ["prune", "--database", str(database_path), "--manifest", str(manifest_path)]
+        [
+            "prune",
+            "--root",
+            str(root),
+            "--database",
+            str(database_path),
+            "--manifest",
+            str(manifest_path),
+        ]
     )
 
     assert exit_code == 0
@@ -299,6 +315,7 @@ def test_prune_preview_uses_globs_and_vanished_checkout_without_mutating(
         "selected_count": 1,
         "planned_count": 1,
         "paths": ["checkout/docs/pruned.md"],
+        "missing_paths": [],
         "applied": False,
         "database_committed": False,
         "cleanup_warnings": [],
@@ -343,9 +360,13 @@ def test_prune_apply_honours_layered_local_exclusion(tmp_path, capsys):
         'schema_version = 1\n\n[[exclude]]\nglob = "docs/local-excluded.md"\n',
     )
 
+    root = _make_root(tmp_path, "docs/keep.md", "docs/local-excluded.md")
+
     exit_code = cli.main(
         [
             "prune",
+            "--root",
+            str(root),
             "--database",
             str(database_path),
             "--manifest",
@@ -363,6 +384,7 @@ def test_prune_apply_honours_layered_local_exclusion(tmp_path, capsys):
         "selected_count": 1,
         "planned_count": 1,
         "paths": ["docs/local-excluded.md"],
+        "missing_paths": [],
         "applied": True,
         "database_committed": True,
         "cleanup_warnings": [],
@@ -383,11 +405,14 @@ def test_prune_apply_rolls_back_on_failure(tmp_path, capsys, monkeypatch):
         raise RuntimeError("injected prune failure")
 
     monkeypatch.setattr(sync_module.schema, "touch_config", fail_touch_config)
+    root = _make_root(tmp_path, "docs/keep.md")
 
     assert (
         cli.main(
             [
                 "prune",
+                "--root",
+                str(root),
                 "--database",
                 str(database_path),
                 "--manifest",
@@ -446,7 +471,15 @@ def test_prune_rejects_exclude_only_and_zero_match_selection(tmp_path, capsys):
 
     assert (
         cli.main(
-            ["prune", "--database", str(database_path), "--manifest", str(zero_match)]
+            [
+                "prune",
+                "--root",
+                str(tmp_path),
+                "--database",
+                str(database_path),
+                "--manifest",
+                str(zero_match),
+            ]
         )
         == 2
     )
@@ -466,6 +499,7 @@ def test_prune_all_requires_explicit_flag_and_reports_counts(tmp_path, capsys):
         "selected_count": 0,
         "planned_count": 2,
         "paths": ["docs/one.md", "docs/two.md"],
+        "missing_paths": [],
         "applied": False,
         "database_committed": False,
         "cleanup_warnings": [],
@@ -487,9 +521,19 @@ def test_read_commands_reject_missing_database_without_creation(tmp_path, capsys
         ["verify", "quote", "--database", str(database_path), "doc.md", "1", "quote"],
         ["verify", "report", "--database", str(database_path), str(report)],
         ["doctor", "--database", str(database_path)],
-        ["prune", "--database", str(database_path), "--manifest", str(manifest)],
         [
             "prune",
+            "--root",
+            str(tmp_path),
+            "--database",
+            str(database_path),
+            "--manifest",
+            str(manifest),
+        ],
+        [
+            "prune",
+            "--root",
+            str(tmp_path),
             "--database",
             str(database_path),
             "--manifest",
@@ -577,9 +621,12 @@ def test_prune_apply_reports_postcommit_cleanup_warning(tmp_path, capsys, monkey
         raise RuntimeError("injected cleanup failure")
 
     monkeypatch.setattr(sync_module, "cleanup_asset_generations", fail_cleanup)
+    root = _make_root(tmp_path, "docs/keep.md")
     exit_code = cli.main(
         [
             "prune",
+            "--root",
+            str(root),
             "--database",
             str(database_path),
             "--manifest",
@@ -744,3 +791,62 @@ def test_cli_sync_names_the_source_whose_pages_cannot_be_rendered(
     err = capsys.readouterr().err
     assert "doc.pdf" in err
     assert ".tracecite-source-snapshots" not in err
+
+
+def test_prune_removes_selected_sources_whose_files_are_gone(
+    tmp_path, capsys, monkeypatch
+):
+    root = _make_root(tmp_path, "papers/kept.md", "papers/scanned.md")
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[include]]\nglob = "papers/*.md"\n',
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(root, manifest_path, database_path) == 0
+    (root / "papers" / "scanned.md").unlink()
+    capsys.readouterr()
+
+    prune = [
+        "prune",
+        "--root",
+        str(root),
+        "--database",
+        str(database_path),
+        "--manifest",
+        str(manifest_path),
+    ]
+    assert cli.main(prune) == 0
+    preview = json.loads(capsys.readouterr().out)
+    assert preview["paths"] == ["papers/scanned.md"]
+    assert preview["missing_paths"] == ["papers/scanned.md"]
+    assert preview["selected_count"] == 1
+
+    assert cli.main([*prune, "--apply"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "applied"
+    assert _source_paths(database_path) == ["papers/kept.md"]
+
+    # Rule matches, not existing files, decide the zero-match guard, so a
+    # selection whose files are all gone can still be pruned.
+    (root / "papers" / "kept.md").unlink()
+    assert cli.main([*prune, "--apply"]) == 0
+    assert json.loads(capsys.readouterr().out)["paths"] == ["papers/kept.md"]
+    assert _source_paths(database_path) == []
+
+
+def test_prune_requires_a_root_unless_pruning_everything(tmp_path, capsys):
+    database_path = tmp_path / "tracecite.sqlite"
+    _insert_source(database_path, "docs/one.md")
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[include]]\nglob = "docs/*.md"\n',
+    )
+
+    exit_code = cli.main(
+        ["prune", "--database", str(database_path), "--manifest", str(manifest_path)]
+    )
+
+    assert exit_code == 2
+    assert "--root" in capsys.readouterr().err
+    assert _source_paths(database_path) == ["docs/one.md"]
+    assert cli.main(["prune", "--database", str(database_path), "--all"]) == 0

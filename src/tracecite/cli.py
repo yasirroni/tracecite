@@ -144,7 +144,8 @@ def _add_evidence_parsers(
     report_parser.add_argument("--source-links-root", type=Path, default=None)
 
     prune_parser = subparsers.add_parser(
-        "prune", help="Preview or apply removal of unselected indexed paths."
+        "prune",
+        help="Preview or apply removal of indexed paths that are unselected or missing under the root.",
     )
     _add_evidence_common_args(prune_parser)
     prune_parser.add_argument("--apply", action="store_true", dest="apply")

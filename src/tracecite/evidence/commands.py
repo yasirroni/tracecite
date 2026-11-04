@@ -498,6 +498,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_prune(args: argparse.Namespace) -> int:
+    from . import manifest as manifest_module
     from . import sync as sync_module
 
     rules = sync_module.load_manifest_rules(args.manifests)
@@ -515,24 +516,35 @@ def cmd_prune(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    if not prune_all and args.root is None:
+        print(
+            "prune requires --root (or a profile root) to find selected sources "
+            "whose files no longer exist; use --all to prune every source",
+            file=sys.stderr,
+        )
+        return 2
     conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
     try:
         schema.ensure_schema(conn)
         selected = set()
+        missing: list[str] = []
         if not prune_all:
-            selected = {
+            matched = {
                 row["path"]
                 for row in conn.execute("SELECT path FROM sources").fetchall()
                 if rules.selects_path(row["path"])
             }
-            if not selected:
+            if not matched:
                 print(
                     "prune selection matched zero indexed sources; use --all explicitly to prune every source",
                     file=sys.stderr,
                 )
                 return 2
+            present = manifest_module.resolve_sources(Path(args.root), rules).selected
+            selected = matched & present.keys()
+            missing = sorted(matched - selected)
         plan = sync_module.plan_prune(conn, selected)
         sync_module.validate_prune_plan(conn, args.database, plan)
         leaks = []
@@ -553,6 +565,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
                     "selected_count": len(selected),
                     "planned_count": len(plan.paths),
                     "paths": list(plan.paths),
+                    "missing_paths": missing,
                     "applied": bool(args.apply),
                     "database_committed": bool(args.apply),
                     "cleanup_warnings": leaks,
