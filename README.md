@@ -101,7 +101,13 @@ tracecite search \
 tracecite doctor --database .tracecite/evidence.sqlite
 ```
 
-`sync` is incremental and non-pruning. Unavailable or no-longer-selected sources remain in the database until an explicit `tracecite prune` operation is previewed and applied.
+`sync` needs at least one `[[source]]` or `[[include]]` rule; without one it stops before creating or changing the database. It prints each added, reparsed, renamed, missing, or unselected path on its own line, and `--json` prints the whole report as JSON. When a declared `[[source]]` does not exist under the root, sync still applies the other sources, lists the path under `missing-sources`, and exits with status 1.
+
+PDF pages that yield no text are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores those pages without text and says that OCR was unavailable. Install Tesseract and re-run `tracecite sync --full` to extract their text.
+
+`sync` is incremental and non-pruning. Unavailable or no-longer-selected sources remain in the database, still searchable and citable, until an explicit `tracecite prune` operation is previewed and applied. A prune needs the source root (`--root` or a profile) and plans every indexed source that the rules no longer select or whose file no longer exists under the root; the preview lists the latter under `missing_paths`. `--all` plans every indexed source without a root. `prune --apply` compacts the database file afterwards.
+
+`doctor --root <dir>` also compares each indexed source with its file and warns about sources that changed or disappeared since the last sync. These warnings do not change the exit status; only database, vector, and asset integrity issues do.
 
 Restrict `search` to one or more source types with `--source-type` (repeatable; one of `pdf`, `markdown`, `workbook`). The filter is applied before lexical and vector candidates are ranked and truncated to `--limit`, not as a post-hoc filter on the final result list:
 
@@ -128,6 +134,8 @@ Search results include retrieval provenance and a source-specific locator. The a
   "provenance": ["lexical", "vector"]
 }
 ```
+
+A query must contain text; an empty query exits with status 2. `--lexical-only` ranks by full-text search alone and skips loading the embedding model. Chinese, Japanese, and Korean text has no spaces between words, so lexical search also matches each CJK run of the query as a substring of the indexed text. That match reads every indexed passage, so it is slower than ordinary full-text search on a large database. The embedding model is English-only, so CJK queries rely on the lexical match. Hits from byte-identical files at different paths are reported once, under the best-ranked path, with the other paths in `duplicate_paths`.
 
 The source path and SHA-256 identify the workbook version. The worksheet and `exact_ranges` identify the cells represented in the indexed passage. `range` is only the convenient bounding rectangle and can include cells that did not contribute to the passage. Search rank identifies candidate evidence; inspect the returned cells before using the result to support a claim.
 
@@ -167,7 +175,7 @@ tracecite page reports/example.pdf -20 --database evidence.sqlite
 tracecite page reports/example.pdf all --database evidence.sqlite
 ```
 
-The standalone selector `all` is the only implicit complete-source form; it cannot be combined with another term. Multi-page text output marks each physical page. `--format json` returns an ordered array containing retained text, extraction metadata, a citation link, and validated paths for the indexed page render and figure crops. Search results expose the same page-render and figure-crop fields for page-local PDF matches.
+The standalone selector `all` is the only implicit complete-source form; it cannot be combined with another term. Multi-page text output marks each physical page, and a selected page with no extracted text, such as a scanned page synced without OCR, adds a note on stderr. `--format json` returns an ordered array containing retained text, extraction metadata, a citation link, and validated paths for the indexed page render and figure crops. Search results expose the same page-render and figure-crop fields for page-local PDF matches.
 
 `extract-pages` uses the same selector grammar but reads the indexed source PDF to create a derivative PDF and provenance manifest. The output directory must already exist outside the source root. TraceCite refuses stale source content, symlink output directories, overlap, and overwrite.
 
@@ -179,6 +187,16 @@ tracecite extract-pages reports/example.pdf 5,12-15,20 \
 ```
 
 Use database-backed text or indexed page assets for page-local questions. Select `all` only when the complete source is intentionally required.
+
+### Verify quotations
+
+`tracecite verify quote` checks a quotation against the retained text of one physical page, or of a contiguous page range such as `4-5` when the quotation continues across a page break:
+
+```sh
+tracecite verify quote reports/example.pdf 4-5 "Exact quotation" --database evidence.sqlite
+```
+
+`exact` means the quotation occurs verbatim. `normalised` means it matches after collapsing whitespace, straightening curly quotes and apostrophes, and ignoring case; a changed word gives `not-found`. The JSON result also reports `source_state`: `current`, `changed`, or `missing`, comparing the indexed version with the file under `--root` (default: the current directory). Verification always uses the indexed text; when the file changed, a warning on stderr asks for a re-sync.
 
 ### Build the documentation
 

@@ -37,11 +37,15 @@ Plain-text output for one selected page retains the original page command contra
 ## Quotation verification
 
 `tracecite verify quote <source-path> <physical-page> <quote>` checks, in order: (1) exact substring
-match against `pages.text`; (2) a whitespace-normalised match (`chunking.normalise_text`: collapse
-all whitespace, no case-folding) against the normalised page text; (3) otherwise `"not-found"`.
-An empty quotation is `"structural-error"`. Only `exact` and `normalised` return process status
-`0`; all other verification states return non-zero. This is intentionally independent of chunk
-boundaries — a quotation may straddle two chunks.
+match against `pages.text`; (2) a normalised match that collapses all whitespace, straightens curly
+single and double quotes, and folds case, against the page text normalised the same way; (3)
+otherwise `"not-found"`. A changed word never matches. An empty quotation is `"structural-error"`.
+Only `exact` and `normalised` return process status `0`; all other verification states return
+non-zero. This is intentionally independent of chunk boundaries — a quotation may straddle two
+chunks. The page argument also accepts a contiguous range such as `4-5`; the pages' text is joined
+in order, so a quotation may continue across a page break. The JSON result adds `pages` and
+`source_state` (`current`, `changed`, or `missing` under the root); verification always uses the
+indexed text and warns on stderr when the file changed since sync.
 
 ## Report verification
 

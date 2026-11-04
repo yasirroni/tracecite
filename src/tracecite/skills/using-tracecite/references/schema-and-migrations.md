@@ -37,7 +37,7 @@ glob = "workbooks/**/*.xlsm"
 glob = "reports/drafts/**"
 ```
 
-TraceCite rejects absolute paths, traversal, unsupported extensions, unknown fields, duplicate normalised entries, and symlink escapes. Selection rules apply both to files currently on disk and to paths already stored in the database; unavailable selected paths are retained rather than pruned automatically.
+TraceCite rejects absolute paths, traversal, unsupported extensions, unknown fields, duplicate normalised entries, and symlink escapes. Selection rules apply both to files currently on disk and to paths already stored in the database; unavailable selected paths are retained rather than pruned automatically, until an explicit `tracecite prune` removes them.
 
 ## Stored tables
 
@@ -49,4 +49,4 @@ At a high level the schema stores:
 - `chunks`, FTS5 content, embeddings, sqlite-vec vectors, and chunk-to-embedding links;
 - generated PDF assets with stored SHA-256 hashes.
 
-Use `tracecite doctor` to verify relational consistency, vector/FTS state, asset existence, and asset hashes after syncs or restores.
+Use `tracecite doctor` to verify relational consistency, vector/FTS state, asset existence, and asset hashes after syncs or restores. With `--root`, it also warns about indexed sources whose files changed or disappeared; those warnings are not integrity issues.

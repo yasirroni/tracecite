@@ -12,7 +12,7 @@ reciprocal-rank fusion (k = 60), reduced to --limit (default 10)
 ```
 
 `commands.hybrid_search()` computes both candidate lists, fuses them by `score(chunk) = sum(1 / (60 + rank))` over whichever list(s) contain that chunk, then returns the top `--limit` chunks (configurable 10-20 is the practical default; both `--fts-limit`
-and `--vector-limit` are independently configurable). Each result reports `rank`, `source_path`, `source_type`, `source_sha256`, `heading_path`, `passage` (`body`), `physical_page`, `page_offsets`, `page_range`, `line_range`, `locator`, `content_type`, `provenance` (`["lexical"]`, `["vector"]`, or both), and `fused_score`. PDF results for a physical page also include a ready-to-use `pdf_link` of the form `<source-path>#page=<N>`, a validated `page_render`, and zero or more validated `figure_crops`. Results without a PDF physical page use `null` for `page_render` and an empty list for `figure_crops`. Internal `chunk_id`, `source_pk`, page IDs, and asset IDs are not part of the result contract. Fused scores are relative ranking signals, not calibrated probabilities; never present them as absolute semantic confidence.
+and `--vector-limit` are independently configurable). Each result reports `rank`, `source_path`, `source_type`, `source_sha256`, `heading_path`, `passage` (`body`), `physical_page`, `page_offsets`, `page_range`, `line_range`, `locator`, `content_type`, `provenance` (`["lexical"]`, `["vector"]`, or both), `fused_score`, and `duplicate_paths`. Hits from byte-identical files (same source SHA-256 and chunk) are collapsed into one result under the best-ranked path before `--limit` applies; `duplicate_paths` lists the other paths. PDF results for a physical page also include a ready-to-use `pdf_link` of the form `<source-path>#page=<N>`, a validated `page_render`, and zero or more validated `figure_crops`. Results without a PDF physical page use `null` for `page_render` and an empty list for `figure_crops`. Internal `chunk_id`, `source_pk`, page IDs, and asset IDs are not part of the result contract. Fused scores are relative ranking signals, not calibrated probabilities; never present them as absolute semantic confidence.
 
 ## Query recovery
 
@@ -43,3 +43,7 @@ FTS5's `unicode61` tokenizer preserves exact identifiers, numbers, and acronyms 
 half of retrieval; do not rely on the vector half alone for exact-wording queries (`tracecite verify quote`
 and `tracecite verify report` intentionally bypass ranked search entirely and check the retained `pages.text`
 directly — see `references/pdf-and-assets.md`).
+
+The tokenizer indexes an unspaced run of Chinese, Japanese, or Korean characters as one token, so
+the lexical half also matches each CJK run of the query as a substring of chunk text. That match
+scans every chunk. The embedding model is English-only, so CJK queries rely on it.
