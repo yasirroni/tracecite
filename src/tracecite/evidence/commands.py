@@ -107,7 +107,7 @@ def _print_sync_report(report) -> None:
             print(f"  {item}")
     if report.pages_without_text:
         print(
-            "  scanned pages need Tesseract for OCR; "
+            "  scanned pages need Tesseract for OCR; if it was missing, "
             "install it and re-run sync with --full to extract their text"
         )
     print(f"unchanged: {len(report.sources_unchanged)}")

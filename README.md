@@ -103,7 +103,7 @@ tracecite doctor --database .tracecite/evidence.sqlite
 
 `sync` needs at least one `[[source]]` or `[[include]]` rule; without one it stops before creating or changing the database. It prints each added, reparsed, renamed, missing, or unselected path on its own line, and `--json` prints the whole report as JSON. When a declared `[[source]]` does not exist under the root, sync still applies the other sources, lists the path under `missing-sources`, and exits with status 1.
 
-PDF pages that yield no text are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores those pages without text. Install Tesseract and re-run `tracecite sync --full` to extract their text.
+PDF pages that yield no text, such as blank pages or scanned pages, are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores them without text. If Tesseract was missing, install it and re-run `tracecite sync --full` to extract their text.
 
 `sync` is incremental and non-pruning. Unavailable or no-longer-selected sources remain in the database, still searchable and citable, until an explicit `tracecite prune` operation is previewed and applied. A prune needs the source root (`--root` or a profile) and plans every indexed source that the rules no longer select or whose file no longer exists under the root; the preview lists the latter under `missing_paths`. `--all` plans every indexed source without a root. `prune --apply` compacts the database file afterwards.
 
