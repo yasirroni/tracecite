@@ -35,7 +35,7 @@ import stat
 import tempfile
 import uuid
 from collections import defaultdict, deque
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -48,7 +48,7 @@ from .parsers import workbook as workbook_parser
 from .parsers.base import ParsedChunkUnit, units_from_layout
 from .paths import file_sha256
 
-ASSET_EVENT_HOOK = None
+ASSET_EVENT_HOOK: Callable[[str], None] | None = None
 
 
 def _asset_event(name: str) -> None:
@@ -124,12 +124,9 @@ class AssetGeneration:
 def load_manifest_rules(
     manifest_paths: Path | Sequence[Path],
 ) -> manifest_module.ManifestRules:
-    paths = (
-        list(manifest_paths)
-        if isinstance(manifest_paths, (list, tuple))
-        else [manifest_paths]
-    )
-    return manifest_module.merge_manifests(paths)
+    if isinstance(manifest_paths, Path):
+        return manifest_module.merge_manifests([manifest_paths])
+    return manifest_module.merge_manifests(list(manifest_paths))
 
 
 def _parser_config_for(source_type: str) -> dict:
@@ -790,15 +787,14 @@ def sync(
                         """,
                         (*_source_values(plan), plan.source_type),
                     )
-                    plan.source_pk = conn.execute(
+                    source_pk = conn.execute(
                         "SELECT source_pk FROM sources WHERE path = ?",
                         (plan.source_path,),
                     ).fetchone()["source_pk"]
+                    plan.source_pk = source_pk
                     asset_generation = asset_generations.get(plan.source_path)
                     if asset_generation is not None:
-                        path_mapping = asset_generation.finalize_new_source(
-                            plan.source_pk
-                        )
+                        path_mapping = asset_generation.finalize_new_source(source_pk)
                         rendered_assets[plan.source_path] = [
                             (page, path_mapping.get(path, path), *rest)
                             for page, path, *rest in rendered_assets[plan.source_path]
@@ -1315,6 +1311,7 @@ def _ensure_embedding(
         (model_id, semantic_input_hash, schema.utc_now()),
     )
     embedding_id = cursor.lastrowid
+    assert embedding_id is not None
     backend.upsert(conn, embedding_id, vector)
     return embedding_id
 
@@ -1325,14 +1322,14 @@ def _asset_generation_root(database_path: Path, generation: str) -> Path:
 
 def _render_assets(
     database_path: Path, plan: _SourcePlan, generation: str
-) -> tuple[AssetGeneration, list[tuple[int, Path, object, str]]]:
+) -> tuple[AssetGeneration, list[tuple[int, Path, object, str, str]]]:
     generation_root = _asset_generation_root(database_path, generation)
     staging_dir = None
     if plan.source_pk is None:
         staging_dir = generation_root / f".staging-{uuid.uuid4().hex}"
     base_dir = staging_dir or generation_root / str(plan.source_pk)
     base_dir.mkdir(parents=True, exist_ok=False)
-    rendered = []
+    rendered: list[tuple[int, Path, object, str, str]] = []
     physical_pages = sorted({page.physical_page for page in plan.pages})
     for physical_page in physical_pages:
         render = pdf_parser.render_page(plan.content_path, physical_page)

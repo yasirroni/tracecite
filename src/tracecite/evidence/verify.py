@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -229,15 +230,17 @@ def verify_report(
         quote_match = _BLOCKQUOTE_RE.match(line)
         if quote_match:
             quote_parts = [quote_match.group("quote")]
-            while index + 1 < len(lines) and _BLOCKQUOTE_RE.match(lines[index + 1]):
+            while index + 1 < len(lines) and (
+                next_match := _BLOCKQUOTE_RE.match(lines[index + 1])
+            ):
                 index += 1
-                quote_parts.append(_BLOCKQUOTE_RE.match(lines[index]).group("quote"))
+                quote_parts.append(next_match.group("quote"))
             quote_parts[0] = quote_parts[0].lstrip()
             quote_parts[-1] = quote_parts[-1].rstrip()
             quote_parts[0] = quote_parts[0].removeprefix('"')
             quote_parts[-1] = quote_parts[-1].removesuffix('"')
             quote = "\n".join(quote_parts)
-            viable: list[tuple[str, object, ReferenceDefinition]] = []
+            viable: list[tuple[str, sqlite3.Row, ReferenceDefinition]] = []
             for key in dict.fromkeys(paragraph_keys):
                 definition = result.definitions.get(key)
                 if (

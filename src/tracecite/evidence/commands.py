@@ -279,7 +279,7 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
             fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
             provenance[chunk_id].add(retrieval)
 
-    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)
+    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.__getitem__, reverse=True)
 
     results = []
     # Byte-identical files yield identical chunks; report each passage once,
@@ -297,7 +297,7 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
             continue
         if len(results) == limit:
             continue
-        entry = {
+        entry: dict = {
             "rank": len(results) + 1,
             "source_path": chunk["source_path"],
             "source_type": chunk["source_type"],

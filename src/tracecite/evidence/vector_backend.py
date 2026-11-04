@@ -83,8 +83,11 @@ class SqliteVecBackend:
             rows = conn.execute(f"SELECT DISTINCT shard_id FROM {VECTOR_TABLE}")
             shards = dict.fromkeys(row[0] for row in rows)
         else:
+            allowed_by_shard: dict[str, list[int]] = {}
             for embedding_id in set(allowed_embedding_ids):
-                shards.setdefault(self._shard_id(embedding_id), []).append(embedding_id)
+                shard_id = self._shard_id(embedding_id)
+                allowed_by_shard.setdefault(shard_id, []).append(embedding_id)
+            shards.update(allowed_by_shard)
 
         matches = []
         for shard_id, allowed in shards.items():
