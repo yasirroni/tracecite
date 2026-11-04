@@ -7,7 +7,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
-from conftest import build_pdf, write_manifest
+from conftest import build_markdown, build_pdf, write_manifest
 
 from tracecite.evidence import schema, verify
 from tracecite.evidence import sync as sync_module
@@ -67,6 +67,26 @@ def test_verify_quote_exact_and_normalised(
             conn, "AEMO_2026_ISP.pdf", 65, "this text does not appear anywhere"
         )
         assert not_found.status == "not-found"
+
+
+def test_verify_quote_folds_quote_marks_and_case_but_not_words(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_markdown(
+        corpus_dir / "notice.md",
+        "Operators must give two years\u2019 notice and \u201cconsult\u201d first.\n",
+    )
+    write_manifest(manifest_path, {"notice.md": "notice.md"})
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+
+    def status(quote: str) -> str:
+        with closing(schema.connect(database_path)) as conn:
+            return verify.verify_quote(conn, "notice.md", 1, quote).status
+
+    assert status("two years\u2019 notice and \u201cconsult\u201d") == "exact"
+    assert status('two years\' notice and "consult"') == "normalised"
+    assert status("Two Years\u2019 Notice") == "normalised"
+    assert status("two months' notice") == "not-found"
 
 
 def test_image_and_crop_asset_validation(

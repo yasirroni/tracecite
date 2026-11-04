@@ -12,6 +12,18 @@ _DEFINITION_LIKE_RE = re.compile(r"^\[(?P<key>[^\]]+)\]:")
 _CITATION_RE = re.compile(r"\[[^\]]*\]\[(?P<key>[^\]]+)\]")
 _BLOCKQUOTE_RE = re.compile(r"^>\s?(?P<quote>.*)$")
 _FENCE_RE = re.compile(r"^\s{0,3}(?P<marker>`{3,}|~{3,})(?P<suffix>.*)$")
+_STRAIGHT_QUOTES = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201a": "'",
+        "\u201b": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u201e": '"',
+        "\u201f": '"',
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -45,11 +57,16 @@ def verify_quote(
     page_text = row["text"]
     if quote in page_text:
         return QuoteVerification("exact", physical_page, quote, source_path=source_path)
-    if normalise_text(quote) in normalise_text(page_text):
+    if _fold_quote_text(quote) in _fold_quote_text(page_text):
         return QuoteVerification(
             "normalised", physical_page, quote, source_path=source_path
         )
     return QuoteVerification("not-found", physical_page, quote, source_path=source_path)
+
+
+def _fold_quote_text(text: str) -> str:
+    """Collapse whitespace, straighten curly quote marks, and fold case."""
+    return normalise_text(text).translate(_STRAIGHT_QUOTES).casefold()
 
 
 @dataclass
