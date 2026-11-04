@@ -688,11 +688,12 @@ def sync(
 
         # skip hashes already cached for the active model, unless forcing re-embed
         if pending_embeddings and not options.reembed:
-            placeholders = ",".join("?" for _ in pending_embeddings)
+            # One JSON parameter, not one per hash: SQLite caps the parameters
+            # in a statement, and a large source set exceeds that cap.
             cached_rows = conn.execute(
-                f"SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
-                f"AND semantic_input_hash IN ({placeholders})",
-                (model_id, *pending_embeddings.keys()),
+                "SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
+                "AND semantic_input_hash IN (SELECT value FROM json_each(?))",
+                (model_id, json.dumps(list(pending_embeddings))),
             ).fetchall()
             for row in cached_rows:
                 pending_embeddings.pop(row["semantic_input_hash"], None)

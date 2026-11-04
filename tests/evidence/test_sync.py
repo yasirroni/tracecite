@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from contextlib import closing
 from pathlib import Path
 
@@ -963,6 +964,33 @@ def test_markdown_source_indexes_and_chunks(
     chunk_rows = conn.execute("SELECT line_start, line_end FROM chunks").fetchall()
     assert all(row["line_start"] is not None for row in chunk_rows)
     conn.close()
+
+
+def test_sync_embeds_more_chunks_than_sqlite_allows_parameters(
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+):
+    connect = schema.connect
+
+    def connect_with_few_parameters(path):
+        conn = connect(path)
+        conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 30)
+        return conn
+
+    monkeypatch.setattr(schema, "connect", connect_with_few_parameters)
+    build_markdown(
+        corpus_dir / "report.md",
+        "".join(
+            f"## Section {i}\nParagraph {i} records synthetic evidence item {i}.\n\n"
+            for i in range(60)
+        ),
+    )
+    write_manifest(manifest_path, {"report.md": "report.md"})
+
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
+
+    assert report.embeddings_generated == 60
 
 
 def test_sync_ocr_fallback_populates_pages_and_chunks(
