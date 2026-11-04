@@ -703,6 +703,10 @@ def cmd_prune(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    # A missing root would make every selected source look deleted.
+    if not prune_all and not Path(args.root).is_dir():
+        print(f"prune root is not a directory: {args.root}", file=sys.stderr)
+        return 2
     conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
