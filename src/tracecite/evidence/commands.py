@@ -149,6 +149,8 @@ def hybrid_search(
 ):
     from . import vector_backend
 
+    if not query.strip():
+        raise ValueError("search query is empty")
     fts_rows = _fts_rows(conn, query, fts_limit, source_types)
     fts_rank = {row["chunk_id"]: rank for rank, row in enumerate(fts_rows, start=1)}
     query_vector = embedder.embed([query])[0]

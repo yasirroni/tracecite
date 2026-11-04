@@ -871,3 +871,19 @@ def test_prune_apply_shrinks_the_database_file(tmp_path, capsys):
     )
     assert json.loads(capsys.readouterr().out)["status"] == "applied"
     assert database_path.stat().st_size < size_before / 4
+
+
+def test_cli_search_rejects_empty_queries(tmp_path, capsys, monkeypatch):
+    corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
+    embedder = FakeEmbedder()
+    monkeypatch.setattr(sync_module, "EmbeddingModel", lambda *a, **k: embedder)
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
+    embedder.calls.clear()
+    capsys.readouterr()
+
+    for query in ("", "   \t"):
+        assert cli.main(["search", "--database", str(database_path), query]) == 2
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "empty" in captured.err
+    assert embedder.calls == []
