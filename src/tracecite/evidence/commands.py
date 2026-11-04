@@ -415,7 +415,12 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
         PageSelectionUnavailableError,
         resolve_page_selection,
     )
-    from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
+    from .paths import (
+        PathAuthorityError,
+        normalise_source_path,
+        source_file_state,
+        source_row_for_path,
+    )
 
     conn = _connect(args.database, read_only=True)
     if conn is None:
@@ -435,12 +440,21 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             return 2
         source_row = source_row_for_path(conn, source_path)
         pages: list[int] = []
+        source_state = None
         if source_row is None:
             leading_page = re.match(r"\s*(\d+)", args.page)
             result = verify.QuoteVerification(
                 "not-found", int(leading_page[1]) if leading_page else 0, args.quote
             )
         else:
+            source_state = source_file_state(root, source_row)
+            if source_state == "changed":
+                print(
+                    f"warning: {source_row['path']} changed on disk since it was "
+                    "indexed; this check used the indexed text, so re-run "
+                    "tracecite sync to verify against the current file",
+                    file=sys.stderr,
+                )
             available_pages = [
                 row["physical_page"]
                 for row in conn.execute(
@@ -466,7 +480,12 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
                 )
             else:
                 result = verify.verify_quote_pages(conn, source_path, pages, args.quote)
-        print(json.dumps({**_quote_json(result), "pages": pages}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {**_quote_json(result), "pages": pages, "source_state": source_state},
+                ensure_ascii=False,
+            )
+        )
     finally:
         conn.close()
     return 0 if result.status in {"exact", "normalised"} else 1
@@ -527,11 +546,34 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         issues = sync_module.integrity_check(conn)
         for issue in issues:
             print(f"ISSUE: {issue}")
+        if args.root is not None:
+            _print_source_state_warnings(conn, Path(args.root))
         if not issues:
             print("doctor: no issues found")
         return 0 if not issues else 1
     finally:
         conn.close()
+
+
+def _print_source_state_warnings(conn, root: Path) -> None:
+    """Report indexed sources whose files differ from the indexed version.
+
+    These are warnings, not integrity issues: the indexed text stays
+    citable after its file changes or disappears.
+    """
+    from .paths import source_file_state
+
+    states: dict[str, list[str]] = defaultdict(list)
+    for row in conn.execute("SELECT * FROM sources ORDER BY path"):
+        states[source_file_state(root, row)].append(row["path"])
+    for state, message in (
+        ("changed", "changed on disk since sync; re-run tracecite sync"),
+        ("missing", "missing under the root"),
+    ):
+        if states[state]:
+            print(f"WARNING: {len(states[state])} indexed source(s) {message}:")
+            for path in states[state]:
+                print(f"  {path}")
 
 
 def cmd_prune(args: argparse.Namespace) -> int:

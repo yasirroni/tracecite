@@ -945,3 +945,92 @@ def test_cli_verify_quote_accepts_a_contiguous_page_range(
         assert exit_code == 2, selector
         assert out == ""
         assert err
+
+
+def _sync_notes(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "notes.md").write_text("# Notes\n\nThe original sentence.\n", "utf-8")
+    (root / "touched.md").write_text("# Touched\n\nUnchanged content.\n", "utf-8")
+    (root / "gone.md").write_text("# Gone\n\nSoon deleted.\n", "utf-8")
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[include]]\nglob = "*.md"\n',
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(root, manifest_path, database_path) == 0
+    return root, database_path
+
+
+def test_doctor_warns_about_changed_and_missing_sources_without_failing(
+    tmp_path, capsys, monkeypatch
+):
+    root, database_path = _sync_notes(tmp_path, monkeypatch)
+    (root / "notes.md").write_text("# Notes\n\nAn edited sentence.\n", "utf-8")
+    os.utime(root / "touched.md", ns=(1, 1))
+    (root / "gone.md").unlink()
+    capsys.readouterr()
+
+    assert (
+        cli.main(["doctor", "--root", str(root), "--database", str(database_path)]) == 0
+    )
+    out = capsys.readouterr().out
+    assert "changed on disk" in out and "\n  notes.md\n" in out
+    assert "missing under the root" in out and "\n  gone.md\n" in out
+    assert "touched.md" not in out
+    assert "doctor: no issues found" in out
+
+    assert cli.main(["doctor", "--database", str(database_path)]) == 0
+    assert "notes.md" not in capsys.readouterr().out
+    with closing(schema.connect(database_path)) as conn:
+        assert sync_module.integrity_check(conn) == []
+
+
+def test_verify_quote_reports_source_state_and_keeps_checking_indexed_text(
+    tmp_path, capsys, monkeypatch
+):
+    root, database_path = _sync_notes(tmp_path, monkeypatch)
+    capsys.readouterr()
+
+    def verify(path: str) -> tuple[int, dict, str]:
+        exit_code = cli.main(
+            [
+                "verify",
+                "quote",
+                "--root",
+                str(root),
+                "--database",
+                str(database_path),
+                path,
+                "1",
+                "The original sentence.",
+            ]
+        )
+        captured = capsys.readouterr()
+        return exit_code, json.loads(captured.out), captured.err
+
+    exit_code, payload, err = verify("notes.md")
+    assert (exit_code, payload["status"], payload["source_state"]) == (
+        0,
+        "exact",
+        "current",
+    )
+    assert err == ""
+
+    (root / "notes.md").write_text("# Notes\n\nAn edited sentence.\n", "utf-8")
+    exit_code, payload, err = verify("notes.md")
+    assert (exit_code, payload["status"], payload["source_state"]) == (
+        0,
+        "exact",
+        "changed",
+    )
+    assert "notes.md" in err and "sync" in err
+
+    (root / "notes.md").unlink()
+    exit_code, payload, _ = verify("notes.md")
+    assert (exit_code, payload["status"], payload["source_state"]) == (
+        0,
+        "exact",
+        "missing",
+    )
