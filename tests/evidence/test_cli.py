@@ -913,6 +913,33 @@ def test_prune_apply_shrinks_the_database_file(tmp_path, capsys):
     assert database_path.stat().st_size < size_before / 4
 
 
+def test_search_after_an_applied_prune_returns_only_the_surviving_source(
+    tmp_path, capsys, monkeypatch
+):
+    # The pruned source is indexed first, so its chunks hold the lowest rowids
+    # and the lexical index must still resolve the surviving rowids afterwards.
+    root = _make_root(tmp_path)
+    (root / "a-pruned.md").write_text("Alpha bravo removed passage.\n", "utf-8")
+    (root / "b-kept.md").write_text("Charlie delta surviving passage.\n", "utf-8")
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[include]]\nglob = "*.md"\n',
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(root, manifest_path, database_path) == 0
+    (root / "a-pruned.md").unlink()
+    prune = ["prune", "--root", str(root), "--database", str(database_path)]
+    assert cli.main([*prune, "--manifest", str(manifest_path), "--apply"]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["search", "--database", str(database_path), "passage"]) == 0
+    results = json.loads(capsys.readouterr().out)
+    assert [result["source_path"] for result in results] == ["b-kept.md"]
+    assert "Charlie delta" in results[0]["passage"]
+    assert results[0]["provenance"] == ["lexical", "vector"]
+
+
 def test_cli_search_rejects_empty_queries(tmp_path, capsys, monkeypatch):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
     embedder = FakeEmbedder()
