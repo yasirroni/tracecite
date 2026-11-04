@@ -1267,6 +1267,12 @@ def apply_prune(
         leaks.extend(cleanup_asset_generations(conn, database_path))
     except Exception as exc:  # noqa: BLE001
         leaks.append(f"failed to clean unreferenced asset generations: {exc}")
+    # Deleted rows leave free pages inside the file; VACUUM returns them to
+    # the filesystem so a prune also shrinks the database.
+    try:
+        conn.execute("VACUUM")
+    except sqlite3.Error as exc:
+        leaks.append(f"failed to vacuum the database after pruning: {exc}")
     return leaks
 
 

@@ -850,3 +850,24 @@ def test_prune_requires_a_root_unless_pruning_everything(tmp_path, capsys):
     assert "--root" in capsys.readouterr().err
     assert _source_paths(database_path) == ["docs/one.md"]
     assert cli.main(["prune", "--database", str(database_path), "--all"]) == 0
+
+
+def test_prune_apply_shrinks_the_database_file(tmp_path, capsys):
+    database_path = tmp_path / "tracecite.sqlite"
+    _insert_source(database_path, "docs/large.md")
+    with closing(schema.connect(database_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO pages (
+                source_pk, physical_page, text, extraction_method, extraction_status
+            ) SELECT source_pk, 1, ?, 'test', 'ok' FROM sources
+            """,
+            ("retained text " * 50_000,),
+        )
+    size_before = database_path.stat().st_size
+
+    assert (
+        cli.main(["prune", "--database", str(database_path), "--all", "--apply"]) == 0
+    )
+    assert json.loads(capsys.readouterr().out)["status"] == "applied"
+    assert database_path.stat().st_size < size_before / 4
