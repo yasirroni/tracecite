@@ -124,8 +124,8 @@ class AssetGeneration:
 def load_manifest_rules(
     manifest_paths: Path | Sequence[Path],
 ) -> manifest_module.ManifestRules:
-    if isinstance(manifest_paths, Path):
-        return manifest_module.merge_manifests([manifest_paths])
+    if isinstance(manifest_paths, (str, os.PathLike)):
+        return manifest_module.merge_manifests([Path(manifest_paths)])
     return manifest_module.merge_manifests(list(manifest_paths))
 
 
