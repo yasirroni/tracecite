@@ -114,14 +114,35 @@ def _print_sync_report(report) -> None:
     print(f"embeddings generated: {report.embeddings_generated}")
 
 
-def _fts_rows(conn, query, fts_limit, source_types=None):
-    type_filter = ""
-    type_params: list = []
-    if source_types:
-        placeholders = ",".join("?" for _ in source_types)
-        type_filter = f" AND sources.source_type IN ({placeholders})"
-        type_params = list(source_types)
+# Han, kana, and Hangul. The unicode61 tokenizer indexes an unspaced run of
+# these characters as one token, so MATCH cannot find a word inside the run.
+_CJK_RUN_RE = re.compile(
+    "[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]+"
+)
 
+
+def _source_type_filter(source_types) -> tuple[str, list]:
+    if not source_types:
+        return "", []
+    placeholders = ",".join("?" for _ in source_types)
+    return f" AND sources.source_type IN ({placeholders})", list(source_types)
+
+
+def _fts_rows(conn, query, fts_limit, source_types=None):
+    rows = _match_rows(conn, query, fts_limit, source_types)
+    cjk_runs = _CJK_RUN_RE.findall(query)
+    if not cjk_runs or len(rows) >= fts_limit:
+        return rows
+    found = {row["chunk_id"] for row in rows}
+    substring_rows = _cjk_substring_rows(conn, cjk_runs, fts_limit, source_types)
+    return [
+        *rows,
+        *(row for row in substring_rows if row["chunk_id"] not in found),
+    ][:fts_limit]
+
+
+def _match_rows(conn, query, fts_limit, source_types):
+    type_filter, type_params = _source_type_filter(source_types)
     statement = f"""
         SELECT chunks.chunk_id AS chunk_id, bm25(chunks_fts) AS score
         FROM chunks_fts
@@ -145,6 +166,36 @@ def _fts_rows(conn, query, fts_limit, source_types=None):
         return conn.execute(
             statement, [fallback_query, *type_params, fts_limit]
         ).fetchall()
+
+
+def _cjk_substring_rows(conn, cjk_runs, limit, source_types):
+    """Find chunks whose text contains every CJK run, most occurrences first.
+
+    This scans every chunk's text, so it is slower than MATCH on a large
+    database.
+    """
+    type_filter, type_params = _source_type_filter(source_types)
+    occurrences = " + ".join(
+        "(length(chunks.body) - length(replace(chunks.body, ?, ''))) / length(?)"
+        for _ in cjk_runs
+    )
+    contains_all = " AND ".join("instr(chunks.body, ?) > 0" for _ in cjk_runs)
+    return conn.execute(
+        f"""
+        SELECT chunks.chunk_id AS chunk_id, {occurrences} AS score
+        FROM chunks
+        JOIN sources ON sources.source_pk = chunks.source_pk
+        WHERE {contains_all}{type_filter}
+        ORDER BY score DESC, chunks.rowid
+        LIMIT ?
+        """,
+        [
+            *(run for run in cjk_runs for _ in range(2)),
+            *cjk_runs,
+            *type_params,
+            limit,
+        ],
+    ).fetchall()
 
 
 def active_embedding_model(conn, model_cache_dir: Path):

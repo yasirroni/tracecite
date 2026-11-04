@@ -298,3 +298,30 @@ def test_search_constructs_active_model_and_returns_results_after_cached_reactiv
         assert constructed == [
             (schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION, tmp_path / "cache")
         ]
+
+
+def test_lexical_search_finds_cjk_text_inside_unspaced_runs(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_markdown(
+        corpus_dir / "ja.md",
+        "# 概要\n\n日本の電力需要は今後も増加すると見込まれている。\n",
+    )
+    build_markdown(
+        corpus_dir / "en.md", "# Summary\n\nElectricity demand keeps growing.\n"
+    )
+    write_manifest(manifest_path, {"ja.md": "ja.md", "en.md": "en.md"})
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+
+    with closing(schema.connect(database_path)) as conn:
+
+        def lexical_paths(query, source_types=None):
+            results = hybrid_search(
+                conn, query, 5, 50, 50, None, source_types=source_types
+            )
+            return [result["source_path"] for result in results]
+
+        assert lexical_paths("電力需要") == ["ja.md"]
+        assert lexical_paths("需要 増加") == ["ja.md"]
+        assert lexical_paths("電力需要", source_types=["pdf"]) == []
+        assert lexical_paths("風力発電") == []
