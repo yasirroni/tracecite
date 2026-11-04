@@ -1,6 +1,6 @@
 # TraceCite
 
-TraceCite is a Python package and CLI that turns executable documentation, and the PDF, Markdown, and Excel source documents behind it, into evidence that people and AI agents can read, search, cite, and verify.
+TraceCite lets people and AI agents search their documents, cite the exact page or cell, and check that a quote matches its source.
 
 Its core is source-linked table normalisation. Each table in a rendered Python or Julia documentation page stays in the site as the original evidence. TraceCite derives deterministic, self-describing row text from the table for search, so generated tables become retrievable without changing what readers see.
 
