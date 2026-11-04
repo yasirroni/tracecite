@@ -538,15 +538,21 @@ def cmd_prune(args: argparse.Namespace) -> int:
 def dispatch(args: argparse.Namespace) -> int:
     args = _resolve_runtime_args(args)
     if args.command == "verify":
-        return {"quote": cmd_verify_quote, "report": cmd_verify_report}[
+        handler = {"quote": cmd_verify_quote, "report": cmd_verify_report}[
             args.verify_command
-        ](args)
-    handlers = {
-        "sync": cmd_sync,
-        "search": cmd_search,
-        "page": cmd_page,
-        "extract-pages": cmd_extract_pages,
-        "prune": cmd_prune,
-        "doctor": cmd_doctor,
-    }
-    return handlers[args.command](args)
+        ]
+    else:
+        handler = {
+            "sync": cmd_sync,
+            "search": cmd_search,
+            "page": cmd_page,
+            "extract-pages": cmd_extract_pages,
+            "prune": cmd_prune,
+            "doctor": cmd_doctor,
+        }[args.command]
+    try:
+        return handler(args)
+    except sqlite3.DatabaseError as exc:
+        # A damaged page can pass the open-time check and fail mid-query.
+        print(f"tracecite: database error in {args.database}: {exc}", file=sys.stderr)
+        return 2

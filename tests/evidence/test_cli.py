@@ -594,3 +594,38 @@ def test_prune_apply_reports_postcommit_cleanup_warning(tmp_path, capsys, monkey
         "failed to clean unreferenced asset generations: injected cleanup failure"
     ]
     assert _source_paths(database_path) == ["docs/keep.md"]
+
+
+def test_commands_report_unreadable_database_in_one_line(tmp_path, capsys, monkeypatch):
+    corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
+    not_sqlite = tmp_path / "not-sqlite.sqlite"
+    not_sqlite.write_bytes(b"plain bytes, not an SQLite file\n" * 200)
+    truncated = tmp_path / "truncated.sqlite"
+    truncated.write_bytes(database_path.read_bytes()[:4096])
+    capsys.readouterr()
+
+    for bad_database in (not_sqlite, truncated):
+        commands = [
+            ["doctor"],
+            ["search", "renewable"],
+            ["page", "doc.pdf", "1"],
+            ["verify", "quote", "doc.pdf", "1", "renewable"],
+            ["prune", "--manifest", str(manifest_path)],
+            ["sync", "--manifest", str(manifest_path)],
+        ]
+        for command in commands:
+            exit_code = cli.main(
+                [
+                    *command,
+                    "--root",
+                    str(corpus_dir),
+                    "--database",
+                    str(bad_database),
+                ]
+            )
+            err = capsys.readouterr().err
+            assert exit_code == 2, command
+            assert str(bad_database) in err
+            assert len(err.strip().splitlines()) == 1
