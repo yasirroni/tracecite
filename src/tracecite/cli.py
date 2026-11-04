@@ -45,6 +45,18 @@ DEFAULT_FTS_LIMIT = 50
 DEFAULT_VECTOR_LIMIT = 50
 DEFAULT_MAX_CHUNK_CHARS = 1200
 
+PANDOC_HELP = (
+    "Pandoc command or path (default: TRACECITE_PANDOC, then Quarto's bundled "
+    "Pandoc, then pandoc on PATH)."
+)
+PIPE_FALLBACK_HELP = (
+    "Parse plain pipe tables without Pandoc when Pandoc is unavailable or "
+    "rejects the input."
+)
+LIMIT_HELP = "Number of results to return (default: %(default)s)."
+FTS_LIMIT_HELP = "Full-text candidates ranked before fusion (default: %(default)s)."
+VECTOR_LIMIT_HELP = "Vector candidates ranked before fusion (default: %(default)s)."
+
 
 def _add_evidence_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -94,9 +106,15 @@ def _add_evidence_parsers(
     search_parser = subparsers.add_parser("search", help="Hybrid FTS + vector search.")
     _add_evidence_common_args(search_parser)
     search_parser.add_argument("query")
-    search_parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
-    search_parser.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
-    search_parser.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
+    search_parser.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=LIMIT_HELP
+    )
+    search_parser.add_argument(
+        "--fts-limit", type=int, default=DEFAULT_FTS_LIMIT, help=FTS_LIMIT_HELP
+    )
+    search_parser.add_argument(
+        "--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT, help=VECTOR_LIMIT_HELP
+    )
     search_parser.add_argument(
         "--source-type",
         dest="source_types",
@@ -190,22 +208,44 @@ def build_parser() -> argparse.ArgumentParser:
         dest="source_format",
         choices=["auto", "pandoc", "html"],
         default="auto",
+        help="Input format; auto reads input containing <table as HTML and "
+        "anything else as Pandoc Markdown.",
     )
     normalise.add_argument(
         "--to",
         dest="target_format",
         choices=["text", "json", "canonical-markdown", "debug-markdown"],
         default="text",
+        help="Output: normalised row text, the full JSON record, canonical "
+        "Markdown, or Markdown with diagnostics.",
     )
-    normalise.add_argument("--output", type=Path)
-    normalise.add_argument("--document-path")
-    normalise.add_argument("--source-code-path")
-    normalise.add_argument("--caption")
-    normalise.add_argument("--table-id")
-    normalise.add_argument("--ordering")
-    normalise.add_argument("--strict", action="store_true")
-    normalise.add_argument("--pandoc")
-    normalise.add_argument("--allow-pipe-fallback", action="store_true")
+    normalise.add_argument(
+        "--output", type=Path, help="Write to this file instead of standard output."
+    )
+    normalise.add_argument(
+        "--document-path",
+        help="Source document named in the normalised text (default: the input path).",
+    )
+    normalise.add_argument(
+        "--source-code-path",
+        help="Executable source file named in the normalised text.",
+    )
+    normalise.add_argument("--caption", help="Table caption for the normalised text.")
+    normalise.add_argument(
+        "--table-id", help="Table identifier to use instead of a generated one."
+    )
+    normalise.add_argument(
+        "--ordering", help="Description of the row order for the normalised text."
+    )
+    normalise.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail when the table has normalisation errors instead of reporting them.",
+    )
+    normalise.add_argument("--pandoc", help=PANDOC_HELP)
+    normalise.add_argument(
+        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
+    )
 
     document = subparsers.add_parser(
         "document", help="Normalise every table in one document"
@@ -231,13 +271,27 @@ def build_parser() -> argparse.ArgumentParser:
         "prepare",
         help="Prepare table records and optionally keep a complete embedding-Markdown website",
     )
-    prepare.add_argument("source_root", type=Path)
-    prepare.add_argument("--project-config", type=Path)
+    prepare.add_argument(
+        "source_root",
+        type=Path,
+        help="Rendered site directory containing Quarto's retained *.html.md files.",
+    )
+    prepare.add_argument(
+        "--project-config",
+        type=Path,
+        help="Quarto project configuration (_quarto.yml) whose theme and "
+        "navigation the copied site keeps.",
+    )
     prepare.add_argument(
         "--project-profile",
         help="Merge _quarto-<profile>.yml into the copied inspection-site configuration",
     )
-    prepare.add_argument("--source-project", type=Path)
+    prepare.add_argument(
+        "--source-project",
+        type=Path,
+        help="Documentation source project; its extensions and assets are copied "
+        "and each page's executable source is named in the table text.",
+    )
     prepare.add_argument(
         "--keep-embedding-markdown",
         type=Path,
@@ -245,13 +299,34 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Copy the complete retained-Markdown website to DIR and append normalised table text",
     )
-    prepare.add_argument("--render-embedding-site", action="store_true")
-    prepare.add_argument("--debug-tables", action="store_true")
-    prepare.add_argument("--quarto")
-    prepare.add_argument("--pandoc")
-    prepare.add_argument("--strict-tables", action="store_true")
-    prepare.add_argument("--allow-pipe-fallback", action="store_true")
-    prepare.add_argument("--no-clean", action="store_true")
+    prepare.add_argument(
+        "--render-embedding-site",
+        action="store_true",
+        help="Render the copied site with Quarto after writing it.",
+    )
+    prepare.add_argument(
+        "--debug-tables",
+        action="store_true",
+        help="Print each table's size, source format, and diagnostics.",
+    )
+    prepare.add_argument(
+        "--quarto",
+        help="Quarto command for --render-embedding-site (default: quarto on PATH).",
+    )
+    prepare.add_argument("--pandoc", help=PANDOC_HELP)
+    prepare.add_argument(
+        "--strict-tables",
+        action="store_true",
+        help="Fail when any table has normalisation errors.",
+    )
+    prepare.add_argument(
+        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
+    )
+    prepare.add_argument(
+        "--no-clean",
+        action="store_true",
+        help="Write into DIR without first deleting a previous TraceCite output there.",
+    )
 
     docs_parser = subparsers.add_parser("docs", help="Build documentation")
     docs_sub = docs_parser.add_subparsers(dest="docs_command", required=True)
@@ -288,17 +363,33 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--repo-root", type=Path, default=Path.cwd())
     docs_search = docs_sub.choices["search"]
     docs_search.add_argument("query")
-    docs_search.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
-    docs_search.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
-    docs_search.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
+    docs_search.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=LIMIT_HELP
+    )
+    docs_search.add_argument(
+        "--fts-limit", type=int, default=DEFAULT_FTS_LIMIT, help=FTS_LIMIT_HELP
+    )
+    docs_search.add_argument(
+        "--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT, help=VECTOR_LIMIT_HELP
+    )
 
     check = subparsers.add_parser(
         "check", help="Strictly validate generated Markdown tables"
     )
-    check.add_argument("path", type=Path)
-    check.add_argument("--pandoc")
-    check.add_argument("--allow-pipe-fallback", action="store_true")
-    check.add_argument("--debug-tables", action="store_true")
+    check.add_argument(
+        "path",
+        type=Path,
+        help="Markdown file, or directory whose *.md files are checked recursively.",
+    )
+    check.add_argument("--pandoc", help=PANDOC_HELP)
+    check.add_argument(
+        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
+    )
+    check.add_argument(
+        "--debug-tables",
+        action="store_true",
+        help="Print each table's size, source format, and diagnostics.",
+    )
 
     skills = subparsers.add_parser("skills", help="Install the bundled agent skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+from tracecite.cli import build_parser
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 
@@ -78,3 +81,32 @@ def test_subcommand_help_does_not_load_heavy_modules():
         stdout, modules = _help_modules(*args)
         assert "usage: tracecite" in stdout
         assert not [name for name in modules if name.startswith(FORBIDDEN)]
+
+
+def _subparser(parser: argparse.ArgumentParser, *names: str) -> argparse.ArgumentParser:
+    for name in names:
+        subparsers = next(
+            action
+            for action in parser._actions
+            if isinstance(action, argparse._SubParsersAction)
+        )
+        parser = subparsers.choices[name]
+    return parser
+
+
+def test_table_prepare_check_and_search_limits_describe_their_arguments():
+    parser = build_parser()
+    for path in (("table", "normalise"), ("prepare",), ("check",)):
+        undocumented = [
+            action.dest
+            for action in _subparser(parser, *path)._actions
+            if not isinstance(action, argparse._HelpAction) and not action.help
+        ]
+        assert undocumented == [], path
+    for path in (("search",), ("docs", "search")):
+        limits = {
+            action.dest: action.help
+            for action in _subparser(parser, *path)._actions
+            if action.dest in {"limit", "fts_limit", "vector_limit"}
+        }
+        assert len(limits) == 3 and all(limits.values()), path
