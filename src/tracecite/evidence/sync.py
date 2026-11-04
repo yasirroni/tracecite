@@ -93,6 +93,9 @@ class SyncReport:
     sources_renamed: list[tuple[str, str]] = field(default_factory=list)
     selected_missing_paths: list[str] = field(default_factory=list)
     missing_explicit_paths: list[str] = field(default_factory=list)
+    # PDF physical pages with no extracted text, keyed by source path.
+    pages_without_text: dict[str, list[int]] = field(default_factory=dict)
+    ocr_unavailable: bool = False
     indexed_unselected_paths: list[str] = field(default_factory=list)
     unmatched_globs: list[str] = field(default_factory=list)
     cleanup_warnings: list[str] = field(default_factory=list)
@@ -617,6 +620,14 @@ def sync(
                     ) from exc
                 plan.units = result.units
                 plan.pages = result.pages
+                empty_pages = [
+                    page.physical_page for page in result.pages if not page.text.strip()
+                ]
+                if plan.source_type == "pdf" and empty_pages:
+                    report.pages_without_text[plan.source_path] = empty_pages
+                report.ocr_unavailable = (
+                    report.ocr_unavailable or result.ocr_unavailable
+                )
                 if plan.action == "add":
                     report.sources_added.append(plan.source_path)
                 else:

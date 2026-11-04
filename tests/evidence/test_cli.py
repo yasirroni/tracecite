@@ -9,7 +9,14 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
-from conftest import FakeEmbedder, build_pdf, insert_source, write_manifest
+import pymupdf
+from conftest import (
+    FakeEmbedder,
+    build_pdf,
+    build_pdf_with_image_only_page,
+    insert_source,
+    write_manifest,
+)
 
 from tracecite import cli
 from tracecite.evidence import schema
@@ -1034,3 +1041,62 @@ def test_verify_quote_reports_source_state_and_keeps_checking_indexed_text(
         "exact",
         "missing",
     )
+
+
+def test_sync_and_page_flag_pages_without_text_when_ocr_is_unavailable(
+    tmp_path, capsys, monkeypatch
+):
+    def no_tesseract(tessdata=None):
+        raise RuntimeError("No tessdata specified and Tesseract is not installed")
+
+    monkeypatch.setattr(pymupdf, "get_tessdata", no_tesseract)
+    monkeypatch.setattr(
+        sync_module.pdf_parser, "TESSERACT_CMD", "tracecite-missing-tesseract"
+    )
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    corpus_dir = tmp_path / "sources"
+    build_pdf_with_image_only_page(
+        corpus_dir / "scan.pdf",
+        leading_pages=[["Intro", "This page has a real text layer for control."]],
+    )
+    manifest_path = write_manifest(tmp_path / "manifest.toml", {"scan.pdf": "scan.pdf"})
+    database_path = tmp_path / "runtime" / "knowledge.sqlite"
+
+    exit_code = cli.main(
+        [
+            "sync",
+            "--root",
+            str(corpus_dir),
+            "--manifest",
+            str(manifest_path),
+            "--database",
+            str(database_path),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["status"] == "ok"
+    assert payload["pages_without_text"] == {"scan.pdf": [2]}
+    assert payload["ocr_unavailable"] is True
+
+    assert _sync(corpus_dir, manifest_path, tmp_path / "second.sqlite") == 0
+    out = capsys.readouterr().out
+    assert "pages-without-text: 1\n  scan.pdf: 2\n" in out
+    assert "OCR" in out
+
+    for page, expect_note in (("2", True), ("1", False)):
+        exit_code = cli.main(
+            [
+                "page",
+                "--root",
+                str(corpus_dir),
+                "--database",
+                str(database_path),
+                "scan.pdf",
+                page,
+            ]
+        )
+        err = capsys.readouterr().err
+        assert exit_code == 0
+        assert ("no extracted text" in err) is expect_note

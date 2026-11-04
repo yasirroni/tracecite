@@ -90,10 +90,22 @@ def _print_sync_report(report) -> None:
         ("unmatched-globs", report.unmatched_globs),
         ("indexed-but-unselected", report.indexed_unselected_paths),
         ("cleanup-warnings", report.cleanup_warnings),
+        (
+            "pages-without-text",
+            [
+                f"{path}: {', '.join(map(str, pages))}"
+                for path, pages in report.pages_without_text.items()
+            ],
+        ),
     ):
         print(f"{heading}: {len(items)}")
         for item in items:
             print(f"  {item}")
+    if report.ocr_unavailable:
+        print(
+            "OCR was unavailable, so scanned pages were stored without text; "
+            "install Tesseract and re-run sync with --full to extract it"
+        )
     print(f"unchanged: {len(report.sources_unchanged)}")
     print(
         f"chunks added={report.chunks_added} updated={report.chunks_updated} "
@@ -341,6 +353,13 @@ def cmd_page(args: argparse.Namespace) -> int:
             for row in rows
             if row["physical_page"] in selected_pages
         }
+        for page in selected_pages:
+            if not selected_rows[page]["text"].strip():
+                print(
+                    f"note: physical page {page} of {source_path} has no extracted "
+                    "text; a scanned page needs OCR (Tesseract) during sync",
+                    file=sys.stderr,
+                )
         if args.format == "json":
             try:
                 payload = [

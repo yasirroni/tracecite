@@ -45,6 +45,8 @@ class ParsedChunkUnit:
 class ParseResult:
     pages: list[ParsedPage]
     units: list[ParsedChunkUnit]
+    # True when a page had no text and no OCR engine could run on it.
+    ocr_unavailable: bool = False
 
 
 def units_from_layout(layout_json: str | None) -> list[ParsedChunkUnit]:
