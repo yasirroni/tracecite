@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import re
 import sqlite3
 import sys
 from collections import defaultdict
@@ -409,6 +410,11 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
 
 def cmd_verify_quote(args: argparse.Namespace) -> int:
     from . import verify
+    from .page_selection import (
+        PageSelectionSyntaxError,
+        PageSelectionUnavailableError,
+        resolve_page_selection,
+    )
     from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
     conn = _connect(args.database, read_only=True)
@@ -427,11 +433,40 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        if source_row_for_path(conn, source_path) is None:
-            result = verify.QuoteVerification("not-found", args.page, args.quote)
+        source_row = source_row_for_path(conn, source_path)
+        pages: list[int] = []
+        if source_row is None:
+            leading_page = re.match(r"\s*(\d+)", args.page)
+            result = verify.QuoteVerification(
+                "not-found", int(leading_page[1]) if leading_page else 0, args.quote
+            )
         else:
-            result = verify.verify_quote(conn, source_path, args.page, args.quote)
-        print(json.dumps(_quote_json(result), ensure_ascii=False))
+            available_pages = [
+                row["physical_page"]
+                for row in conn.execute(
+                    "SELECT physical_page FROM pages WHERE source_pk = ?",
+                    (source_row["source_pk"],),
+                )
+            ]
+            try:
+                pages = resolve_page_selection(args.page, available_pages)
+                if args.page.strip() == "all" or pages != list(
+                    range(pages[0], pages[-1] + 1)
+                ):
+                    raise PageSelectionSyntaxError(
+                        "verify quote takes one page or a contiguous page range "
+                        f"such as 4-5: {args.page}"
+                    )
+            except PageSelectionSyntaxError as exc:
+                print(f"tracecite: {exc}", file=sys.stderr)
+                return 2
+            except PageSelectionUnavailableError as exc:
+                result = verify.QuoteVerification(
+                    "not-found", exc.page, args.quote, source_path=source_path
+                )
+            else:
+                result = verify.verify_quote_pages(conn, source_path, pages, args.quote)
+        print(json.dumps({**_quote_json(result), "pages": pages}, ensure_ascii=False))
     finally:
         conn.close()
     return 0 if result.status in {"exact", "normalised"} else 1

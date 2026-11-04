@@ -133,7 +133,9 @@ def _add_evidence_parsers(
     )
     _add_evidence_common_args(quote_parser)
     quote_parser.add_argument("source_path")
-    quote_parser.add_argument("page", type=int)
+    quote_parser.add_argument(
+        "page", help="Physical page or contiguous page range, such as 4 or 4-5."
+    )
     quote_parser.add_argument("quote")
     report_parser = verify_subparsers.add_parser(
         "report", help="Verify a Markdown report's citations and quotes."

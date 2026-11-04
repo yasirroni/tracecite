@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -38,30 +39,45 @@ class QuoteVerification:
 def verify_quote(
     conn, source_path: str, physical_page: int, quote: str
 ) -> QuoteVerification:
+    return verify_quote_pages(conn, source_path, [physical_page], quote)
+
+
+def verify_quote_pages(
+    conn, source_path: str, physical_pages: Sequence[int], quote: str
+) -> QuoteVerification:
+    """Verify a quotation against consecutive retained pages read as one text.
+
+    The pages are joined in order with a line break, so a quotation that
+    continues across a page break matches after whitespace normalisation.
+    The result reports the first page.
+    """
+    first_page = physical_pages[0]
     if not quote.strip():
         return QuoteVerification(
-            "structural-error", physical_page, quote, source_path=source_path
+            "structural-error", first_page, quote, source_path=source_path
         )
-    row = conn.execute(
-        """
+    placeholders = ",".join("?" for _ in physical_pages)
+    rows = conn.execute(
+        f"""
         SELECT pages.text FROM pages
         JOIN sources ON sources.source_pk = pages.source_pk
-        WHERE sources.path = ? AND pages.physical_page = ?
+        WHERE sources.path = ? AND pages.physical_page IN ({placeholders})
+        ORDER BY pages.physical_page
         """,
-        (source_path, physical_page),
-    ).fetchone()
-    if row is None:
+        (source_path, *physical_pages),
+    ).fetchall()
+    if len(rows) != len(set(physical_pages)):
         return QuoteVerification(
-            "not-found", physical_page, quote, source_path=source_path
+            "not-found", first_page, quote, source_path=source_path
         )
-    page_text = row["text"]
+    page_text = "\n".join(row["text"] for row in rows)
     if quote in page_text:
-        return QuoteVerification("exact", physical_page, quote, source_path=source_path)
+        return QuoteVerification("exact", first_page, quote, source_path=source_path)
     if _fold_quote_text(quote) in _fold_quote_text(page_text):
         return QuoteVerification(
-            "normalised", physical_page, quote, source_path=source_path
+            "normalised", first_page, quote, source_path=source_path
         )
-    return QuoteVerification("not-found", physical_page, quote, source_path=source_path)
+    return QuoteVerification("not-found", first_page, quote, source_path=source_path)
 
 
 def _fold_quote_text(text: str) -> str:

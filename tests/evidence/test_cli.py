@@ -887,3 +887,61 @@ def test_cli_search_rejects_empty_queries(tmp_path, capsys, monkeypatch):
         assert captured.out == ""
         assert "empty" in captured.err
     assert embedder.calls == []
+
+
+def test_cli_verify_quote_accepts_a_contiguous_page_range(
+    tmp_path, capsys, monkeypatch
+):
+    corpus_dir = tmp_path / "sources"
+    build_pdf(
+        corpus_dir / "plan.pdf",
+        [
+            ["Storage", "By 2030 the installed storage target"],
+            ["rises to five gigawatts across the region."],
+            ["Appendix", "Unrelated appendix text for the third page."],
+        ],
+    )
+    manifest_path = write_manifest(tmp_path / "manifest.toml", {"plan.pdf": "plan.pdf"})
+    database_path = tmp_path / "runtime" / "knowledge.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
+    capsys.readouterr()
+    quote = "the installed storage target rises to five gigawatts"
+
+    def verify(selector: str) -> tuple[int, str, str]:
+        exit_code = cli.main(
+            [
+                "verify",
+                "quote",
+                "--root",
+                str(corpus_dir),
+                "--database",
+                str(database_path),
+                "plan.pdf",
+                selector,
+                quote,
+            ]
+        )
+        captured = capsys.readouterr()
+        return exit_code, captured.out, captured.err
+
+    exit_code, out, _ = verify("1-2")
+    payload = json.loads(out)
+    assert exit_code == 0
+    assert payload["status"] == "normalised"
+    assert payload["page"] == 1
+    assert payload["pages"] == [1, 2]
+
+    exit_code, out, _ = verify("1")
+    assert exit_code == 1
+    assert json.loads(out)["status"] == "not-found"
+
+    exit_code, out, _ = verify("2-4")
+    assert exit_code == 1
+    assert json.loads(out)["status"] == "not-found"
+
+    for selector in ("1,3", "all", "2-1"):
+        exit_code, out, err = verify(selector)
+        assert exit_code == 2, selector
+        assert out == ""
+        assert err
