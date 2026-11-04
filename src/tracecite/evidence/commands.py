@@ -66,6 +66,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
         print(json.dumps(dataclasses.asdict(report), indent=2, ensure_ascii=False))
     else:
         _print_sync_report(report)
+    if report.missing_explicit_paths:
+        print(
+            f"tracecite: {len(report.missing_explicit_paths)} declared [[source]] "
+            f"path(s) do not exist under the root: "
+            f"{', '.join(report.missing_explicit_paths)}",
+            file=sys.stderr,
+        )
+        return 1
     return 0 if report.status == "ok" else 1
 
 
@@ -77,6 +85,7 @@ def _print_sync_report(report) -> None:
         ("rechunked", report.sources_rechunked),
         ("renamed", [f"{old} -> {new}" for old, new in report.sources_renamed]),
         ("selected-missing", report.selected_missing_paths),
+        ("missing-sources", report.missing_explicit_paths),
         ("unmatched-globs", report.unmatched_globs),
         ("indexed-but-unselected", report.indexed_unselected_paths),
         ("cleanup-warnings", report.cleanup_warnings),

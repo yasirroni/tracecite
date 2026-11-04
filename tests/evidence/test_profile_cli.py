@@ -64,6 +64,7 @@ def test_explicit_cli_overrides_profile_and_repeated_manifests_are_layered(
     profile_root.mkdir()
     override_root.mkdir()
     build_pdf(override_root / "keep.pdf", [["Keep", "Explicit override root content."]])
+    build_pdf(override_root / "ignored.pdf", [["Profile", "Profile source content."]])
     tracked = tmp_path / "tracked.toml"
     local = tmp_path / "local.toml"
     tracked.write_text(

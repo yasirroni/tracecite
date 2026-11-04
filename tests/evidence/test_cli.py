@@ -322,10 +322,12 @@ def test_cli_sync_prints_structured_missing_and_unmatched_warnings(
     database_path = tmp_path / "tracecite.sqlite"
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
     exit_code = _sync(root, manifest_path, database_path)
-    assert exit_code == 0
-    out = capsys.readouterr().out
-    assert "selected-missing: 1\n  missing.pdf\n" in out
-    assert "unmatched-globs: 1\n  reports/*.md\n" in out
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "selected-missing: 1\n  missing.pdf\n" in captured.out
+    assert "missing-sources: 1\n  missing.pdf\n" in captured.out
+    assert "unmatched-globs: 1\n  reports/*.md\n" in captured.out
+    assert "missing.pdf" in captured.err
 
 
 def test_prune_apply_honours_layered_local_exclusion(tmp_path, capsys):
@@ -688,3 +690,19 @@ def test_cli_sync_lists_items_one_per_line_and_supports_json(
     assert payload["status"] == "ok"
     assert payload["sources_added"] == []
     assert payload["sources_unchanged"] == ["doc.pdf", "notes.md"]
+
+
+def test_cli_sync_without_positive_rule_fails_before_creating_database(
+    tmp_path, capsys
+):
+    root = tmp_path / "sources"
+    root.mkdir()
+    database_path = tmp_path / "runtime" / "knowledge.sqlite"
+    for text in (
+        "schema_version = 1\n",
+        'schema_version = 1\n[[exclude]]\nglob = "*.md"\n',
+    ):
+        manifest_path = _write_manifest(tmp_path / "manifest.toml", text)
+        assert _sync(root, manifest_path, database_path) == 2
+        assert "[[source]]" in capsys.readouterr().err
+        assert not database_path.parent.exists()

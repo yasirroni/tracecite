@@ -639,7 +639,9 @@ def test_delete_removes_chunks_fts_vectors_and_assets(
     conn.close()
 
     one_pdf_corpus.unlink()
-    write_manifest(manifest_path, {})
+    manifest_path.write_text(
+        'schema_version = 1\n[[include]]\nglob = "other/*.pdf"\n', encoding="utf-8"
+    )
     report = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=embedder
     )
@@ -1210,3 +1212,34 @@ def test_same_size_same_mtime_content_change_is_not_fast_unchanged(
             item["body"] for item in conn.execute("SELECT body FROM chunks")
         )
         assert "Evidence bravo 2222." in body
+
+
+def test_sync_without_positive_rule_raises_before_creating_database(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
+    manifest_path.write_text(
+        'schema_version = 1\n[[exclude]]\nglob = "*.md"\n', encoding="utf-8"
+    )
+    with pytest.raises(sync_module.SyncError, match="include"):
+        sync_module.sync(
+            corpus_dir, manifest_path, database_path, embedder=make_embedder()
+        )
+    assert not database_path.parent.exists()
+
+
+def test_sync_reports_missing_explicit_source_and_still_applies_the_rest(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
+    manifest_path.write_text(
+        'schema_version = 1\n[[source]]\npath = "missing.pdf"\n'
+        '[[source]]\npath = "notes.md"\n',
+        encoding="utf-8",
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
+    assert report.status == "ok"
+    assert report.missing_explicit_paths == ["missing.pdf"]
+    assert report.sources_added == ["notes.md"]

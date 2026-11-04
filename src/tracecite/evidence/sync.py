@@ -92,6 +92,7 @@ class SyncReport:
     sources_unchanged: list[str] = field(default_factory=list)
     sources_renamed: list[tuple[str, str]] = field(default_factory=list)
     selected_missing_paths: list[str] = field(default_factory=list)
+    missing_explicit_paths: list[str] = field(default_factory=list)
     indexed_unselected_paths: list[str] = field(default_factory=list)
     unmatched_globs: list[str] = field(default_factory=list)
     cleanup_warnings: list[str] = field(default_factory=list)
@@ -391,6 +392,11 @@ def sync(
     database_path = Path(database_path)
 
     rules = load_manifest_rules(manifest_path)
+    if not (rules.explicit_paths or rules.include_globs):
+        raise SyncError(
+            "sync requires at least one [[source]] or [[include]] rule; "
+            "[[exclude]] rules only narrow a selection"
+        )
     selection = manifest_module.resolve_sources(sources_dir, rules)
 
     conn = schema.connect(database_path)
@@ -475,6 +481,7 @@ def sync(
                 - set(renames.keys())
             )
         )
+        report.missing_explicit_paths.extend(selection.missing_explicit_paths)
         report.indexed_unselected_paths.extend(
             sorted(indexed_unselected_paths - set(renames.keys()))
         )
