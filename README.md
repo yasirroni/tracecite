@@ -2,11 +2,11 @@
 
 TraceCite lets people and AI agents search their documents, cite the exact page or cell, and check that a quote matches its source.
 
-Its core is source-linked table normalisation. Each table in a rendered Python or Julia documentation page stays in the site as the original evidence. TraceCite derives deterministic, self-describing row text from the table for search, so generated tables become retrievable without changing what readers see.
+Its core is source-linked table normalisation. Tables in rendered Python or Julia documentation stay unchanged as the original evidence, and TraceCite derives deterministic, self-describing row text from them for search.
 
-Around that core, TraceCite indexes source collections of Markdown, PDF, `.xlsx`, and `.xlsm` files. It stores the retained extraction, source hashes, full-text and vector search records, and source-specific locators such as PDF pages, Markdown lines, and worksheet ranges. It verifies quotations and report citations against these records.
+TraceCite also indexes Markdown, PDF, `.xlsx`, and `.xlsm` files. It stores retained text, source hashes, full-text and vector search records, and locators (PDF pages, Markdown lines, and worksheet ranges), and verifies quotations and report citations against them.
 
-Two documentation commands join the two parts. `tracecite docs index` adds a project's retained documentation, with its normalised tables, to an evidence index. `tracecite docs stage` routes source links to local files or public URLs.
+`tracecite docs index` adds a project's retained documentation and its normalised tables to an evidence index. `tracecite docs stage` routes source links to local files or public URLs.
 
 ## Core architecture
 
@@ -24,11 +24,11 @@ retained Markdown
        -> optional embedding-inspection website copy
 ```
 
-The normal site remains pure Quarto output. The inspection copy, which doubles each table, is generated only on explicit request.
+The normal site is pure Quarto output. The inspection copy, which doubles each table, is generated only on request.
 
-`tracecite docs build docs` is the public automatic documentation builder. It discovers configured executable inputs, selects the complete site when both runtimes are available, safely falls back to the available language with exact skipped-file warnings, stages retained Markdown, and optionally renders the inspection site. Table normalisation remains in the public `tracecite prepare` command.
+`tracecite docs build docs` discovers configured executable inputs, builds the complete site when both runtimes are available or falls back to the available one with a warning naming each skipped file, stages retained Markdown, and optionally renders the inspection site. `tracecite prepare` does the table normalisation.
 
-The searchable-evidence path is separate from the documentation renderer:
+The evidence path is separate from the documentation renderer:
 
 ```text
 declared PDF, Markdown, or workbook sources
@@ -41,11 +41,11 @@ declared PDF, Markdown, or workbook sources
 ## Prerequisites
 
 - Python 3.11 or newer;
-- Pandoc, either installed directly or provided by Quarto;
+- Pandoc, standalone or bundled with Quarto;
 - Quarto for documentation-site renders;
-- Julia 1.10 or newer only when building Julia documentation pages.
+- Julia 1.10 or newer, only for Julia documentation pages.
 
-The Python normaliser and CLI work without Julia. Automatic documentation builds fall back to the Python-only overlay when configured Julia inputs cannot run; explicit Julia-only builds require Julia.
+The Python normaliser and CLI work without Julia. Automatic builds fall back to the Python overlay without it; `--only julia` builds need it.
 
 Evidence synchronisation and hybrid search use the optional `evidence` dependencies:
 
@@ -53,11 +53,11 @@ Evidence synchronisation and hybrid search use the optional `evidence` dependenc
 uv pip install -e ".[evidence]"
 ```
 
-Workbook parsing reads OOXML packages directly with the Python standard library and runs independently of Excel, Julia, Quarto, and third-party workbook readers.
+Workbook parsing reads OOXML packages with only the Python standard library, without Excel, Julia, Quarto, or third-party workbook readers.
 
 ## Usage
 
-The public `tracecite` CLI provides table and document normalisation, documentation builds, and source-evidence synchronisation and search. The `prepare` command consumes retained Markdown after a Quarto render and creates the optional inspection-site copy.
+The `tracecite` CLI normalises tables and documents, builds documentation, and syncs and searches source evidence. `prepare` reads retained Markdown after a Quarto render and creates the optional inspection copy.
 
 ### Public API
 
@@ -71,7 +71,7 @@ from tracecite.tables import (
 
 `normalise_pandoc_table()` is the core contract. It accepts one Pandoc table and returns raw evidence, canonical Markdown, normalised text, row records, diagnostics, hashes, and version metadata.
 
-Each row also receives a deterministic `row_id`. When `row_identity` metadata is supplied, the identifier follows the logical row rather than its current rank or position.
+Each row gets a deterministic `row_id`, which follows the logical row rather than its rank or position when `row_identity` metadata is supplied.
 
 `normalise_html_table()` supports Literate.jl, Documenter.jl, PrettyTables, notebook HTML MIME, row spans, and column spans through an HTML-to-canonical-Markdown adapter.
 
@@ -91,7 +91,7 @@ tracecite document normalise report.md --to embedding-markdown --output report.e
 
 ### Index and search source evidence
 
-Declare the source collection in a manifest. Explicit sources and include or exclude globs select `.pdf`, `.md`, `.xlsx`, and `.xlsm` files.
+List sources in a manifest by explicit path or by include and exclude globs over `.pdf`, `.md`, `.xlsx`, and `.xlsm` files.
 
 ```toml
 schema_version = 1
@@ -100,7 +100,7 @@ schema_version = 1
 path = "2023-iasr-ev-workbook.xlsx"
 ```
 
-Synchronise the selected sources into a database, search the resulting lexical and semantic index, then run the integrity checks:
+Sync the sources into a database, search it lexically and semantically, then check its integrity:
 
 ```sh
 tracecite sync \
@@ -119,23 +119,23 @@ tracecite doctor --database .tracecite/evidence.sqlite
 
 #### Sync
 
-- `sync` needs at least one `[[source]]` or `[[include]]` rule. Without one, it stops before creating or changing the database.
-- It prints each added, reparsed, renamed, missing, or unselected path on its own line. `--json` prints the whole report as JSON.
-- When a declared `[[source]]` does not exist under the root, sync still applies the other sources, lists the path under `missing-sources`, and exits with status 1. A sync of one source path checks only that path.
-- PDF pages that yield no text, such as blank or scanned pages, are listed under `pages-without-text`. OCR of scanned pages needs [Tesseract](https://github.com/tesseract-ocr/tesseract); without it, sync stores those pages without text. After installing Tesseract, re-run `tracecite sync --full` to extract their text.
-- `sync` is incremental and non-pruning. Unavailable or no-longer-selected sources remain in the database, still searchable and citable, until an explicit `tracecite prune` is previewed and applied.
+- `sync` needs at least one `[[source]]` or `[[include]]` rule; without one, it stops without creating or changing the database.
+- It prints one line per added, reparsed, renamed, missing, or unselected path; `--json` prints the full report.
+- A declared `[[source]]` missing under the root is listed under `missing-sources` and makes sync exit 1; the other sources still sync. A sync of one path checks only that path.
+- PDF pages without text, such as blank or scanned pages, are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; after installing it, run `tracecite sync --full` to extract their text.
+- `sync` is incremental and non-pruning. Sources that are gone or no longer selected stay searchable and citable until you preview and apply `tracecite prune`.
 
 #### Prune
 
-A prune needs the source root (`--root` or a profile). It plans every indexed source that the rules no longer select or whose file no longer exists under the root; the preview lists the latter under `missing_paths`. `--all` plans every indexed source without a root. `prune --apply` compacts the database file afterwards.
+`prune` needs the source root (`--root` or a profile). It targets indexed sources the rules no longer select or whose file is gone from the root; the preview lists the latter under `missing_paths`. `--all` targets every indexed source and needs no root. `prune --apply` also compacts the database file.
 
 #### Doctor
 
-`doctor --root <dir>` also compares each indexed source with its file and warns about sources that changed or disappeared since the last sync. These warnings do not change the exit status; only database, vector, and asset integrity issues do.
+`doctor --root <dir>` also warns about sources that changed or disappeared since the last sync. Only database, vector, and asset integrity issues change its exit status.
 
 #### Search
 
-`--source-type` restricts `search` to one or more source types (`pdf`, `markdown`, or `workbook`; repeatable). The filter applies before lexical and vector candidates are ranked and truncated to `--limit`, not as a post-hoc filter on the final result list:
+`search --source-type` (`pdf`, `markdown`, or `workbook`; repeatable) filters candidates before ranking and the `--limit` cut, not after:
 
 ```sh
 tracecite search "coal retirement" \
@@ -143,13 +143,13 @@ tracecite search "coal retirement" \
   --source-type pdf
 ```
 
-- A query must contain text; an empty query exits with status 2.
-- `--lexical-only` ranks by full-text search alone and skips loading the embedding model.
-- Chinese, Japanese, and Korean (CJK) text has no spaces between words, so lexical search also matches each CJK run of the query as a substring of the indexed text. That match reads every indexed passage, so it is slower than ordinary full-text search on a large database.
-- The embedding model is English-only, so CJK queries rely on the lexical match.
-- Hits from byte-identical files at different paths are reported once, under the best-ranked path, with the other paths in `duplicate_paths`.
+- An empty query exits with status 2.
+- `--lexical-only` uses full-text search alone and skips loading the embedding model.
+- Chinese, Japanese, and Korean (CJK) text has no spaces, so lexical search also matches each CJK run of the query as a substring. This reads every passage and is slower on a large database.
+- The embedding model is English-only, so CJK queries rely on lexical matching.
+- Byte-identical files at different paths give one hit, under the best-ranked path, with the others in `duplicate_paths`.
 
-Each search result includes retrieval provenance and a source-specific locator. The abbreviated JSON below shows the stable workbook evidence fields; the actual worksheet and ranges depend on the indexed workbook and chunk configuration.
+Each result includes retrieval provenance and a source-specific locator, as in this abbreviated workbook result (the worksheet and ranges vary with the workbook and chunk settings):
 
 ```json
 {
@@ -167,21 +167,21 @@ Each search result includes retrieval provenance and a source-specific locator. 
 }
 ```
 
-The source path and SHA-256 identify the workbook version. The worksheet and `exact_ranges` identify the cells represented in the indexed passage. `range` is only the convenient bounding rectangle and can include cells that did not contribute to the passage. Search rank identifies candidate evidence; inspect the returned cells before using the result to support a claim.
+The path and SHA-256 identify the workbook version, and the worksheet and `exact_ranges` identify the passage's cells. `range` is only the bounding rectangle and can include other cells. Rank only marks candidate evidence, so inspect the returned cells before citing a result.
 
-The portable workbook citation is the source path, SHA-256, worksheet, and A1 ranges. The workbook viewer, or a provider-specific link supplied separately, opens the exact range.
+A portable workbook citation is the path, SHA-256, worksheet, and A1 ranges. Opening the exact range needs a workbook viewer or a separate provider-specific link.
 
 #### Workbook boundaries
 
-- `.xlsx` and `.xlsm` OOXML packages are supported. Legacy binary `.xls` files are outside the supported source set.
-- Stored text, numeric, Boolean, error, formula, and cached formula values are retained. Cached values describe the workbook's stored state; TraceCite does not recalculate formulae.
-- The parser reads stored package content only. It does not execute VBA or refresh external links, Power Query, pivot caches, or data connections.
-- Style-only empty cells are ignored. Excel display formatting is not reconstructed, so styled date or time serials can remain numeric.
-- Workbook chunks are row-oriented. The parser does not yet infer formal Excel tables or propagate complex multi-row headers into every row.
+- Supports `.xlsx` and `.xlsm` OOXML packages, not legacy binary `.xls`.
+- Keeps stored text, numeric, Boolean, error, formula, and cached formula values. Formulae are not recalculated.
+- Reads stored package content only; it does not run VBA or refresh external links, Power Query, pivot caches, or data connections.
+- Ignores style-only empty cells and does not reconstruct display formatting, so styled dates and times can stay numeric serials.
+- Chunks by row. It does not yet infer formal Excel tables or carry complex multi-row headers into every row.
 
 ### Retrieve retained pages and visual evidence
 
-`tracecite page` reads retained PDF page text from the SQLite evidence database. Without a selector, it returns physical page 1. A selector can combine individual pages, closed ranges, and open ranges; overlapping terms are deduplicated, and pages return in ascending physical-page order.
+`tracecite page` prints retained PDF page text from the SQLite evidence database, physical page 1 by default. Selectors combine pages and closed or open ranges; overlaps are merged and pages come back in ascending physical order.
 
 ```sh
 tracecite page reports/example.pdf --database evidence.sqlite
@@ -191,9 +191,9 @@ tracecite page reports/example.pdf -20 --database evidence.sqlite
 tracecite page reports/example.pdf all --database evidence.sqlite
 ```
 
-Only the standalone selector `all` implicitly selects the complete source, and it cannot be combined with another term. Multi-page text output marks each physical page. A selected page with no extracted text, such as a scanned page synced without OCR, adds a note on stderr. `--format json` returns an ordered array of retained text, extraction metadata, a citation link, and validated paths for the indexed page render and figure crops. Search results expose the same page-render and figure-crop fields for page-local PDF matches.
+`all` selects the whole source and must stand alone. Multi-page output marks each page, and a page with no text, such as a scanned page synced without OCR, adds a note on stderr. `--format json` returns an ordered array of text, extraction metadata, a citation link, and validated page-render and figure-crop paths. Search results carry the same render and crop fields for page-local PDF matches.
 
-`extract-pages` uses the same selector grammar but reads the indexed source PDF to create a derivative PDF and provenance manifest. The output directory must already exist outside the source root. TraceCite refuses stale source content, symlink output directories, overlap, and overwrite.
+`extract-pages` takes the same selectors and writes a derivative PDF and provenance manifest from the indexed source PDF. The output directory must already exist outside the source root; stale sources, symlinked output directories, overlap, and overwrites are refused.
 
 ```sh
 mkdir -p ../tracecite-exports
@@ -202,21 +202,21 @@ tracecite extract-pages reports/example.pdf 5,12-15,20 \
   --output-dir ../tracecite-exports
 ```
 
-Use database-backed text or indexed page assets for page-local questions. Select `all` only when the complete source is intentionally required.
+Answer page-local questions from database text or page assets; select `all` only when you need the whole source.
 
 ### Verify quotations
 
-`tracecite verify quote` checks a quotation against the retained text of one physical page, or of a contiguous page range such as `4-5` when the quotation continues across a page break:
+`tracecite verify quote` checks a quotation against the retained text of one page, or a contiguous range such as `4-5` for a quotation that crosses a page break:
 
 ```sh
 tracecite verify quote reports/example.pdf 4-5 "Exact quotation" --database evidence.sqlite
 ```
 
-- `exact`: the quotation occurs verbatim.
-- `normalised`: the quotation matches after collapsing whitespace, straightening curly quotes and apostrophes, and ignoring case.
-- `not-found`: neither matches; a changed word gives `not-found`.
+- `exact`: verbatim.
+- `normalised`: matches after collapsing whitespace, straightening curly quotes and apostrophes, and ignoring case.
+- `not-found`: anything else, including one changed word.
 
-The JSON result also reports `source_state` (`current`, `changed`, or `missing`), which compares the indexed version with the file under `--root` (default: the current directory). Verification always uses the indexed text. When the file changed, a warning on stderr asks for a re-sync.
+The JSON also reports `source_state` (`current`, `changed`, or `missing`) for the file under `--root` (default: the current directory). Verification always uses the indexed text and warns on stderr to re-sync if the file changed.
 
 ### Build the documentation
 
@@ -230,13 +230,13 @@ uv run tracecite docs build docs_quarto_jl --only julia
 Explain the expected `[WARNING] Could not fetch resource`
 -->
 
-The public builder discovers configured render inputs and automatically selects the complete site when both runtimes are available. If Julia is unavailable, it names every configured Julia source it skips and renders the Python overlay without modifying Julia sources. Use `--only python` or `--only julia` for explicit reduced builds. External projects that already have rendered and staged retained Markdown can invoke `tracecite prepare` directly after their Quarto render.
+Without Julia, the builder names each Julia source it skips and renders the Python overlay, leaving Julia sources untouched. `--only python` or `--only julia` builds one language. Projects with their own Quarto render can run `tracecite prepare` on their staged retained Markdown.
 
-See `docs/examples/report-adoption/aemo-isp-comparison/` for a complete, real example of the author -> check -> index -> search -> doctor -> publish-only workflow using two AEMO Integrated System Plan reports.
+`docs/examples/report-adoption/aemo-isp-comparison/` is a complete author -> check -> index -> search -> doctor -> publish-only example using two AEMO Integrated System Plan reports.
 
-`docs/examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`, `source_links`, `index_output`, `publication_exclude`, and optional `host_render_command` under `[docs]`. Contract paths are repository-relative and must remain inside the repository.
+`docs/examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`, `source_links`, `index_output`, `publication_exclude`, and optional `host_render_command` under `[docs]`. Contract paths are repository-relative and stay inside the repository.
 
-To open the final docs:
+Open the built site:
 
 ```sh
 open docs/build/index.html
@@ -253,9 +253,9 @@ tracecite prepare docs/build \
   --render-embedding-site
 ```
 
-The generated copy includes `_tracecite/tables.jsonl` and `_tracecite/manifest.json`. Its `_quarto.yml` is derived from the selected documentation profile; it keeps the theme and navigation and removes execution engines and build hooks. The copy is disposable, gitignored, and excluded from recursive ingestion.
+The copy includes `_tracecite/tables.jsonl` and `_tracecite/manifest.json`, and its `_quarto.yml` keeps the selected profile's theme and navigation without execution engines or build hooks. It is disposable, gitignored, and excluded from recursive ingestion.
 
-The copied Markdown is deliberately redundant. It keeps the original table for audit and appends the normalised representation for inspection. Normal indexing can consume `tables.jsonl` or the `NormalisedTable` objects directly, without writing the copied site.
+Its Markdown keeps each original table for audit and appends the normalised form for inspection. Normal indexing reads `tables.jsonl` or `NormalisedTable` objects directly and needs no copy.
 
 ### Install the agent skills
 
@@ -265,13 +265,13 @@ TraceCite bundles three AI agent skills: `using-tracecite`, `writing-evidence-ba
 tracecite skills install
 ```
 
-`--target` installs them into another skills directory, for example Claude Code's personal skills:
+`--target` picks another directory, such as Claude Code's personal skills:
 
 ```sh
 tracecite skills install --target ~/.claude/skills
 ```
 
-Running the command again replaces the copies with the skills from the installed TraceCite version.
+Rerunning it replaces the copies with the installed version's skills.
 
 ## Contributing
 
@@ -285,7 +285,7 @@ source .venv/bin/activate
 uv pip install -e ".[evidence,test]"
 ```
 
-`requirements.txt` pins the runtime and evidence dependencies to the latest versions that `pyproject.toml` allows. Install it for a reproducible environment, and refresh it with [`pru`](https://github.com/yasirroni/pru). Installing `-e ".[evidence]"` in the same command keeps the upgrades within the `pyproject.toml` bounds:
+`requirements.txt` pins runtime and evidence dependencies to the newest versions `pyproject.toml` allows; install it for a reproducible environment. Refresh it with [`pru`](https://github.com/yasirroni/pru); installing `-e ".[evidence]"` in the same command keeps upgrades within `pyproject.toml` bounds:
 
 ```sh
 uv pip install -r requirements.txt
@@ -300,14 +300,14 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 ### Lint and format
 
-[pre-commit](https://pre-commit.com/) runs [Ruff](https://docs.astral.sh/ruff/) on the Python files and type-checks the whole project with [ty](https://github.com/astral-sh/ty) in each commit. Install it once and enable the hook:
+On each commit, [pre-commit](https://pre-commit.com/) runs [Ruff](https://docs.astral.sh/ruff/) on changed Python files and [ty](https://github.com/astral-sh/ty) on the whole project. Install it once and enable the hook:
 
 ```sh
 uv tool install pre-commit
 pre-commit install
 ```
 
-To check every file, run `pre-commit run --all-files`. [Pyright](https://github.com/microsoft/pyright), the type checker behind Pylance, runs only on request with `pre-commit run --hook-stage manual pyright --all-files`.
+`pre-commit run --all-files` checks every file. [Pyright](https://github.com/microsoft/pyright), the checker behind Pylance, runs only on request with `pre-commit run --hook-stage manual pyright --all-files`.
 
 ### Test
 
@@ -318,7 +318,7 @@ python -m pytest
 uv build
 ```
 
-The Julia package is tested by its documentation example, `docs/examples/julia/dirty_dataframe.jl`. Building the documentation runs the example, including its hidden checks:
+The Julia package is tested by `docs/examples/julia/dirty_dataframe.jl`, which the documentation build runs with its hidden checks:
 
 ```sh
 tracecite docs build docs
