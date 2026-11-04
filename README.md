@@ -101,7 +101,7 @@ tracecite search \
 tracecite doctor --database .tracecite/evidence.sqlite
 ```
 
-`sync` needs at least one `[[source]]` or `[[include]]` rule; without one it stops before creating or changing the database. It prints each added, reparsed, renamed, missing, or unselected path on its own line, and `--json` prints the whole report as JSON. When a declared `[[source]]` does not exist under the root, sync still applies the other sources, lists the path under `missing-sources`, and exits with status 1.
+`sync` needs at least one `[[source]]` or `[[include]]` rule; without one it stops before creating or changing the database. It prints each added, reparsed, renamed, missing, or unselected path on its own line, and `--json` prints the whole report as JSON. When a declared `[[source]]` does not exist under the root, sync still applies the other sources, lists the path under `missing-sources`, and exits with status 1. A sync of one source path checks only that path.
 
 PDF pages that yield no text, such as blank pages or scanned pages, are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores them without text. If Tesseract was missing, install it and re-run `tracecite sync --full` to extract their text.
 

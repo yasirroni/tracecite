@@ -490,7 +490,11 @@ def sync(
                 - set(renames.keys())
             )
         )
-        report.missing_explicit_paths.extend(selection.missing_explicit_paths)
+        report.missing_explicit_paths.extend(
+            path
+            for path in selection.missing_explicit_paths
+            if only_relative_paths is None or path in only_relative_paths
+        )
         report.indexed_unselected_paths.extend(
             sorted(indexed_unselected_paths - set(renames.keys()))
         )

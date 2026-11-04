@@ -355,6 +355,26 @@ def test_cli_sync_prints_structured_missing_and_unmatched_warnings(
     assert "missing.pdf" in captured.err
 
 
+def test_cli_sync_of_one_path_ignores_other_missing_declared_sources(
+    tmp_path, capsys, monkeypatch
+):
+    root = _make_root(tmp_path, "notes.md")
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[source]]\npath = "notes.md"\n'
+        '[[source]]\npath = "missing.pdf"\n',
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    sync = ["sync", "--root", str(root), "--manifest", str(manifest_path)]
+    sync += ["--database", str(database_path)]
+
+    assert cli.main([*sync, "notes.md"]) == 0
+    assert "missing-sources: 0\n" in capsys.readouterr().out
+    assert cli.main([*sync, "missing.pdf"]) == 1
+    assert "missing.pdf" in capsys.readouterr().err
+
+
 def test_prune_apply_honours_layered_local_exclusion(tmp_path, capsys):
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "docs/keep.md")
