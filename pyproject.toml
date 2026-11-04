@@ -42,6 +42,8 @@ tracecite = ["skills/**/*"]
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 # scripts/bootstrap_docs.py copies docs_quarto_py from docs/. Markdown is not formatted

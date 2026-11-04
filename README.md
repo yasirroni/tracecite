@@ -300,14 +300,14 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 ### Lint and format
 
-[pre-commit](https://pre-commit.com/) runs [Ruff](https://docs.astral.sh/ruff/) on the Python files in each commit. Install it once and enable the hook:
+[pre-commit](https://pre-commit.com/) runs [Ruff](https://docs.astral.sh/ruff/) on the Python files and type-checks the whole project with [ty](https://github.com/astral-sh/ty) in each commit. Install it once and enable the hook:
 
 ```sh
 uv tool install pre-commit
 pre-commit install
 ```
 
-To check every file, run `pre-commit run --all-files`.
+To check every file, run `pre-commit run --all-files`. [Pyright](https://github.com/microsoft/pyright), the type checker behind Pylance, runs only on request with `pre-commit run --hook-stage manual pyright --all-files`.
 
 ### Test
 
