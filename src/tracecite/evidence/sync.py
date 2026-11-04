@@ -240,6 +240,13 @@ class _SourcePlan:
         return self.snapshot_path or self.abs_path
 
 
+def _source_error(exc: Exception, plan: _SourcePlan) -> str:
+    """Describe a parser failure with the source path instead of its snapshot copy."""
+    return (str(exc) or type(exc).__name__).replace(
+        str(plan.content_path), plan.source_path
+    )
+
+
 def _match_chunks(
     existing_rows: list[sqlite3.Row], candidates: list[chunking.ChunkCandidate]
 ):
@@ -602,7 +609,12 @@ def sync(
                     "markdown": markdown_parser,
                     "workbook": workbook_parser,
                 }[plan.source_type]
-                result = parser_module.parse(plan.content_path, plan.parser_config)
+                try:
+                    result = parser_module.parse(plan.content_path, plan.parser_config)
+                except Exception as exc:
+                    raise SyncError(
+                        f"cannot parse {plan.source_path}: {_source_error(exc, plan)}"
+                    ) from exc
                 plan.units = result.units
                 plan.pages = result.pages
                 if plan.action == "add":
@@ -706,9 +718,15 @@ def sync(
                     and plan.source_type == "pdf"
                     and options.generate_assets
                 ):
-                    asset_generation, assets = _render_assets(
-                        database_path, plan, generation
-                    )
+                    try:
+                        asset_generation, assets = _render_assets(
+                            database_path, plan, generation
+                        )
+                    except Exception as exc:
+                        raise SyncError(
+                            f"cannot render pages of {plan.source_path}: "
+                            f"{_source_error(exc, plan)}"
+                        ) from exc
                     asset_generations[plan.source_path] = asset_generation
                     rendered_assets[plan.source_path] = assets
         except Exception:

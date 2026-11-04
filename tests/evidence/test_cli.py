@@ -706,3 +706,41 @@ def test_cli_sync_without_positive_rule_fails_before_creating_database(
         assert _sync(root, manifest_path, database_path) == 2
         assert "[[source]]" in capsys.readouterr().err
         assert not database_path.parent.exists()
+
+
+def test_cli_sync_names_the_source_that_cannot_be_parsed(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    for name, content in (
+        ("papers/random.pdf", os.urandom(4096)),
+        ("papers/truncated.pdf", b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog"),
+        ("notes/latin1.md", "Café notes\n".encode("latin-1")),
+    ):
+        root = tmp_path / name.replace("/", "-")
+        (root / name).parent.mkdir(parents=True)
+        (root / name).write_bytes(content)
+        manifest_path = write_manifest(tmp_path / "manifest.toml", {name: name})
+        database_path = root.parent / f"{root.name}.sqlite"
+
+        exit_code = _sync(root, manifest_path, database_path)
+        err = capsys.readouterr().err
+        assert exit_code == 2
+        assert name in err
+        assert ".tracecite-source-snapshots" not in err
+        assert len(err.strip().splitlines()) == 1
+
+
+def test_cli_sync_names_the_source_whose_pages_cannot_be_rendered(
+    tmp_path, capsys, monkeypatch
+):
+    corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+
+    def fail_render(path, physical_page):
+        raise RuntimeError(f"cannot render page {physical_page} of '{path}'")
+
+    monkeypatch.setattr(sync_module.pdf_parser, "render_page", fail_render)
+
+    assert _sync(corpus_dir, manifest_path, database_path) == 2
+    err = capsys.readouterr().err
+    assert "doc.pdf" in err
+    assert ".tracecite-source-snapshots" not in err
