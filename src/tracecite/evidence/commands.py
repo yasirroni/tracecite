@@ -284,17 +284,26 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
             fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
             provenance[chunk_id].add(retrieval)
 
-    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)[:limit]
+    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)
 
     results = []
-    for position, chunk_id in enumerate(ranked_chunk_ids, start=1):
+    # Byte-identical files yield identical chunks; report each passage once,
+    # under its best-ranked path, before applying the limit.
+    by_identity: dict[tuple[str, str, str], dict] = {}
+    for chunk_id in ranked_chunk_ids:
         chunk = conn.execute(
             "SELECT c.*, s.path AS source_path, s.source_type, s.sha256 "
             "FROM chunks c JOIN sources s USING (source_pk) WHERE c.chunk_id = ?",
             (chunk_id,),
         ).fetchone()
+        identity = (chunk["sha256"], chunk["logical_key"], chunk["lexical_hash"])
+        if identity in by_identity:
+            by_identity[identity]["duplicate_paths"].append(chunk["source_path"])
+            continue
+        if len(results) == limit:
+            continue
         entry = {
-            "rank": position,
+            "rank": len(results) + 1,
             "source_path": chunk["source_path"],
             "source_type": chunk["source_type"],
             "source_sha256": chunk["sha256"],
@@ -318,10 +327,14 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
             "content_type": chunk["content_type"],
             "provenance": sorted(provenance[chunk_id]),
             "fused_score": fused_scores[chunk_id],
+            "duplicate_paths": [],
         }
         if chunk["source_type"] == "pdf" and chunk["physical_page"] is not None:
             entry["pdf_link"] = f"{chunk['source_path']}#page={chunk['physical_page']}"
+        by_identity[identity] = entry
         results.append(entry)
+    for entry in results:
+        entry["duplicate_paths"].sort()
     return results
 
 

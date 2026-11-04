@@ -325,3 +325,28 @@ def test_lexical_search_finds_cjk_text_inside_unspaced_runs(
         assert lexical_paths("需要 増加") == ["ja.md"]
         assert lexical_paths("電力需要", source_types=["pdf"]) == []
         assert lexical_paths("風力発電") == []
+
+
+def test_search_collapses_hits_from_byte_identical_files_before_the_limit(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    copy = "# Storage\n\nBattery storage grows. Battery storage costs fall.\n"
+    build_markdown(corpus_dir / "a" / "storage.md", copy)
+    build_markdown(corpus_dir / "b" / "storage.md", copy)
+    build_markdown(corpus_dir / "other.md", "# Other\n\nOne battery mention.\n")
+    write_manifest(
+        manifest_path,
+        {path: path for path in ("a/storage.md", "b/storage.md", "other.md")},
+    )
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+
+    with closing(schema.connect(database_path)) as conn:
+        for embedder in (None, make_embedder()):
+            results = hybrid_search(conn, "battery", 2, 50, 50, embedder)
+            assert [result["source_path"] for result in results] == [
+                "a/storage.md",
+                "other.md",
+            ]
+            assert [result["rank"] for result in results] == [1, 2]
+            assert results[0]["duplicate_paths"] == ["b/storage.md"]
+            assert results[1]["duplicate_paths"] == []
