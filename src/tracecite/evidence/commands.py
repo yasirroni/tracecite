@@ -665,16 +665,13 @@ def cmd_prune(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    if not prune_all and args.root is None:
+    # A missing root would make every selected source look deleted.
+    if not prune_all and (args.root is None or not Path(args.root).is_dir()):
         print(
-            "prune requires --root (or a profile root) to find selected sources "
-            "whose files no longer exist; use --all to prune every source",
+            "prune requires --root (or a profile root) to be an existing directory, "
+            f"got {args.root}; use --all to prune every source",
             file=sys.stderr,
         )
-        return 2
-    # A missing root would make every selected source look deleted.
-    if not prune_all and not Path(args.root).is_dir():
-        print(f"prune root is not a directory: {args.root}", file=sys.stderr)
         return 2
     conn = _connect(args.database, read_only=True)
     if conn is None:

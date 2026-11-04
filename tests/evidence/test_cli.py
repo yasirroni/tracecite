@@ -10,6 +10,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pymupdf
+import pytest
 from conftest import (
     FakeEmbedder,
     build_pdf,
@@ -841,16 +842,28 @@ def test_prune_removes_selected_sources_whose_files_are_gone(
     assert _source_paths(database_path) == []
 
 
-def test_prune_requires_a_root_unless_pruning_everything(tmp_path, capsys):
+@pytest.mark.parametrize("root", [None, "unmounted"])
+def test_prune_requires_an_existing_root_unless_pruning_everything(
+    tmp_path, capsys, root
+):
     database_path = tmp_path / "tracecite.sqlite"
     _insert_source(database_path, "docs/one.md")
     manifest_path = _write_manifest(
         tmp_path / "manifest.toml",
         'schema_version = 1\n[[include]]\nglob = "docs/*.md"\n',
     )
+    root_args = [] if root is None else ["--root", str(tmp_path / root)]
 
     exit_code = cli.main(
-        ["prune", "--database", str(database_path), "--manifest", str(manifest_path)]
+        [
+            "prune",
+            *root_args,
+            "--database",
+            str(database_path),
+            "--manifest",
+            str(manifest_path),
+            "--apply",
+        ]
     )
 
     assert exit_code == 2
@@ -1125,29 +1138,3 @@ def test_cli_search_lexical_only_skips_the_embedding_model(
     assert exit_code == 0
     assert [result["source_path"] for result in results] == ["doc.pdf"]
     assert results[0]["provenance"] == ["lexical"]
-
-
-def test_prune_rejects_a_root_that_is_not_a_directory(tmp_path, capsys):
-    database_path = tmp_path / "tracecite.sqlite"
-    _insert_source(database_path, "docs/one.md")
-    manifest_path = _write_manifest(
-        tmp_path / "manifest.toml",
-        'schema_version = 1\n[[include]]\nglob = "docs/*.md"\n',
-    )
-
-    exit_code = cli.main(
-        [
-            "prune",
-            "--root",
-            str(tmp_path / "unmounted"),
-            "--database",
-            str(database_path),
-            "--manifest",
-            str(manifest_path),
-            "--apply",
-        ]
-    )
-
-    assert exit_code == 2
-    assert "unmounted" in capsys.readouterr().err
-    assert _source_paths(database_path) == ["docs/one.md"]
