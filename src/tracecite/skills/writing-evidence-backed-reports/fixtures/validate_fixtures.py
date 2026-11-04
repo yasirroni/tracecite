@@ -64,7 +64,7 @@ def write_pdf(path: Path, pages: list[list[str]]) -> None:
         document.close()
 
 
-def prepare_runtime(tmp: Path) -> tuple[Path, Path, Path, Path]:
+def prepare_runtime(tmp: Path) -> tuple[Path, Path, Path, Path, Path, Path]:
     sources = tmp / "sources"
     reports = tmp / "reports"
     database = tmp / "runtime" / "tracecite.sqlite"

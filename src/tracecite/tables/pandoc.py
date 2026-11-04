@@ -249,7 +249,7 @@ def _walk_nodes(value: Any) -> Iterable[dict[str, Any]]:
 
 def _nested_block_lists(node: dict[str, Any]) -> Iterable[list[dict[str, Any]]]:
     kind = node.get("t")
-    value = node.get("c")
+    value: Any = node.get("c")
     if kind == "Div" and isinstance(value, list) and len(value) == 2:
         yield value[1]
     elif kind in {"BlockQuote"} and isinstance(value, list):
@@ -429,7 +429,7 @@ def _blocks_text(blocks: Any) -> str:
         if not isinstance(block, dict):
             continue
         kind = block.get("t")
-        value = block.get("c")
+        value: Any = block.get("c")
         if kind in {"Plain", "Para", "Header"}:
             inlines = value if kind != "Header" else value[2]
             parts.append(_inlines_text(inlines))
@@ -463,7 +463,7 @@ def _inlines_text(inlines: Any) -> str:
         if not isinstance(inline, dict):
             continue
         kind = inline.get("t")
-        value = inline.get("c")
+        value: Any = inline.get("c")
         if kind == "Str":
             parts.append(str(value))
         elif kind in {"Space", "SoftBreak", "LineBreak"}:

@@ -26,6 +26,7 @@ from ._text import (
 )
 from .models import (
     NormalisedTable,
+    SourceFormat,
     TableContext,
     TableDiagnostic,
     TableNormalisationError,
@@ -95,7 +96,7 @@ def normalise_parsed_table(
     raw_source: str,
     context: TableContext,
     metadata: Mapping[str, Any] | None = None,
-    source_format: str = "pandoc-markdown",
+    source_format: SourceFormat = "pandoc-markdown",
     extra_diagnostics: Iterable[TableDiagnostic] = (),
     strict: bool = False,
 ) -> NormalisedTable:
@@ -179,7 +180,7 @@ def normalise_parsed_table(
         headers=tuple(headers),
         rows=tuple(tuple(row) for row in rows),
         raw_source=raw_source,
-        source_format=source_format,  # type: ignore[arg-type]
+        source_format=source_format,
         canonical_markdown=canonical,
         normalised_text=normalised_text,
         row_ids=tuple(row_ids),

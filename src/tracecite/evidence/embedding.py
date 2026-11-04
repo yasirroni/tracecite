@@ -3,9 +3,9 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class Embedder(Protocol):
@@ -13,7 +13,7 @@ class Embedder(Protocol):
 
 
 @contextlib.contextmanager
-def _quiet_model_loading() -> Iterator[None]:
+def _quiet_model_loading() -> Generator[None, None, None]:
     """Hide the warnings and progress bars the model libraries print on every load.
 
     Logger levels and progress-bar settings are restored afterwards, so other
@@ -77,7 +77,10 @@ class EmbeddingModel:
                     local_files_only=True,
                 )
                 return self._model
-            kwargs = {"revision": self.revision, "cache_folder": str(self.cache_dir)}
+            kwargs: dict[str, Any] = {
+                "revision": self.revision,
+                "cache_folder": str(self.cache_dir),
+            }
             try:
                 self._model = SentenceTransformer(
                     self.model_name, local_files_only=True, **kwargs

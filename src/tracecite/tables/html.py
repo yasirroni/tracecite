@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
+from bs4.element import PageElement
 
 from ._text import collapse_space, escape_pipe_cell
 from .models import (
@@ -255,8 +256,8 @@ def _direct_cells(row: Tag) -> list[Tag]:
 
 def _span(cell: Tag, attribute: str) -> int:
     try:
-        return max(1, int(cell.get(attribute, 1)))
-    except (TypeError, ValueError):
+        return max(1, int(str(cell.get(attribute) or 1)))
+    except ValueError:
         return 1
 
 
@@ -272,11 +273,9 @@ def _combine_header_rows(rows: list[list[str]], width: int) -> list[str]:
     return headers
 
 
-def _render_html(node: Tag | NavigableString | None) -> str:
+def _render_html(node: PageElement | None) -> str:
     if node is None:
         return ""
-    if isinstance(node, NavigableString):
-        return collapse_space(str(node))
     if not isinstance(node, Tag):
         return collapse_space(str(node))
     if node.name == "table":

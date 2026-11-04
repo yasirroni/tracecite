@@ -61,7 +61,7 @@ def _looks_like_heading(text: str) -> bool:
 
 
 def _blocks_for_page(page: pymupdf.Page) -> list[dict]:
-    raw_blocks = page.get_text("blocks")
+    raw_blocks = page.get_text_blocks(flags=pymupdf.TEXTFLAGS_BLOCKS)
     text_blocks = [b for b in raw_blocks if b[6] == 0 and b[4].strip()]
     text_blocks.sort(key=lambda b: (round(b[1], 1), round(b[0], 1)))
 
@@ -136,7 +136,7 @@ def _pymupdf_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
             dpi=dpi,
             full=True,
         )
-        return page.get_text("text", textpage=textpage).strip()
+        return textpage.extractText().strip()
     except (RuntimeError, OSError):
         # PyMuPDF's OCR path raises if Tesseract/tessdata is not resolvable
         # in this environment; treat that as "no text", not a hard failure,
@@ -189,9 +189,9 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
     units: list[ParsedChunkUnit] = []
 
     with pymupdf.open(path) as document:
-        for index, page in enumerate(document):
+        for index, page in enumerate(document.pages()):
             physical_page = index + 1
-            blocks = _blocks_for_page(page)
+            blocks: list[dict] = _blocks_for_page(page)
             page_text = "\n\n".join(block["text"] for block in blocks)
             extraction_method = NAME
 
