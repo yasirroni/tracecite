@@ -1100,3 +1100,28 @@ def test_sync_and_page_flag_pages_without_text_when_ocr_is_unavailable(
         err = capsys.readouterr().err
         assert exit_code == 0
         assert ("no extracted text" in err) is expect_note
+
+
+def test_cli_search_lexical_only_skips_the_embedding_model(
+    tmp_path, capsys, monkeypatch
+):
+    corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
+    (corpus_dir / "other.md").write_text("# Other\n\nAn unrelated note.\n", "utf-8")
+    manifest_path.write_text(
+        'schema_version = 1\n[[include]]\nglob = "*"\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
+    capsys.readouterr()
+
+    def no_model(*args, **kwargs):
+        raise AssertionError("lexical-only search must not load the model")
+
+    monkeypatch.setattr(sync_module, "EmbeddingModel", no_model)
+    exit_code = cli.main(
+        ["search", "--database", str(database_path), "renewable", "--lexical-only"]
+    )
+    results = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert [result["source_path"] for result in results] == ["doc.pdf"]
+    assert results[0]["provenance"] == ["lexical"]

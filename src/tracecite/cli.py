@@ -105,6 +105,11 @@ def _add_evidence_parsers(
         default=None,
         help="Restrict results to one or more source types (repeatable).",
     )
+    search_parser.add_argument(
+        "--lexical-only",
+        action="store_true",
+        help="Use only full-text search and skip loading the embedding model.",
+    )
 
     page_parser = subparsers.add_parser(
         "page", help="Retrieve retained text for one physical page or selector."

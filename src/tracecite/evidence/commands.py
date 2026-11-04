@@ -160,12 +160,25 @@ def active_embedding_model(conn, model_cache_dir: Path):
 def hybrid_search(
     conn, query, limit, fts_limit, vector_limit, embedder, *, source_types=None
 ):
-    from . import vector_backend
+    """Rank chunks by fusing lexical and vector retrieval.
 
+    With ``embedder=None`` only lexical retrieval runs.
+    """
     if not query.strip():
         raise ValueError("search query is empty")
     fts_rows = _fts_rows(conn, query, fts_limit, source_types)
     fts_rank = {row["chunk_id"]: rank for rank, row in enumerate(fts_rows, start=1)}
+    vector_rank = (
+        {}
+        if embedder is None
+        else _vector_rank(conn, query, vector_limit, embedder, source_types)
+    )
+    return _ranked_results(conn, limit, fts_rank, vector_rank)
+
+
+def _vector_rank(conn, query, vector_limit, embedder, source_types) -> dict[str, int]:
+    from . import vector_backend
+
     query_vector = embedder.embed([query])[0]
 
     active_model_id = schema.load_config(conn).embedding_model_id
@@ -209,7 +222,10 @@ def hybrid_search(
             for chunk_id in embedding_to_chunks.get(match.embedding_id, []):
                 rank += 1
                 vector_rank.setdefault(chunk_id, rank)
+    return vector_rank
 
+
+def _ranked_results(conn, limit, fts_rank, vector_rank):
     fused_scores: dict[str, float] = defaultdict(float)
     provenance: dict[str, set[str]] = defaultdict(set)
     for retrieval, ranks in (("lexical", fts_rank), ("vector", vector_rank)):
@@ -275,7 +291,9 @@ def cmd_search(args: argparse.Namespace) -> int:
             args.limit,
             args.fts_limit,
             args.vector_limit,
-            active_embedding_model(conn, model_cache_dir),
+            None
+            if args.lexical_only
+            else active_embedding_model(conn, model_cache_dir),
             source_types=args.source_types,
         )
         source_pks = {
