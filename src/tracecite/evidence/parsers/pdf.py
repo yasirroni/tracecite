@@ -126,11 +126,8 @@ def _nearby_text_for_bbox(
     return "\n".join(text for _, text in matches)
 
 
-def _pymupdf_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str | None:
-    """First OCR fallback stage: PyMuPDF's own built-in OCR support.
-
-    Returns ``None`` when the OCR engine cannot run.
-    """
+def _pymupdf_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
+    """First OCR fallback stage: PyMuPDF's own built-in OCR support."""
 
     try:
         textpage = page.get_textpage_ocr(
@@ -142,16 +139,13 @@ def _pymupdf_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str | None:
         return page.get_text("text", textpage=textpage).strip()
     except (RuntimeError, OSError):
         # PyMuPDF's OCR path raises if Tesseract/tessdata is not resolvable
-        # in this environment; this is not a hard failure, so the caller can
-        # still try the Tesseract-CLI stage.
-        return None
+        # in this environment; treat that as "no text", not a hard failure,
+        # so the caller can still try the Tesseract-CLI stage.
+        return ""
 
 
-def _tesseract_cli_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str | None:
-    """Second OCR fallback stage: run the Tesseract CLI on a rendered page image.
-
-    Returns ``None`` when the CLI is missing or fails.
-    """
+def _tesseract_cli_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str:
+    """Second OCR fallback stage: run the Tesseract CLI on a rendered page image."""
 
     pixmap = page.get_pixmap(dpi=dpi)
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -165,31 +159,25 @@ def _tesseract_cli_ocr_text(page: pymupdf.Page, *, lang: str, dpi: int) -> str |
                 check=True,
             )
         except (OSError, subprocess.CalledProcessError):
-            return None
+            return ""
     return result.stdout.strip()
 
 
-def _ocr_fallback_text(
-    page: pymupdf.Page, *, lang: str, dpi: int
-) -> tuple[str, str] | None:
+def _ocr_fallback_text(page: pymupdf.Page, *, lang: str, dpi: int) -> tuple[str, str]:
     """Two-stage OCR fallback for a page whose normal text extraction came
     back effectively empty: try PyMuPDF's built-in OCR first, and only if
     that still returns too little text, fall back to the Tesseract CLI.
 
     Returns ``(text, extraction_method)`` so the caller can record which
-    stage (if any) actually produced usable text, or ``None`` when neither
-    stage could run.
+    stage (if any) actually produced usable text.
     """
 
     pymupdf_text = _pymupdf_ocr_text(page, lang=lang, dpi=dpi)
-    if pymupdf_text is not None and len(pymupdf_text) >= MIN_EXTRACTED_TEXT_CHARS:
+    if len(pymupdf_text) >= MIN_EXTRACTED_TEXT_CHARS:
         return pymupdf_text, f"{NAME}-ocr-pymupdf"
 
     tesseract_text = _tesseract_cli_ocr_text(page, lang=lang, dpi=dpi)
-    if pymupdf_text is None and tesseract_text is None:
-        return None
-    pymupdf_text = pymupdf_text or ""
-    if len(tesseract_text or "") > len(pymupdf_text):
+    if len(tesseract_text) > len(pymupdf_text):
         return tesseract_text, f"{NAME}-ocr-tesseract-cli"
     return pymupdf_text, f"{NAME}-ocr-pymupdf"
 
@@ -199,7 +187,6 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
     ocr_lang = config.get("ocr_lang", DEFAULT_OCR_LANG)
     pages: list[ParsedPage] = []
     units: list[ParsedChunkUnit] = []
-    ocr_unavailable = False
 
     with pymupdf.open(path) as document:
         for index, page in enumerate(document):
@@ -211,9 +198,7 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
             if len(page_text.strip()) < MIN_EXTRACTED_TEXT_CHARS:
                 ocr_text, ocr_method = _ocr_fallback_text(
                     page, lang=ocr_lang, dpi=OCR_DPI
-                ) or ("", None)
-                if ocr_method is None and not page_text.strip():
-                    ocr_unavailable = True
+                )
                 ocr_text = ocr_text.strip()
                 if len(ocr_text) > len(page_text.strip()):
                     page_rect = page.rect
@@ -252,7 +237,7 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
             )
             units.extend(_block_units(physical_page, blocks))
 
-    return ParseResult(pages=pages, units=units, ocr_unavailable=ocr_unavailable)
+    return ParseResult(pages=pages, units=units)
 
 
 def _block_units(physical_page: int, blocks: list[dict]) -> list[ParsedChunkUnit]:

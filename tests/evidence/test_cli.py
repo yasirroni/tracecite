@@ -1056,9 +1056,7 @@ def test_verify_quote_reports_source_state_and_keeps_checking_indexed_text(
     )
 
 
-def test_sync_and_page_flag_pages_without_text_when_ocr_is_unavailable(
-    tmp_path, capsys, monkeypatch
-):
+def test_sync_and_page_flag_pages_without_text(tmp_path, capsys, monkeypatch):
     def no_tesseract(tessdata=None):
         raise RuntimeError("No tessdata specified and Tesseract is not installed")
 
@@ -1091,12 +1089,11 @@ def test_sync_and_page_flag_pages_without_text_when_ocr_is_unavailable(
     assert exit_code == 0
     assert payload["status"] == "ok"
     assert payload["pages_without_text"] == {"scan.pdf": [2]}
-    assert payload["ocr_unavailable"] is True
 
     assert _sync(corpus_dir, manifest_path, tmp_path / "second.sqlite") == 0
     out = capsys.readouterr().out
     assert "pages-without-text: 1\n  scan.pdf: 2\n" in out
-    assert "OCR" in out
+    assert "Tesseract" in out
 
     for page, expect_note in (("2", True), ("1", False)):
         exit_code = cli.main(

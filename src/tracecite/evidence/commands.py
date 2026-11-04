@@ -105,10 +105,10 @@ def _print_sync_report(report) -> None:
         print(f"{heading}: {len(items)}")
         for item in items:
             print(f"  {item}")
-    if report.ocr_unavailable:
+    if report.pages_without_text:
         print(
-            "OCR was unavailable, so scanned pages were stored without text; "
-            "install Tesseract and re-run sync with --full to extract it"
+            "  scanned pages need Tesseract for OCR; "
+            "install it and re-run sync with --full to extract their text"
         )
     print(f"unchanged: {len(report.sources_unchanged)}")
     print(
