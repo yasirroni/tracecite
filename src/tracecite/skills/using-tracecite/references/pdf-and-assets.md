@@ -42,10 +42,7 @@ single and double quotes, and folds case, against the page text normalised the s
 otherwise `"not-found"`. A changed word never matches. An empty quotation is `"structural-error"`.
 Only `exact` and `normalised` return process status `0`; all other verification states return
 non-zero. This is intentionally independent of chunk boundaries — a quotation may straddle two
-chunks. The page argument also accepts a contiguous range such as `4-5`; the pages' text is joined
-in order, so a quotation may continue across a page break. The JSON result adds `pages` and
-`source_state` (`current`, `changed`, or `missing` under the root); verification always uses the
-indexed text and warns on stderr when the file changed since sync.
+chunks.
 
 ## Report verification
 

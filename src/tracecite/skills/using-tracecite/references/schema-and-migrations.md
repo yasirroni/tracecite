@@ -49,4 +49,4 @@ At a high level the schema stores:
 - `chunks`, FTS5 content, embeddings, sqlite-vec vectors, and chunk-to-embedding links;
 - generated PDF assets with stored SHA-256 hashes.
 
-Use `tracecite doctor` to verify relational consistency, vector/FTS state, asset existence, and asset hashes after syncs or restores. With `--root`, it also warns about indexed sources whose files changed or disappeared; those warnings are not integrity issues.
+Use `tracecite doctor` to verify relational consistency, vector/FTS state, asset existence, and asset hashes after syncs or restores.
