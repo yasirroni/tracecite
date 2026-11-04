@@ -15,6 +15,10 @@ from . import schema
 RRF_K = 60
 
 
+def _json(value, indent: int | None = None) -> str:
+    return json.dumps(value, indent=indent, ensure_ascii=False)
+
+
 def _require(value, flag: str):
     if value is None:
         raise SystemExit(f"error: {flag} is required for this command")
@@ -64,7 +68,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         only_relative_paths=only_paths,
     )
     if args.json:
-        print(json.dumps(dataclasses.asdict(report), indent=2, ensure_ascii=False))
+        print(_json(dataclasses.asdict(report), indent=2))
     else:
         _print_sync_report(report)
     if report.missing_explicit_paths:
@@ -373,7 +377,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 if page is not None
                 else (None, [])
             )
-        print(json.dumps(results, indent=2, ensure_ascii=False))
+        print(_json(results, indent=2))
     except PageAssetMissingError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -403,12 +407,7 @@ def cmd_page(args: argparse.Namespace) -> int:
         try:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
-            print(
-                json.dumps(
-                    {"error": "path-error", "detail": str(exc)}, ensure_ascii=False
-                ),
-                file=sys.stderr,
-            )
+            print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
             return 2
         source_row = source_row_for_path(conn, source_path)
         if source_row is None:
@@ -456,7 +455,7 @@ def cmd_page(args: argparse.Namespace) -> int:
             except PageOutputError as exc:
                 print(str(exc), file=sys.stderr)
                 return 2
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            print(_json(payload, indent=2))
         elif len(selected_pages) == 1:
             print(selected_rows[selected_pages[0]]["text"])
         else:
@@ -494,14 +493,13 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         print(
-            json.dumps(
+            _json(
                 {
                     "pdf_path": str(result.pdf_path),
                     "manifest_path": str(result.manifest_path),
                     "normalized_pages": result.normalized_pages,
                 },
                 indent=2,
-                ensure_ascii=False,
             )
         )
     finally:
@@ -532,12 +530,7 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
         try:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
-            print(
-                json.dumps(
-                    {"error": "path-error", "detail": str(exc)}, ensure_ascii=False
-                ),
-                file=sys.stderr,
-            )
+            print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
             return 2
         source_row = source_row_for_path(conn, source_path)
         pages: list[int] = []
@@ -582,10 +575,7 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             else:
                 result = verify.verify_quote_pages(conn, source_path, pages, args.quote)
         print(
-            json.dumps(
-                {**_quote_json(result), "pages": pages, "source_state": source_state},
-                ensure_ascii=False,
-            )
+            _json({**_quote_json(result), "pages": pages, "source_state": source_state})
         )
     finally:
         conn.close()
@@ -618,7 +608,7 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
             source_links_root=args.source_links_root,
         )
         print(
-            json.dumps(
+            _json(
                 {
                     "citation_issues": [
                         issue.__dict__ for issue in result.citation_issues
@@ -628,7 +618,6 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
                     "ok": result.ok,
                 },
                 indent=2,
-                ensure_ascii=False,
             )
         )
     finally:
@@ -743,7 +732,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
         if args.apply:
             status = "applied-with-cleanup-warnings" if leaks else "applied"
         print(
-            json.dumps(
+            _json(
                 {
                     "status": status,
                     "selected_count": len(selected),
@@ -753,8 +742,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
                     "applied": bool(args.apply),
                     "database_committed": bool(args.apply),
                     "cleanup_warnings": leaks,
-                },
-                ensure_ascii=False,
+                }
             )
         )
         return 3 if args.apply and leaks else 0
