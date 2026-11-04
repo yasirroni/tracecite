@@ -254,7 +254,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 if page is not None
                 else (None, [])
             )
-        print(json.dumps(results, indent=2))
+        print(json.dumps(results, indent=2, ensure_ascii=False))
     except PageAssetMissingError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -285,7 +285,10 @@ def cmd_page(args: argparse.Namespace) -> int:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
             print(
-                json.dumps({"error": "path-error", "detail": str(exc)}), file=sys.stderr
+                json.dumps(
+                    {"error": "path-error", "detail": str(exc)}, ensure_ascii=False
+                ),
+                file=sys.stderr,
             )
             return 2
         source_row = source_row_for_path(conn, source_path)
@@ -327,7 +330,7 @@ def cmd_page(args: argparse.Namespace) -> int:
             except PageOutputError as exc:
                 print(str(exc), file=sys.stderr)
                 return 2
-            print(json.dumps(payload, indent=2))
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
         elif len(selected_pages) == 1:
             print(selected_rows[selected_pages[0]]["text"])
         else:
@@ -372,6 +375,7 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
                     "normalized_pages": result.normalized_pages,
                 },
                 indent=2,
+                ensure_ascii=False,
             )
         )
     finally:
@@ -393,14 +397,17 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             source_path = normalise_source_path(root, args.source_path)
         except PathAuthorityError as exc:
             print(
-                json.dumps({"error": "path-error", "detail": str(exc)}), file=sys.stderr
+                json.dumps(
+                    {"error": "path-error", "detail": str(exc)}, ensure_ascii=False
+                ),
+                file=sys.stderr,
             )
             return 2
         if source_row_for_path(conn, source_path) is None:
             result = verify.QuoteVerification("not-found", args.page, args.quote)
         else:
             result = verify.verify_quote(conn, source_path, args.page, args.quote)
-        print(json.dumps(_quote_json(result)))
+        print(json.dumps(_quote_json(result), ensure_ascii=False))
     finally:
         conn.close()
     return 0 if result.status in {"exact", "normalised"} else 1
@@ -442,6 +449,7 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
                     "ok": result.ok,
                 },
                 indent=2,
+                ensure_ascii=False,
             )
         )
     finally:
@@ -526,7 +534,8 @@ def cmd_prune(args: argparse.Namespace) -> int:
                     "applied": bool(args.apply),
                     "database_committed": bool(args.apply),
                     "cleanup_warnings": leaks,
-                }
+                },
+                ensure_ascii=False,
             )
         )
         return 3 if args.apply and leaks else 0

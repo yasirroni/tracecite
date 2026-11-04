@@ -629,3 +629,27 @@ def test_commands_report_unreadable_database_in_one_line(tmp_path, capsys, monke
             assert exit_code == 2, command
             assert str(bad_database) in err
             assert len(err.strip().splitlines()) == 1
+
+
+def test_cli_json_output_keeps_non_ascii_characters(tmp_path, capsys, monkeypatch):
+    corpus_dir = tmp_path / "sources"
+    corpus_dir.mkdir()
+    build_pdf(corpus_dir / "doc.pdf", [["Übersicht", "Die Übersicht nennt Köln."]])
+    manifest_path = write_manifest(tmp_path / "manifest.toml", {"doc.pdf": "doc.pdf"})
+    database_path = tmp_path / "runtime" / "knowledge.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
+    capsys.readouterr()
+
+    for command in (
+        ["search", "Köln"],
+        ["page", "doc.pdf", "1", "--format", "json"],
+        ["verify", "quote", "doc.pdf", "1", "Die Übersicht nennt Köln."],
+    ):
+        exit_code = cli.main(
+            [*command, "--root", str(corpus_dir), "--database", str(database_path)]
+        )
+        out = capsys.readouterr().out
+        assert exit_code == 0, command
+        assert "Köln" in out
+        assert "\\u00f6" not in out

@@ -437,7 +437,7 @@ def _docs_search(args: argparse.Namespace) -> int:
         fts_limit=args.fts_limit,
         vector_limit=args.vector_limit,
     )
-    print(json.dumps(results, indent=2))
+    print(json.dumps(results, indent=2, ensure_ascii=False))
     return 0
 
 
