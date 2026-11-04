@@ -324,8 +324,8 @@ def test_cli_sync_prints_structured_missing_and_unmatched_warnings(
     exit_code = _sync(root, manifest_path, database_path)
     assert exit_code == 0
     out = capsys.readouterr().out
-    assert "selected-missing: ['missing.pdf']" in out
-    assert "unmatched-globs: ['reports/*.md']" in out
+    assert "selected-missing: 1\n  missing.pdf\n" in out
+    assert "unmatched-globs: 1\n  reports/*.md\n" in out
 
 
 def test_prune_apply_honours_layered_local_exclusion(tmp_path, capsys):
@@ -653,3 +653,38 @@ def test_cli_json_output_keeps_non_ascii_characters(tmp_path, capsys, monkeypatc
         assert exit_code == 0, command
         assert "Köln" in out
         assert "\\u00f6" not in out
+
+
+def test_cli_sync_lists_items_one_per_line_and_supports_json(
+    tmp_path, capsys, monkeypatch
+):
+    corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
+    (corpus_dir / "notes.md").write_text("# Notes\n\nA short note.\n", encoding="utf-8")
+    manifest_path.write_text(
+        'schema_version = 1\n[[include]]\nglob = "*"\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+
+    assert _sync(corpus_dir, manifest_path, database_path) == 0
+    out = capsys.readouterr().out
+    assert "added: 2\n  doc.pdf\n  notes.md\n" in out
+    assert "reparsed: 0\n" in out
+    assert "[" not in out and "(" not in out
+
+    exit_code = cli.main(
+        [
+            "sync",
+            "--root",
+            str(corpus_dir),
+            "--manifest",
+            str(manifest_path),
+            "--database",
+            str(database_path),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["status"] == "ok"
+    assert payload["sources_added"] == []
+    assert payload["sources_unchanged"] == ["doc.pdf", "notes.md"]

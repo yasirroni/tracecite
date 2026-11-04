@@ -87,6 +87,9 @@ def _add_evidence_parsers(
     sync_parser.add_argument(
         "--no-assets", action="store_true", help="Skip PDF page render/crop generation."
     )
+    sync_parser.add_argument(
+        "--json", action="store_true", help="Print the sync report as JSON."
+    )
 
     search_parser = subparsers.add_parser("search", help="Hybrid FTS + vector search.")
     _add_evidence_common_args(search_parser)

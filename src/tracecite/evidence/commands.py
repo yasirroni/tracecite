@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sqlite3
 import sys
@@ -61,22 +62,34 @@ def cmd_sync(args: argparse.Namespace) -> int:
         model_cache_dir=args.model_cache_dir,
         only_relative_paths=only_paths,
     )
+    if args.json:
+        print(json.dumps(dataclasses.asdict(report), indent=2, ensure_ascii=False))
+    else:
+        _print_sync_report(report)
+    return 0 if report.status == "ok" else 1
+
+
+def _print_sync_report(report) -> None:
     print(f"status: {report.status}")
-    print(f"added: {report.sources_added}")
-    print(f"reparsed: {report.sources_reparsed}")
-    print(f"rechunked: {report.sources_rechunked}")
-    print(f"renamed: {report.sources_renamed}")
-    print(f"selected-missing: {report.selected_missing_paths}")
-    print(f"unmatched-globs: {report.unmatched_globs}")
-    print(f"indexed-but-unselected: {report.indexed_unselected_paths}")
-    print(f"cleanup-warnings: {report.cleanup_warnings}")
-    print(f"unchanged: {len(report.sources_unchanged)} source(s)")
+    for heading, items in (
+        ("added", report.sources_added),
+        ("reparsed", report.sources_reparsed),
+        ("rechunked", report.sources_rechunked),
+        ("renamed", [f"{old} -> {new}" for old, new in report.sources_renamed]),
+        ("selected-missing", report.selected_missing_paths),
+        ("unmatched-globs", report.unmatched_globs),
+        ("indexed-but-unselected", report.indexed_unselected_paths),
+        ("cleanup-warnings", report.cleanup_warnings),
+    ):
+        print(f"{heading}: {len(items)}")
+        for item in items:
+            print(f"  {item}")
+    print(f"unchanged: {len(report.sources_unchanged)}")
     print(
         f"chunks added={report.chunks_added} updated={report.chunks_updated} "
         f"deleted={report.chunks_deleted}"
     )
     print(f"embeddings generated: {report.embeddings_generated}")
-    return 0 if report.status == "ok" else 1
 
 
 def _fts_rows(conn, query, fts_limit, source_types=None):
