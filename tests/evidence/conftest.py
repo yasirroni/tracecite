@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 
 import pymupdf
@@ -16,7 +17,7 @@ class FakeEmbedder:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
         self.calls.append(list(texts))
         vectors: list[list[float]] = []
         for text in texts:

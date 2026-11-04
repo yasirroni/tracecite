@@ -26,6 +26,7 @@ def _insert_embedding(
         "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
         (model_id, semantic_hash, schema.utc_now()),
     )
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 

@@ -176,7 +176,7 @@ def test_local_precedence_is_independent_of_declaration_order_and_origins_are_im
         assert rules.explicit_paths == ("same.md",)
         assert rules.origins[("source", "same.md")] == "local"
         with pytest.raises(TypeError):
-            rules.origins[("source", "same.md")] = "default"
+            rules.origins[("source", "same.md")] = "default"  # type: ignore
 
     for text in (
         'schema_version = 1\n[[source]]\npath = "same.md"\norigin = "default"\n[[source]]\npath = "./same.md"\norigin = "local"\n',

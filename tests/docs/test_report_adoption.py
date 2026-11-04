@@ -348,11 +348,10 @@ def test_publish_static_is_isolated_and_matches_committed_public_snapshot(
     assert not (output_dir / "docs").exists()
 
 
+@pytest.mark.skipif(shutil.which("quarto") is None, reason="quarto not installed")
 def test_quarto_rendered_html_contains_callout_and_citation_links(
     tmp_path: Path,
 ) -> None:
-    if shutil.which("quarto") is None:
-        pytest.skip("quarto not installed")
     root = _copy_example(tmp_path)
 
     subprocess.run(

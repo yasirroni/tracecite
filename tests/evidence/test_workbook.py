@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import zipfile
 from contextlib import closing
 from pathlib import Path
-from types import SimpleNamespace
 
 from conftest import build_markdown, write_manifest
 
@@ -163,7 +163,7 @@ def test_page_command_rejects_workbook_sheet_indexes_as_pdf_pages(
     )
 
     status = cmd_page(
-        SimpleNamespace(
+        argparse.Namespace(
             database=database_path,
             root=corpus_dir,
             source_path=workbook_path.name,

@@ -31,7 +31,7 @@ class FakeEmbedder:
         return vectors
 
 
-def _fixture(tmp_path: Path, *, hook: list[str] | None = None) -> tuple[Path, Path]:
+def _fixture(tmp_path: Path, *, hook: bool = False) -> tuple[Path, Path]:
     (tmp_path / "docs/authored").mkdir(parents=True)
     retained = tmp_path / "docs/retained"
     retained.mkdir()

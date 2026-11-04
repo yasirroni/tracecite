@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -58,7 +59,7 @@ class _FailingVecConnection:
 def test_schema_creation_rolls_back_partial_ddl_after_vec0_failure(database_path: Path):
     with closing(schema.connect(database_path)) as conn:
         with pytest.raises(sqlite3.DatabaseError, match="injected vec0"):
-            schema.ensure_schema(_FailingVecConnection(conn))
+            schema.ensure_schema(cast(sqlite3.Connection, _FailingVecConnection(conn)))
         assert _tracecite_objects(conn) == []
         schema.ensure_schema(conn)
         assert "embedding_vectors" in _tracecite_objects(conn)

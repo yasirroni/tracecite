@@ -246,7 +246,7 @@ def test_page_offset_shift_causes_zero_embedding_calls(
 
 
 def test_unambiguous_rename_zero_parse_and_embed_calls(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
@@ -256,7 +256,6 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
     one_pdf_corpus.rename(renamed_path)
     write_manifest(manifest_path, {"doc-renamed.pdf": "doc-renamed.pdf"})
 
-    import tracecite.evidence.sync as sync_mod
     from tracecite.evidence.parsers import pdf as pdf_parser
 
     original_parse = pdf_parser.parse
@@ -266,13 +265,10 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
         parse_calls.append(args)
         return original_parse(*args, **kwargs)
 
-    sync_mod.pdf_parser.parse = _track
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=embedder
-        )
-    finally:
-        sync_mod.pdf_parser.parse = original_parse
+    monkeypatch.setattr(pdf_parser, "parse", _track)
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=embedder
+    )
 
     assert report.sources_renamed == [("doc.pdf", "doc-renamed.pdf")]
     assert parse_calls == []
