@@ -451,7 +451,7 @@ def test_changed_content_path_move_retains_old_row_until_prune(
             == old_embedding_count + 1
         )
         plan = sync_module.plan_prune(conn, selected_paths=["new.pdf"])
-        assert plan.paths == ("old.pdf",)
+        assert plan == ("old.pdf",)
         assert sync_module.apply_prune(conn, database_path, plan) == []
         assert {
             row["path"] for row in conn.execute("SELECT path FROM sources").fetchall()

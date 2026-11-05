@@ -771,8 +771,8 @@ def cmd_prune(args: argparse.Namespace) -> int:
                 {
                     "status": status,
                     "selected_count": len(selected),
-                    "planned_count": len(plan.paths),
-                    "paths": list(plan.paths),
+                    "planned_count": len(plan),
+                    "paths": list(plan),
                     "missing_paths": missing,
                     "applied": bool(args.apply),
                     "database_committed": bool(args.apply),

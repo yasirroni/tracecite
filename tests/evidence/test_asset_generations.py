@@ -175,17 +175,13 @@ def test_new_source_staging_rename_failure_rolls_back_and_discards_generation(
     )
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
 
-    original = sync_module.AssetGeneration.finalize_new_source
-
-    def fail_finalize(self, source_pk: int):
+    def fail_rename(source, destination):
         raise RuntimeError("rename failed")
 
-    monkeypatch.setattr(
-        sync_module.AssetGeneration, "finalize_new_source", fail_finalize
-    )
+    monkeypatch.setattr(sync_module.os, "replace", fail_rename)
     with pytest.raises(RuntimeError, match="rename failed"):
         _sync(corpus_dir, manifest_path, database_path)
-    monkeypatch.setattr(sync_module.AssetGeneration, "finalize_new_source", original)
+    monkeypatch.undo()
 
     with closing(schema.connect(database_path)) as conn:
         assert conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0

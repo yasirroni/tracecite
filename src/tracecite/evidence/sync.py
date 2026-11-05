@@ -100,23 +100,6 @@ class SyncReport:
     embeddings_generated: int = 0
 
 
-@dataclass
-class AssetGeneration:
-    root: Path
-    referenced_files: tuple[Path, ...] = ()
-    staging_dir: Path | None = None
-
-    def finalize_new_source(self, source_pk: int) -> dict[Path, Path]:
-        if self.staging_dir is None:
-            return {}
-        final_dir = self.root / str(source_pk)
-        os.replace(self.staging_dir, final_dir)
-        mapping = {path: final_dir / path.name for path in self.referenced_files}
-        self.referenced_files = tuple(mapping[path] for path in self.referenced_files)
-        self.staging_dir = None
-        return mapping
-
-
 def load_manifest_rules(
     manifest_paths: Path | Sequence[Path],
 ) -> manifest_module.ManifestRules:
@@ -388,11 +371,6 @@ def _lock_database(database_path: Path) -> int:
     descriptor = os.open(Path(database_path).resolve().parent, os.O_RDONLY)
     fcntl.flock(descriptor, fcntl.LOCK_EX)
     return descriptor
-
-
-@dataclass(frozen=True)
-class PrunePlan:
-    paths: tuple[str, ...]
 
 
 def sync(
@@ -750,7 +728,9 @@ def sync(
 
         generation = uuid.uuid4().hex
         rendered_assets: dict[str, list] = {}
-        asset_generations: dict[str, AssetGeneration] = {}
+        # A new source has no source_pk until its row is inserted, so its
+        # assets render into a staging directory renamed after the insert.
+        staging_dirs: dict[str, Path] = {}
         generation_root = _asset_generation_root(database_path, generation)
         try:
             for plan in plans:
@@ -759,17 +739,20 @@ def sync(
                     and plan.source_type == "pdf"
                     and options.generate_assets
                 ):
+                    if plan.source_pk is None:
+                        base_dir = generation_root / f".staging-{uuid.uuid4().hex}"
+                        staging_dirs[plan.source_path] = base_dir
+                    else:
+                        base_dir = generation_root / str(plan.source_pk)
                     try:
-                        asset_generation, assets = _render_assets(
-                            database_path, plan, generation
+                        rendered_assets[plan.source_path] = _render_assets(
+                            plan, base_dir
                         )
                     except Exception as exc:
                         raise SyncError(
                             f"cannot render pages of {plan.source_path}: "
                             f"{_source_error(exc, plan)}"
                         ) from exc
-                    asset_generations[plan.source_path] = asset_generation
-                    rendered_assets[plan.source_path] = assets
         except Exception:
             shutil.rmtree(generation_root, ignore_errors=True)
             raise
@@ -823,11 +806,12 @@ def sync(
                         (plan.source_path,),
                     ).fetchone()["source_pk"]
                     plan.source_pk = source_pk
-                    asset_generation = asset_generations.get(plan.source_path)
-                    if asset_generation is not None:
-                        path_mapping = asset_generation.finalize_new_source(source_pk)
+                    staging_dir = staging_dirs.get(plan.source_path)
+                    if staging_dir is not None:
+                        final_dir = staging_dir.with_name(str(source_pk))
+                        os.replace(staging_dir, final_dir)
                         rendered_assets[plan.source_path] = [
-                            (page, path_mapping.get(path, path), *rest)
+                            (page, final_dir / path.name, *rest)
                             for page, path, *rest in rendered_assets[plan.source_path]
                         ]
                     assert plan.source_pk is not None
@@ -1006,10 +990,13 @@ def sync(
         os.close(lock)
 
 
-def plan_prune(conn: sqlite3.Connection, selected_paths: Collection[str]) -> PrunePlan:
+def plan_prune(
+    conn: sqlite3.Connection, selected_paths: Collection[str]
+) -> tuple[str, ...]:
+    """Return the indexed source paths outside ``selected_paths``."""
     rows = conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
     selected = set(selected_paths)
-    return PrunePlan(tuple(row["path"] for row in rows if row["path"] not in selected))
+    return tuple(row["path"] for row in rows if row["path"] not in selected)
 
 
 def _canonical_asset_parts(
@@ -1056,11 +1043,11 @@ def _prune_asset_target(
 
 
 def validate_prune_plan(
-    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+    conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> set[Path]:
     """Return the asset directories the plan would remove, or raise if any stored asset path is unsafe."""
     targets_by_source: dict[int, set[Path]] = defaultdict(set)
-    for path in plan.paths:
+    for path in plan:
         for row in conn.execute(
             "SELECT source_pk, asset_path FROM assets JOIN sources USING (source_pk) WHERE path = ?",
             (path,),
@@ -1262,7 +1249,7 @@ def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None
 
 
 def apply_prune(
-    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+    conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> list[str]:
     lock = _lock_database(database_path)
     try:
@@ -1272,14 +1259,14 @@ def apply_prune(
 
 
 def _apply_prune(
-    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+    conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> list[str]:
     backend = vector_backend.SqliteVecBackend()
     conn.execute("BEGIN IMMEDIATE")
     try:
         pruned_asset_targets = validate_prune_plan(conn, database_path, plan)
         conn.executemany(
-            "DELETE FROM sources WHERE path = ?", [(path,) for path in plan.paths]
+            "DELETE FROM sources WHERE path = ?", [(path,) for path in plan]
         )
         orphan_rows = conn.execute(
             "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
@@ -1363,13 +1350,8 @@ def _asset_generation_root(database_path: Path, generation: str) -> Path:
 
 
 def _render_assets(
-    database_path: Path, plan: _SourcePlan, generation: str
-) -> tuple[AssetGeneration, list[tuple[int, Path, object, str, str]]]:
-    generation_root = _asset_generation_root(database_path, generation)
-    staging_dir = None
-    if plan.source_pk is None:
-        staging_dir = generation_root / f".staging-{uuid.uuid4().hex}"
-    base_dir = staging_dir or generation_root / str(plan.source_pk)
+    plan: _SourcePlan, base_dir: Path
+) -> list[tuple[int, Path, object, str, str]]:
     base_dir.mkdir(parents=True, exist_ok=False)
     rendered: list[tuple[int, Path, object, str, str]] = []
     physical_pages = sorted({page.physical_page for page in plan.pages})
@@ -1384,12 +1366,7 @@ def _render_assets(
             crop_path.write_bytes(crop.image_bytes)
             sha256 = file_sha256(crop_path)
             rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
-    generation_obj = AssetGeneration(
-        root=generation_root,
-        referenced_files=tuple(path for _, path, _, _, _ in rendered),
-        staging_dir=staging_dir,
-    )
-    return generation_obj, rendered
+    return rendered
 
 
 def _persist_assets(

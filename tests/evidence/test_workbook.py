@@ -206,7 +206,7 @@ def test_workbook_dropped_from_manifest_is_retained_until_prune(
         assert conn.execute(workbook_chunks).fetchone()[0] > 0
 
         plan = sync_module.plan_prune(conn, selected_paths=["notes.md"])
-        assert plan.paths == ("assumptions.xlsx",)
+        assert plan == ("assumptions.xlsx",)
         assert sync_module.apply_prune(conn, database_path, plan) == []
         assert {row["path"] for row in conn.execute("SELECT path FROM sources")} == {
             "notes.md"
