@@ -39,7 +39,9 @@ Plain-text output for one selected page retains the original page command contra
 `tracecite verify quote <source-path> <physical-page> <quote>` checks, in order: (1) exact substring
 match against `pages.text`; (2) a normalised match that collapses all whitespace, straightens curly
 single and double quotes, and folds case, against the page text normalised the same way; (3)
-otherwise `"not-found"`. A changed word never matches. An empty quotation is `"structural-error"`.
+otherwise `"not-found"`. A changed word never matches. An empty quotation is `"structural-error"`;
+a page range outside the indexed pages is `"page-not-indexed"` and an unindexed source is
+`"source-not-indexed"`, both with process status `2`.
 Only `exact` and `normalised` return process status `0`; all other verification states return
 non-zero. This is intentionally independent of chunk boundaries — a quotation may straddle two
 chunks.

@@ -1051,15 +1051,22 @@ def test_cli_verify_quote_accepts_a_contiguous_page_range(
     assert exit_code == 0
     assert payload["status"] == "normalised"
     assert payload["page"] == 1
-    assert payload["pages"] == [1, 2]
+    assert payload["last_page"] == 2
 
     exit_code, out, _ = verify("1")
     assert exit_code == 1
     assert json.loads(out)["status"] == "not-found"
 
-    exit_code, out, _ = verify("2-4")
-    assert exit_code == 1
-    assert json.loads(out)["status"] == "not-found"
+    for selector in ("2-4", "99", "1-40000"):
+        exit_code, out, err = verify(selector)
+        assert exit_code == 2, selector
+        assert json.loads(out)["status"] == "page-not-indexed"
+        assert "has 3 indexed page(s)" in err
+
+    unindexed = ["verify", "quote", "--root", str(corpus_dir)]
+    unindexed += ["--database", str(database_path), "other.pdf", "1", quote]
+    assert cli.main(unindexed) == 2
+    assert json.loads(capsys.readouterr().out)["status"] == "source-not-indexed"
 
     for selector in ("1,3", "all", "2-1"):
         exit_code, out, err = verify(selector)

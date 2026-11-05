@@ -215,6 +215,7 @@ tracecite verify quote reports/example.pdf 4-5 "Exact quotation" --database evid
 - `exact`: the quotation occurs verbatim.
 - `normalised`: matches after collapsing whitespace, straightening curly quotes and apostrophes, and ignoring case.
 - `not-found`: anything else, including one changed word.
+- `page-not-indexed` or `source-not-indexed`: the page range or the source is not in the database; these exit 2, other failures exit 1.
 
 The JSON also reports `source_state` (`current`, `changed`, or `missing`), which compares the indexed version with the file under `--root` (default: the current directory). Verification always uses the indexed text and warns on stderr to re-sync if the file changed.
 

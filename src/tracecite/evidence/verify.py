@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -38,47 +37,40 @@ class QuoteVerification:
 
 
 def verify_quote(
-    conn, source_path: str, physical_page: int, quote: str
-) -> QuoteVerification:
-    return verify_quote_pages(conn, source_path, [physical_page], quote)
-
-
-def verify_quote_pages(
-    conn, source_path: str, physical_pages: Sequence[int], quote: str
+    conn, source_path: str, first_page: int, quote: str, last_page: int | None = None
 ) -> QuoteVerification:
     """Verify a quotation against consecutive retained pages read as one text.
 
-    The pages are joined in order with a line break, so a quotation that
-    continues across a page break matches after whitespace normalisation.
-    The result reports the first page.
+    Pages ``first_page`` to ``last_page`` (default ``first_page``) are joined
+    in order with a line break, so a quotation that continues across a page
+    break matches after whitespace normalisation. The result reports the
+    first page, and ``page-not-indexed`` when any page in the range is not
+    indexed.
     """
-    first_page = physical_pages[0]
+    last_page = first_page if last_page is None else last_page
+
+    def result(status: str) -> QuoteVerification:
+        return QuoteVerification(status, first_page, quote, source_path=source_path)
+
     if not quote.strip():
-        return QuoteVerification(
-            "structural-error", first_page, quote, source_path=source_path
-        )
-    placeholders = ",".join("?" for _ in physical_pages)
+        return result("structural-error")
     rows = conn.execute(
-        f"""
+        """
         SELECT pages.text FROM pages
         JOIN sources ON sources.source_pk = pages.source_pk
-        WHERE sources.path = ? AND pages.physical_page IN ({placeholders})
+        WHERE sources.path = ? AND pages.physical_page BETWEEN ? AND ?
         ORDER BY pages.physical_page
         """,
-        (source_path, *physical_pages),
+        (source_path, first_page, last_page),
     ).fetchall()
-    if len(rows) != len(physical_pages):
-        return QuoteVerification(
-            "not-found", first_page, quote, source_path=source_path
-        )
+    if len(rows) != last_page - first_page + 1:
+        return result("page-not-indexed")
     page_text = "\n".join(row["text"] for row in rows)
     if quote in page_text:
-        return QuoteVerification("exact", first_page, quote, source_path=source_path)
+        return result("exact")
     if _fold_quote_text(quote) in _fold_quote_text(page_text):
-        return QuoteVerification(
-            "normalised", first_page, quote, source_path=source_path
-        )
-    return QuoteVerification("not-found", first_page, quote, source_path=source_path)
+        return result("normalised")
+    return result("not-found")
 
 
 def _fold_quote_text(text: str) -> str:

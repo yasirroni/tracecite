@@ -50,7 +50,7 @@ doctor
 `tracecite verify quote` returns:
 
 ```text
-exact | normalised | not-found | structural-error
+exact | normalised | not-found | structural-error | page-not-indexed | source-not-indexed
 ```
 
 Only `exact` and `normalised` return process status `0`. Every other quotation

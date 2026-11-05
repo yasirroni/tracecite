@@ -534,7 +534,6 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    pages = list(range(first, last + 1))
     conn = _connect(args.database, read_only=True)
     if conn is None:
         return 2
@@ -549,7 +548,9 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
         source_row = source_row_for_path(conn, source_path)
         source_state = None
         if source_row is None:
-            result = verify.QuoteVerification("not-found", first, args.quote)
+            result = verify.QuoteVerification(
+                "source-not-indexed", first, args.quote, source_path=source_path
+            )
         else:
             source_state = source_file_state(root, source_row)
             if source_state == "changed":
@@ -559,13 +560,31 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
                     "tracecite sync to verify against the current file",
                     file=sys.stderr,
                 )
-            result = verify.verify_quote_pages(conn, source_path, pages, args.quote)
+            result = verify.verify_quote(conn, source_path, first, args.quote, last)
+            if result.status == "page-not-indexed":
+                (page_count,) = conn.execute(
+                    "SELECT count(*) FROM pages WHERE source_pk = ?",
+                    (source_row["source_pk"],),
+                ).fetchone()
+                print(
+                    f"tracecite: {source_path} has {page_count} indexed page(s), "
+                    f"so page {args.page.strip()} is out of range",
+                    file=sys.stderr,
+                )
         print(
-            _json({**_quote_json(result), "pages": pages, "source_state": source_state})
+            _json(
+                {
+                    **_quote_json(result),
+                    "last_page": last,
+                    "source_state": source_state,
+                }
+            )
         )
     finally:
         conn.close()
-    return 0 if result.status in {"exact", "normalised"} else 1
+    if result.status in {"exact", "normalised"}:
+        return 0
+    return 2 if result.status.endswith("-not-indexed") else 1
 
 
 def _quote_json(result) -> dict:
