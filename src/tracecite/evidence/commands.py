@@ -435,7 +435,7 @@ def cmd_page(args: argparse.Namespace) -> int:
     with _database(args.database) as conn:
         source_path, source_row = _indexed_source(conn, args)
         if source_row is None:
-            print(f"not-found: {source_path} page 1", file=sys.stderr)
+            print(f"not-found: {source_path} page {args.page or 1}", file=sys.stderr)
             return 1
         if source_row["source_type"] == "workbook":
             print(f"source is not a pdf: {source_path}", file=sys.stderr)
@@ -519,6 +519,7 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
     with _database(args.database) as conn:
         source_path, source_row = _indexed_source(conn, args)
         if source_row is None:
+            print(f"tracecite: {source_path} is not indexed", file=sys.stderr)
             result = verify.QuoteVerification(
                 "source-not-indexed", first, args.quote, source_path=source_path
             )

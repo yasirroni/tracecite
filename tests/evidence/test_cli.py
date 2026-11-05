@@ -868,6 +868,27 @@ def test_cli_sync_skips_an_unreadable_source_and_indexes_the_rest(
     assert _source_paths(database_path) == ["new.md"]
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write to a read-only folder")
+def test_cli_sync_reports_a_read_only_database_folder_in_one_line(
+    tmp_path, capsys, monkeypatch
+):
+    root = _make_root(tmp_path, "new.md")
+    manifest_path = write_manifest(tmp_path / "manifest.toml", {"new.md": "new.md"})
+    database_dir = tmp_path / "runtime"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    assert _sync(root, manifest_path, database_dir / "tracecite.sqlite") == 0
+    (root / "new.md").write_text("# Changed\n", encoding="utf-8")
+    capsys.readouterr()
+    database_dir.chmod(0o555)
+    try:
+        assert _sync(root, manifest_path, database_dir / "tracecite.sqlite") == 2
+    finally:
+        database_dir.chmod(0o755)
+    err = capsys.readouterr().err
+    assert err.startswith("tracecite: ") and "Permission denied" in err
+    assert len(err.splitlines()) == 1
+
+
 def test_cli_sync_reports_a_selected_symlink_it_does_not_follow(
     tmp_path, capsys, monkeypatch
 ):
@@ -1095,7 +1116,9 @@ def test_cli_verify_quote_accepts_a_contiguous_page_range(
     unindexed = ["verify", "quote", "--root", str(corpus_dir)]
     unindexed += ["--database", str(database_path), "other.pdf", "1", quote]
     assert cli.main(unindexed) == 2
-    assert json.loads(capsys.readouterr().out)["status"] == "source-not-indexed"
+    out, err = capsys.readouterr()
+    assert json.loads(out)["status"] == "source-not-indexed"
+    assert err == "tracecite: other.pdf is not indexed\n"
 
     for selector in ("1,3", "all", "2-1"):
         exit_code, out, err = verify(selector)

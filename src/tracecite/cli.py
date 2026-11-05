@@ -424,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         raise
     except (
-        FileNotFoundError,
+        OSError,
         RuntimeError,
         TableNormalisationError,
         ValueError,

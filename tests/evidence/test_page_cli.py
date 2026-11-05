@@ -192,3 +192,13 @@ def test_cli_page_reports_non_paginated_sources_without_crashing(tmp_path, capsy
     assert exit_code == 1
     assert captured.out == ""
     assert "page 1" in captured.err
+
+
+def test_cli_page_names_the_requested_page_of_an_unindexed_source(tmp_path, capsys):
+    database_path = tmp_path / "tracecite.sqlite"
+    with closing(schema.connect(database_path)) as conn:
+        schema.ensure_schema(conn)
+    args = ["page", "--root", str(tmp_path), "--database", str(database_path)]
+
+    assert cli.main([*args, "missing.pdf", "4"]) == 1
+    assert capsys.readouterr().err == "not-found: missing.pdf page 4\n"
