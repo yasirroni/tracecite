@@ -131,6 +131,7 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   ├── test_asset_generations.py
 │   │   ├── test_cli.py
 │   │   ├── test_config.py
+│   │   ├── test_embedding.py
 │   │   ├── test_extract_pages.py
 │   │   ├── test_help.py
 │   │   ├── test_installation.py
