@@ -189,6 +189,12 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
     units: list[ParsedChunkUnit] = []
 
     with pymupdf.open(path) as document:
+        # A truncated or half-written PDF can open repaired with pages or text
+        # missing; refusing it makes sync skip the file and keep its entries.
+        if document.is_repaired or not document.page_count:
+            raise ValueError(
+                "damaged or truncated PDF: it has no pages or needs repair"
+            )
         for index, page in enumerate(document.pages()):
             physical_page = index + 1
             blocks: list[dict] = _blocks_for_page(page)

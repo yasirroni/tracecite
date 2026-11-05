@@ -812,6 +812,43 @@ def test_cli_sync_skips_a_source_that_cannot_be_parsed_and_indexes_the_rest(
         assert _source_paths(database_path) == ["new.md"]
 
 
+def test_cli_sync_keeps_the_entries_of_a_pdf_truncated_after_indexing(
+    tmp_path, capsys, monkeypatch
+):
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    root = tmp_path / "sources"
+    pdf_path = build_pdf(
+        root / "report.pdf",
+        [[f"Page {page} discusses grid storage. " * 30] for page in range(10)],
+    )
+    manifest_path = write_manifest(
+        tmp_path / "manifest.toml", {"report.pdf": "report.pdf"}
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    assert _sync(root, manifest_path, database_path) == 0
+    with closing(schema.connect(database_path)) as conn:
+        chunks_before = conn.execute(
+            "SELECT body FROM chunks ORDER BY chunk_id"
+        ).fetchall()
+    capsys.readouterr()
+
+    # MuPDF opens this truncated copy by repairing it, with text missing.
+    data = pdf_path.read_bytes()
+    pdf_path.write_bytes(data[: len(data) * 2 // 3])
+    with pymupdf.open(pdf_path) as document:
+        assert document.is_repaired
+
+    assert _sync(root, manifest_path, database_path) == 1
+    assert "skipped: 1\n  report.pdf: cannot parse: damaged or truncated PDF" in (
+        capsys.readouterr().out
+    )
+    with closing(schema.connect(database_path)) as conn:
+        chunks_after = conn.execute(
+            "SELECT body FROM chunks ORDER BY chunk_id"
+        ).fetchall()
+    assert [tuple(row) for row in chunks_after] == [tuple(row) for row in chunks_before]
+
+
 @pytest.mark.skipif(
     os.geteuid() == 0, reason="root can read a file without read permission"
 )
