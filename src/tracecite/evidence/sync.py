@@ -213,6 +213,11 @@ class _SourcePlan:
     snapshot_path: Path | None = None
     units: list[ParsedChunkUnit] = field(default_factory=list)
     pages: list = field(default_factory=list)
+    # The chunk diff: (existing row, candidate) pairs, the chunk ids to
+    # delete, and the candidates to insert.
+    matched: list = field(default_factory=list)
+    deleted_chunk_ids: list[str] = field(default_factory=list)
+    new_candidates: list[chunking.ChunkCandidate] = field(default_factory=list)
 
     @property
     def content_path(self) -> Path:
@@ -289,6 +294,12 @@ def _config_matches(row: sqlite3.Row, options: SyncOptions, source_type: str) ->
         and row["normalisation_version"] == schema.NORMALISATION_VERSION
         and json.loads(row["chunker_config"]).get("max_chunk_chars")
         == options.max_chunk_chars
+    )
+
+
+def _needs_new_embedding(row: sqlite3.Row, candidate, options: SyncOptions) -> bool:
+    return (
+        options.reembed or row["semantic_input_hash"] != candidate.semantic_input_hash
     )
 
 
@@ -506,7 +517,7 @@ def sync(
 
         # ---- build per-source plans needing (re)parsing or rechunking ----
         plans: list[_SourcePlan] = []
-        hint_updates: list[tuple[str, int, int]] = []
+        hint_updates: list[tuple[int, int, str]] = []  # (size, mtime, path)
         # (chunk_id, semantic_input_hash) pairs needing only a fresh embedding
         # mapping: the embedding model changed but the source did not.
         reembed_only_chunks: list[tuple[str, str]] = []
@@ -552,7 +563,7 @@ def sync(
             content_changed = file_hash != row["sha256"]
             if not content_changed and config_matches and not options.full:
                 if size_bytes != row["size_bytes"] or mtime_ns != row["mtime_ns"]:
-                    hint_updates.append((source_path, size_bytes, mtime_ns))
+                    hint_updates.append((size_bytes, mtime_ns, source_path))
                 if not options.reembed:
                     missing_rows = _chunks_missing_active_embedding(
                         conn, source_pk, model_id
@@ -655,8 +666,6 @@ def sync(
         ]
 
         # ---- build chunk candidates and diff against existing rows ----
-        source_diffs: dict[str, dict] = {}
-
         for plan in plans:
             groups = chunking.group_units(plan.units, max_chars=options.max_chunk_chars)
             candidates = chunking.build_chunk_candidates(
@@ -667,26 +676,14 @@ def sync(
             existing_rows = conn.execute(
                 "SELECT * FROM chunks WHERE source_pk = ?", (plan.source_pk,)
             ).fetchall()
-            matched, to_delete_ids, new_candidates = _match_chunks(
+            plan.matched, plan.deleted_chunk_ids, plan.new_candidates = _match_chunks(
                 existing_rows, candidates
             )
-
-            diff = {
-                "matched": [],
-                "to_delete_ids": to_delete_ids,
-                "new": new_candidates,
-            }
-            for row, candidate in matched:
-                hash_changed = (
-                    row["semantic_input_hash"] != candidate.semantic_input_hash
-                )
-                diff["matched"].append((row["chunk_id"], candidate, hash_changed))
-                if hash_changed or options.reembed:
+            for row, candidate in plan.matched:
+                if _needs_new_embedding(row, candidate, options):
                     pending_embeddings[candidate.semantic_input_hash] = candidate.body
-            for candidate in new_candidates:
+            for candidate in plan.new_candidates:
                 pending_embeddings[candidate.semantic_input_hash] = candidate.body
-
-            source_diffs[plan.source_path] = diff
 
         # skip hashes already cached for the active model, unless forcing re-embed
         if pending_embeddings and not options.reembed:
@@ -755,11 +752,10 @@ def sync(
 
             # size/mtime hint-only updates for sources whose content, parser,
             # chunker, and normalisation metadata are all unchanged
-            for source_path, size_bytes, mtime_ns in hint_updates:
-                conn.execute(
-                    "UPDATE sources SET size_bytes = ?, mtime_ns = ? WHERE path = ?",
-                    (size_bytes, mtime_ns, source_path),
-                )
+            conn.executemany(
+                "UPDATE sources SET size_bytes = ?, mtime_ns = ? WHERE path = ?",
+                hint_updates,
+            )
 
             # renames: relabel path while retaining internal source_pk
             for old_id, new_id in sorted(renames.items()):
@@ -770,14 +766,11 @@ def sync(
                 )
                 report.sources_renamed.append((old_id, new_id))
 
-            # apply per-plan chunk/page/source changes
+            links: list[tuple[str, str]] = []  # (chunk_id, semantic_input_hash)
             for plan in plans:
-                diff = source_diffs[plan.source_path]
-
-                # A brand-new source's row must exist before any chunk that
-                # references it via a foreign key is inserted.
                 if plan.action == "add":
-                    conn.execute(
+                    # A new source's row must exist before its chunks reference it.
+                    plan.source_pk = conn.execute(
                         """
                         INSERT INTO sources (
                             path, sha256, size_bytes, mtime_ns,
@@ -788,96 +781,96 @@ def sync(
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
                         """,
                         (*_source_values(plan), plan.source_type),
-                    )
-                    source_pk = conn.execute(
-                        "SELECT source_pk FROM sources WHERE path = ?",
-                        (plan.source_path,),
-                    ).fetchone()["source_pk"]
-                    plan.source_pk = source_pk
+                    ).lastrowid
                     staging_dir = staging_dirs.get(plan.source_path)
                     if staging_dir is not None:
-                        final_dir = staging_dir.with_name(str(source_pk))
+                        final_dir = staging_dir.with_name(str(plan.source_pk))
                         os.replace(staging_dir, final_dir)
                         rendered_assets[plan.source_path] = [
                             (page, final_dir / path.name, *rest)
                             for page, path, *rest in rendered_assets[plan.source_path]
                         ]
-                    assert plan.source_pk is not None
-
-                for chunk_id in diff["to_delete_ids"]:
-                    conn.execute("DELETE FROM chunks WHERE chunk_id = ?", (chunk_id,))
-                    report.chunks_deleted += 1
-
-                for chunk_id, candidate, hash_changed in diff["matched"]:
+                else:
                     conn.execute(
                         """
-                        UPDATE chunks SET
-                            logical_key = ?, ordinal = ?, heading_path = ?, symbol = ?,
-                            body = ?, semantic_input_hash = ?, lexical_hash = ?,
-                            content_type = ?, physical_page = ?, page_start_offset = ?,
-                            page_end_offset = ?, page_range_start = ?, page_range_end = ?,
-                            line_start = ?, line_end = ?, locator_json = ?
-                        WHERE chunk_id = ?
+                        UPDATE sources SET
+                            path = ?, sha256 = ?, size_bytes = ?, mtime_ns = ?,
+                            parser_name = ?, parser_version = ?, parser_config = ?,
+                            chunker_name = ?, chunker_version = ?, chunker_config = ?,
+                            normalisation_version = ?, normalisation_config = ?,
+                            indexed_at_utc = ?, index_status = 'ok'
+                        WHERE source_pk = ?
                         """,
-                        (*_chunk_values(candidate), chunk_id),
-                    )
-                    report.chunks_updated += 1
-                    if hash_changed or options.reembed:
-                        embedding_id = _ensure_embedding(
-                            conn,
-                            backend,
-                            model_id,
-                            candidate.semantic_input_hash,
-                            hash_to_vector,
-                        )
-                        conn.execute(
-                            "DELETE FROM chunk_embeddings WHERE chunk_id = ?",
-                            (chunk_id,),
-                        )
-                        conn.execute(
-                            "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
-                            (chunk_id, embedding_id),
-                        )
-
-                for candidate in diff["new"]:
-                    chunk_id = uuid.uuid4().hex
-                    conn.execute(
-                        """
-                        INSERT INTO chunks (
-                            chunk_id, source_pk, logical_key, ordinal, heading_path, symbol,
-                            body, semantic_input_hash, lexical_hash, content_type,
-                            physical_page, page_start_offset, page_end_offset,
-                            page_range_start, page_range_end, line_start, line_end, locator_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (chunk_id, plan.source_pk, *_chunk_values(candidate)),
-                    )
-                    report.chunks_added += 1
-                    embedding_id = _ensure_embedding(
-                        conn,
-                        backend,
-                        model_id,
-                        candidate.semantic_input_hash,
-                        hash_to_vector,
-                    )
-                    conn.execute(
-                        "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
-                        (chunk_id, embedding_id),
+                        (*_source_values(plan), plan.source_pk),
                     )
 
-                # pages + source metadata for add/reparse; assets regenerated only then
-                if plan.action in ("add", "reparse"):
+                conn.executemany(
+                    "DELETE FROM chunks WHERE chunk_id = ?",
+                    [(chunk_id,) for chunk_id in plan.deleted_chunk_ids],
+                )
+                conn.executemany(
+                    """
+                    UPDATE chunks SET
+                        logical_key = ?, ordinal = ?, heading_path = ?, symbol = ?,
+                        body = ?, semantic_input_hash = ?, lexical_hash = ?,
+                        content_type = ?, physical_page = ?, page_start_offset = ?,
+                        page_end_offset = ?, page_range_start = ?, page_range_end = ?,
+                        line_start = ?, line_end = ?, locator_json = ?
+                    WHERE chunk_id = ?
+                    """,
+                    [
+                        (*_chunk_values(candidate), row["chunk_id"])
+                        for row, candidate in plan.matched
+                    ],
+                )
+                relinked = [
+                    (row["chunk_id"], candidate.semantic_input_hash)
+                    for row, candidate in plan.matched
+                    if _needs_new_embedding(row, candidate, options)
+                ]
+                conn.executemany(
+                    "DELETE FROM chunk_embeddings WHERE chunk_id = ?",
+                    [(chunk_id,) for chunk_id, _ in relinked],
+                )
+                new_chunks = [
+                    (uuid.uuid4().hex, candidate) for candidate in plan.new_candidates
+                ]
+                conn.executemany(
+                    """
+                    INSERT INTO chunks (
+                        chunk_id, source_pk, logical_key, ordinal, heading_path, symbol,
+                        body, semantic_input_hash, lexical_hash, content_type,
+                        physical_page, page_start_offset, page_end_offset,
+                        page_range_start, page_range_end, line_start, line_end, locator_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (chunk_id, plan.source_pk, *_chunk_values(candidate))
+                        for chunk_id, candidate in new_chunks
+                    ],
+                )
+                links.extend(relinked)
+                links.extend(
+                    (chunk_id, candidate.semantic_input_hash)
+                    for chunk_id, candidate in new_chunks
+                )
+                report.chunks_deleted += len(plan.deleted_chunk_ids)
+                report.chunks_updated += len(plan.matched)
+                report.chunks_added += len(new_chunks)
+
+                # pages and assets change only when the source was parsed
+                if plan.action != "rechunk":
                     conn.execute(
                         "DELETE FROM pages WHERE source_pk = ?", (plan.source_pk,)
                     )
-                    for page in plan.pages:
-                        conn.execute(
-                            """
-                            INSERT INTO pages (
-                                source_pk, physical_page, printed_label, text,
-                                extraction_method, extraction_status, section_candidates, layout_json
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
+                    conn.executemany(
+                        """
+                        INSERT INTO pages (
+                            source_pk, physical_page, printed_label, text,
+                            extraction_method, extraction_status, section_candidates, layout_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
                             (
                                 plan.source_pk,
                                 page.physical_page,
@@ -886,26 +879,13 @@ def sync(
                                 page.extraction_method,
                                 page.extraction_status,
                                 json.dumps(page.section_candidates),
-                                json.dumps(page.layout)
-                                if page.layout is not None
-                                else None,
-                            ),
-                        )
-
-                    if plan.action == "reparse":
-                        conn.execute(
-                            """
-                            UPDATE sources SET
-                                path = ?, sha256 = ?, size_bytes = ?, mtime_ns = ?,
-                                parser_name = ?, parser_version = ?, parser_config = ?,
-                                chunker_name = ?, chunker_version = ?, chunker_config = ?,
-                                normalisation_version = ?, normalisation_config = ?,
-                                indexed_at_utc = ?, index_status = 'ok'
-                            WHERE source_pk = ?
-                            """,
-                            (*_source_values(plan), plan.source_pk),
-                        )
-
+                                None
+                                if page.layout is None
+                                else json.dumps(page.layout),
+                            )
+                            for page in plan.pages
+                        ],
+                    )
                     if plan.source_type == "pdf" and options.generate_assets:
                         _persist_assets(
                             conn,
@@ -913,35 +893,17 @@ def sync(
                             rendered_assets.get(plan.source_path, []),
                             database_path,
                         )
-                else:
-                    conn.execute(
-                        """
-                        UPDATE sources SET
-                            chunker_name = ?, chunker_version = ?, chunker_config = ?,
-                            normalisation_version = ?, normalisation_config = ?,
-                            indexed_at_utc = ?, index_status = 'ok'
-                        WHERE source_pk = ?
-                        """,
-                        (
-                            schema.CHUNKER_NAME,
-                            schema.CHUNKER_VERSION,
-                            json.dumps(plan.chunker_config),
-                            schema.NORMALISATION_VERSION,
-                            "{}",
-                            schema.utc_now(),
-                            plan.source_pk,
-                        ),
-                    )
 
-            # top up embeddings for otherwise-untouched sources whose only
-            # invalidation is a changed active embedding model
-            for chunk_id, semantic_input_hash in reembed_only_chunks:
-                embedding_id = _ensure_embedding(
-                    conn, backend, model_id, semantic_input_hash, hash_to_vector
-                )
-                conn.execute(
-                    "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
-                    (chunk_id, embedding_id),
+            # Link each new or changed chunk, then each chunk of an unchanged
+            # source that lacks an embedding of the active model.
+            for chunk_id, semantic_input_hash in [*links, *reembed_only_chunks]:
+                _ensure_embedding(
+                    conn,
+                    backend,
+                    model_id,
+                    hash_to_vector,
+                    chunk_id,
+                    semantic_input_hash,
                 )
 
             if not _observed_sources_match(observed_states):
@@ -1115,32 +1077,36 @@ def _ensure_embedding(
     conn: sqlite3.Connection,
     backend: vector_backend.SqliteVecBackend,
     model_id: str,
-    semantic_input_hash: str,
     hash_to_vector: dict[str, list[float]],
-) -> int:
+    chunk_id: str,
+    semantic_input_hash: str,
+) -> None:
+    """Link a chunk to the model's embedding of its text, storing a vector
+    generated in this sync."""
     row = conn.execute(
         "SELECT embedding_id FROM embeddings WHERE model_id = ? AND semantic_input_hash = ?",
         (model_id, semantic_input_hash),
     ).fetchone()
     vector = hash_to_vector.get(semantic_input_hash)
-    if row is not None:
-        if vector is not None:
-            backend.upsert(conn, row["embedding_id"], vector)
-        return row["embedding_id"]
-
-    if vector is None:
+    if row is None and vector is None:
         raise SyncError(
             f"no embedding available for semantic_input_hash={semantic_input_hash!r}; "
             "this indicates a bug in the pending-embedding queue"
         )
-    cursor = conn.execute(
-        "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
-        (model_id, semantic_input_hash, schema.utc_now()),
+    if row is None:
+        embedding_id = conn.execute(
+            "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
+            (model_id, semantic_input_hash, schema.utc_now()),
+        ).lastrowid
+        assert embedding_id is not None
+    else:
+        embedding_id = row["embedding_id"]
+    if vector is not None:
+        backend.upsert(conn, embedding_id, vector)
+    conn.execute(
+        "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
+        (chunk_id, embedding_id),
     )
-    embedding_id = cursor.lastrowid
-    assert embedding_id is not None
-    backend.upsert(conn, embedding_id, vector)
-    return embedding_id
 
 
 def _asset_generation_root(database_path: Path, generation: str) -> Path:
