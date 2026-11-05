@@ -1269,8 +1269,8 @@ def test_sync_reports_missing_explicit_source_and_still_applies_the_rest(
 def test_concurrent_syncs_of_one_database_both_succeed(
     corpus_dir, manifest_path, database_path
 ):
-    import threading
     import time
+    from concurrent.futures import ThreadPoolExecutor
 
     build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
     write_manifest(manifest_path, {"notes.md": "notes.md"})
@@ -1281,26 +1281,17 @@ def test_concurrent_syncs_of_one_database_both_succeed(
             time.sleep(0.3)
             return super().embed(texts)
 
-    outcomes: list = []
-
-    def run() -> None:
-        try:
-            outcomes.append(
-                sync_module.sync(
-                    corpus_dir, manifest_path, database_path, embedder=SlowEmbedder()
-                )
+    with ThreadPoolExecutor(2) as pool:
+        futures = [
+            pool.submit(
+                sync_module.sync,
+                corpus_dir,
+                manifest_path,
+                database_path,
+                embedder=SlowEmbedder(),
             )
-        except Exception as exc:  # noqa: BLE001
-            outcomes.append(exc)
-
-    threads = [threading.Thread(target=run) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    assert [getattr(outcome, "status", outcome) for outcome in outcomes] == [
-        "ok",
-        "ok",
-    ]
-    assert sorted(len(outcome.sources_added) for outcome in outcomes) == [0, 1]
+            for _ in range(2)
+        ]
+    reports = [future.result() for future in futures]
+    assert [report.status for report in reports] == ["ok", "ok"]
+    assert sorted(len(report.sources_added) for report in reports) == [0, 1]

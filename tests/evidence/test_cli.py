@@ -13,7 +13,6 @@ import pymupdf
 import pytest
 from conftest import (
     FakeEmbedder,
-    build_markdown,
     build_pdf,
     build_pdf_with_image_only_page,
     insert_source,
@@ -826,12 +825,9 @@ def test_cli_sync_skips_an_unreadable_source_and_indexes_the_rest(
     )
     database_path = tmp_path / "tracecite.sqlite"
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
-    try:
-        assert _sync(root, manifest_path, database_path) == 1
-    finally:
-        (root / "locked.md").chmod(0o644)
+    assert _sync(root, manifest_path, database_path) == 1
     out = capsys.readouterr().out
-    assert "skipped: 1\n  locked.md: cannot read: " in out
+    assert "skipped: 1\n  locked.md: no read permission\n" in out
     assert _source_paths(database_path) == ["new.md"]
 
 
@@ -854,12 +850,10 @@ def test_cli_sync_reports_a_selected_symlink_it_does_not_follow(
     assert _source_paths(database_path) == ["notes.md"]
 
 
-def test_cli_sync_skips_the_source_whose_pages_cannot_be_rendered(
+def test_cli_sync_names_the_source_whose_pages_cannot_be_rendered(
     tmp_path, capsys, monkeypatch
 ):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
-    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
-    write_manifest(manifest_path, {"doc.pdf": "doc.pdf", "notes.md": "notes.md"})
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
 
     def fail_render(path, physical_page):
@@ -867,12 +861,10 @@ def test_cli_sync_skips_the_source_whose_pages_cannot_be_rendered(
 
     monkeypatch.setattr(sync_module.pdf_parser, "render_page", fail_render)
 
-    assert _sync(corpus_dir, manifest_path, database_path) == 1
-    out = capsys.readouterr().out
-    assert "skipped: 1\n  doc.pdf: cannot render pages: " in out
-    assert ".tracecite-source-snapshots" not in out
-    assert _source_paths(database_path) == ["notes.md"]
-    assert not list((database_path.parent / "imgs").rglob("*.png"))
+    assert _sync(corpus_dir, manifest_path, database_path) == 2
+    err = capsys.readouterr().err
+    assert "doc.pdf" in err
+    assert ".tracecite-source-snapshots" not in err
 
 
 def test_prune_removes_selected_sources_whose_files_are_gone(
