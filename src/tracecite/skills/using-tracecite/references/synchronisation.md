@@ -13,9 +13,7 @@ diff old vs new chunks (three-pass matching)
     |
 look up embedding cache, generate only missing embeddings (before any write)
     |
-recheck source state (abort if anything changed mid-flight)
-    |
-one BEGIN IMMEDIATE ... COMMIT transaction (skipped entirely if there is nothing to do)
+one BEGIN IMMEDIATE ... COMMIT transaction that rechecks source state before COMMIT (skipped entirely if there is nothing to do)
 ```
 
 `sync.sync()` returns a `SyncReport` (added/reparsed/rechunked/renamed/deleted/unchanged source
@@ -71,7 +69,6 @@ capture immutable parsing snapshots for add/reparse sources
 parse only invalidated snapshots
 diff old vs new chunks (three-pass matching above)
 look up embedding cache; generate only missing embeddings         <- before BEGIN
-recheck: re-stat/re-hash every touched source                     <- before BEGIN
 BEGIN IMMEDIATE
   hint-only path/mtime updates
   deletes for fully removed sources (cascades chunks/pages/assets)
@@ -81,7 +78,7 @@ BEGIN IMMEDIATE
     assets (add/reparse only)
   embedding top-up for otherwise-untouched sources (model-change case)
   garbage-collect embeddings no chunk references any more
-  re-stat/re-hash every selected source again; ROLLBACK on mismatch
+  re-stat/re-hash every selected source; ROLLBACK on mismatch
   touch_config()
 COMMIT
 ```
@@ -89,9 +86,7 @@ COMMIT
 If embedding generation raises, the exception propagates **before** `BEGIN IMMEDIATE` runs, so the
 database is provably unchanged (an empty schema may already exist from a prior `connect()` call,
 but no `sources`/`chunks`/`embeddings` rows are written). Parsing and PDF rendering use the same
-immutable snapshot whose SHA-256 is stored in the source row. If a selected source changes before
-`BEGIN IMMEDIATE` or during the database transaction, the whole `sync()` call returns
-`SyncReport(status="aborted-source-changed")`; an open transaction is rolled back before return.
+immutable snapshot whose SHA-256 is stored in the source row. If a selected source changes between its first hash and the recheck just before `COMMIT`, the transaction rolls back and the whole `sync()` call returns `SyncReport(status="aborted-source-changed")`. A sync with nothing to write opens no transaction and skips the recheck; the next sync picks up the change.
 The unchanged path also verifies SHA-256, so a same-size replacement with a restored nanosecond
 mtime cannot remain silently stale. `conn` uses true SQLite autocommit (`isolation_level=None`) precisely so this one explicit
 `BEGIN IMMEDIATE`/`COMMIT` pair is the only write transaction in the whole lifecycle; no earlier

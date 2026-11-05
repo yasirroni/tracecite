@@ -20,10 +20,7 @@ class PageSelectionUnavailableError(PageSelectionError):
 def _validate_positive_page(text: str, *, selector: str) -> int:
     if not text.isdigit() or text.startswith("0"):
         raise PageSelectionSyntaxError(f"invalid page selector: {selector}")
-    page = int(text)
-    if page <= 0:
-        raise PageSelectionSyntaxError(f"invalid page selector: {selector}")
-    return page
+    return int(text)
 
 
 def _expand_closed_range(
@@ -67,50 +64,28 @@ def resolve_page_selection(
         raise PageSelectionSyntaxError(f"invalid page selector: {selector}")
 
     resolved: set[int] = set()
-    max_available = available[-1] if available else None
     for term in terms:
-        if term.endswith("-") and term != "-":
-            start = _validate_positive_page(term[:-1], selector=selector)
-            if not available:
-                raise PageSelectionUnavailableError(default_page)
-            assert max_available is not None
-            if start > max_available:
-                raise PageSelectionUnavailableError(start)
-            resolved.update(
-                _expand_closed_range(
-                    start, max_available, available_set=available_set, selector=selector
-                )
-            )
-            continue
-        if term.startswith("-") and term != "-":
-            end = _validate_positive_page(term[1:], selector=selector)
-            if not available:
-                raise PageSelectionUnavailableError(default_page)
-            resolved.update(
-                _expand_closed_range(
-                    1, end, available_set=available_set, selector=selector
-                )
-            )
-            continue
-        if "-" in term:
-            start_text, end_text = term.split("-", 1)
-            if not start_text or not end_text:
-                raise PageSelectionSyntaxError(f"invalid page selector: {selector}")
-            start = _validate_positive_page(start_text, selector=selector)
-            end = _validate_positive_page(end_text, selector=selector)
-            if not available:
-                raise PageSelectionUnavailableError(default_page)
-            resolved.update(
-                _expand_closed_range(
-                    start, end, available_set=available_set, selector=selector
-                )
-            )
-            continue
-        page = _validate_positive_page(term, selector=selector)
+        # "N" is one page, "A-B" a closed range, "-N" pages 1 to N, and "N-"
+        # page N to the last page.
+        start_text, dash, end_text = term.partition("-")
+        if dash and not start_text and not end_text:
+            raise PageSelectionSyntaxError(f"invalid page selector: {selector}")
+        start = (
+            _validate_positive_page(start_text, selector=selector) if start_text else 1
+        )
+        end = _validate_positive_page(end_text, selector=selector) if end_text else None
+        if not dash:
+            end = start
         if not available:
             raise PageSelectionUnavailableError(default_page)
-        if page not in available_set:
-            raise PageSelectionUnavailableError(page)
-        resolved.add(page)
+        if end is None:
+            end = available[-1]
+            if start > end:
+                raise PageSelectionUnavailableError(start)
+        resolved.update(
+            _expand_closed_range(
+                start, end, available_set=available_set, selector=selector
+            )
+        )
 
     return sorted(resolved)

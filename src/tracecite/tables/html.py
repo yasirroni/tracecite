@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
+from bs4.element import PageElement
 
 from ._text import collapse_space, escape_pipe_cell
 from .models import (
@@ -13,6 +14,7 @@ from .models import (
     TableContext,
     TableDiagnostic,
     TableNormalisationError,
+    expand_spans,
     source_hash,
 )
 from .normalise import normalise_pandoc_table
@@ -59,7 +61,18 @@ def html_table_to_markdown(
         ),
         default=0,
     )
-    expanded = _expand_html_rows(logical_rows, width, diagnostics)
+    expanded = expand_spans(
+        (
+            [
+                (_span(cell, "rowspan"), _span(cell, "colspan"), _render_html(cell))
+                for cell in _direct_cells(row)
+            ]
+            for row in logical_rows
+        ),
+        width,
+        diagnostics,
+        "HTML",
+    )
 
     thead_rows = {
         index
@@ -167,84 +180,6 @@ def normalise_html_table(
     return result
 
 
-def _expand_html_rows(
-    rows: list[Tag],
-    width: int,
-    diagnostics: list[TableDiagnostic],
-) -> list[list[str]]:
-    pending: dict[int, tuple[int, str]] = {}
-    expanded: list[list[str]] = []
-
-    for row_number, row in enumerate(rows, start=1):
-        values: list[str | None] = [None] * width
-        for column, (remaining, text) in list(pending.items()):
-            if column < width:
-                values[column] = text
-            if remaining <= 1:
-                del pending[column]
-            else:
-                pending[column] = (remaining - 1, text)
-
-        cursor = 0
-        for cell in _direct_cells(row):
-            while cursor < width and values[cursor] is not None:
-                cursor += 1
-            if cursor >= width:
-                diagnostics.append(
-                    TableDiagnostic(
-                        "table.extra-cell",
-                        "error",
-                        "An HTML row contains more logical cells than the inferred width.",
-                        row=row_number,
-                    )
-                )
-                break
-
-            rowspan = _span(cell, "rowspan")
-            colspan = _span(cell, "colspan")
-            text = _render_html(cell)
-            if rowspan > 1 or colspan > 1:
-                diagnostics.append(
-                    TableDiagnostic(
-                        "table.span-expanded",
-                        "warning",
-                        f"A {rowspan}x{colspan} HTML cell span was expanded by repeating its visible value.",
-                        row=row_number,
-                        column=cursor + 1,
-                    )
-                )
-
-            for offset in range(colspan):
-                column = cursor + offset
-                if column >= width:
-                    diagnostics.append(
-                        TableDiagnostic(
-                            "table.span-overflow",
-                            "error",
-                            "An HTML cell span exceeds the inferred table width.",
-                            row=row_number,
-                            column=cursor + 1,
-                        )
-                    )
-                    break
-                values[column] = text
-                if rowspan > 1:
-                    pending[column] = (rowspan - 1, text)
-            cursor += colspan
-
-        expanded.append([value or "" for value in values])
-
-    if pending:
-        diagnostics.append(
-            TableDiagnostic(
-                "table.rowspan-overflow",
-                "error",
-                "An HTML row span extends beyond the final table row.",
-            )
-        )
-    return expanded
-
-
 def _direct_cells(row: Tag) -> list[Tag]:
     return [
         cell
@@ -255,8 +190,8 @@ def _direct_cells(row: Tag) -> list[Tag]:
 
 def _span(cell: Tag, attribute: str) -> int:
     try:
-        return max(1, int(cell.get(attribute, 1)))
-    except (TypeError, ValueError):
+        return max(1, int(str(cell.get(attribute) or 1)))
+    except ValueError:
         return 1
 
 
@@ -272,11 +207,9 @@ def _combine_header_rows(rows: list[list[str]], width: int) -> list[str]:
     return headers
 
 
-def _render_html(node: Tag | NavigableString | None) -> str:
+def _render_html(node: PageElement | None) -> str:
     if node is None:
         return ""
-    if isinstance(node, NavigableString):
-        return collapse_space(str(node))
     if not isinstance(node, Tag):
         return collapse_space(str(node))
     if node.name == "table":

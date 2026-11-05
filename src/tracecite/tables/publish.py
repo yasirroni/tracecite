@@ -1,4 +1,8 @@
-"""Optional DataFrame helper for emitting safe Pandoc pipe tables."""
+"""Optional DataFrame helper for emitting safe Pandoc pipe tables.
+
+The caller supplies the pandas DataFrame, so pandas is imported only when a
+helper runs.
+"""
 
 from __future__ import annotations
 
@@ -7,10 +11,12 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from html import escape as html_escape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd
 from tabulate import tabulate
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 Formatter = str | Callable[[Any], str]
 _TABLE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]*$")
@@ -60,6 +66,8 @@ def knowledge_table(
         ]
         for row in table.loc[:, selected].itertuples(index=False, name=None)
     ]
+    import pandas as pd
+
     alignments = tuple(
         "right" if pd.api.types.is_numeric_dtype(table[column]) else "left"
         for column in selected
@@ -177,6 +185,8 @@ def computed_first_row_summary(
 
 
 def _format_value(value: Any, formatter: Formatter | None = None) -> str:
+    import pandas as pd
+
     if pd.api.types.is_scalar(value) and pd.isna(value):
         return "not available"
     if formatter is not None:

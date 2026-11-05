@@ -35,9 +35,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Check lint and formatting
-        run: uvx pre-commit run --all-files --show-diff-on-failure
-
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
@@ -47,7 +44,11 @@ jobs:
           sudo apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-eng
 
       - name: Install dependencies
-        run: uv sync --locked --extra evidence --extra test
+        run: uv sync --locked --extra docs --extra evidence --extra test
+
+      # ty resolves imports from .venv, so lint after the install.
+      - name: Check lint and formatting
+        run: uvx pre-commit run --all-files --show-diff-on-failure
 
       - name: Run Python tests
-        run: uv run --no-sync pytest -q
+        run: uv run --no-sync pytest -q -rs

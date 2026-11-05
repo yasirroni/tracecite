@@ -134,7 +134,10 @@ def test_extract_pages_supports_closed_open_list_and_all(
     with pymupdf.open(summary["pdf_path"]) as derivative:
         assert derivative.page_count == len(expected_pages)
         assert [
-            derivative[index].get_text().strip()
+            derivative[index]
+            .get_textpage(flags=pymupdf.TEXTFLAGS_TEXT)
+            .extractText()
+            .strip()
             for index in range(derivative.page_count)
         ] == [f"Page {page}" for page in expected_pages]
 
@@ -232,7 +235,7 @@ def test_extract_pages_rejects_source_changed_since_indexing(
 
     assert exit_code == 2
     assert captured.out == ""
-    assert "changed since indexing" in captured.err
+    assert "source.pdf" in captured.err
     assert not list(output_dir.iterdir())
 
 

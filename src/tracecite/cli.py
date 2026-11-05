@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import shutil
 import sys
@@ -30,23 +31,35 @@ from .tables import (
     render_debug_markdown,
 )
 
-EVIDENCE_COMMANDS = {
-    "sync",
-    "search",
-    "page",
-    "extract-pages",
-    "verify",
-    "prune",
-    "doctor",
-}
-
 DEFAULT_LIMIT = 10
 DEFAULT_FTS_LIMIT = 50
 DEFAULT_VECTOR_LIMIT = 50
+# Equal to chunking.DEFAULT_MAX_CHUNK_CHARS; importing that module here would
+# load the parsers for every command, including --help.
 DEFAULT_MAX_CHUNK_CHARS = 1200
 
+PANDOC_HELP = (
+    "Pandoc command or path (default: TRACECITE_PANDOC, then Quarto's bundled "
+    "Pandoc, then pandoc on PATH)."
+)
+PIPE_FALLBACK_HELP = (
+    "Parse plain pipe tables without Pandoc when Pandoc is unavailable or "
+    "rejects the input."
+)
+LIMIT_HELP = "Number of results to return (default: %(default)s)."
+FTS_LIMIT_HELP = "Full-text candidates ranked before fusion (default: %(default)s)."
+VECTOR_LIMIT_HELP = "Vector candidates ranked before fusion (default: %(default)s)."
 
-def _add_evidence_common_args(parser: argparse.ArgumentParser) -> None:
+
+def _add_pandoc_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--pandoc", help=PANDOC_HELP)
+    parser.add_argument(
+        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
+    )
+
+
+def _add_evidence_common_args(parser: argparse.ArgumentParser, command: str) -> None:
+    parser.set_defaults(handler=functools.partial(_evidence, command))
     parser.add_argument(
         "--config", type=Path, default=argparse.SUPPRESS, help="TraceCite profile TOML."
     )
@@ -68,7 +81,7 @@ def _add_evidence_parsers(
     sync_parser = subparsers.add_parser(
         "sync", help="Synchronise selected sources into the database."
     )
-    _add_evidence_common_args(sync_parser)
+    _add_evidence_common_args(sync_parser, "cmd_sync")
     sync_parser.add_argument(
         "path",
         nargs="?",
@@ -87,13 +100,22 @@ def _add_evidence_parsers(
     sync_parser.add_argument(
         "--no-assets", action="store_true", help="Skip PDF page render/crop generation."
     )
+    sync_parser.add_argument(
+        "--json", action="store_true", help="Print the sync report as JSON."
+    )
 
     search_parser = subparsers.add_parser("search", help="Hybrid FTS + vector search.")
-    _add_evidence_common_args(search_parser)
+    _add_evidence_common_args(search_parser, "cmd_search")
     search_parser.add_argument("query")
-    search_parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
-    search_parser.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
-    search_parser.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
+    search_parser.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=LIMIT_HELP
+    )
+    search_parser.add_argument(
+        "--fts-limit", type=int, default=DEFAULT_FTS_LIMIT, help=FTS_LIMIT_HELP
+    )
+    search_parser.add_argument(
+        "--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT, help=VECTOR_LIMIT_HELP
+    )
     search_parser.add_argument(
         "--source-type",
         dest="source_types",
@@ -102,11 +124,16 @@ def _add_evidence_parsers(
         default=None,
         help="Restrict results to one or more source types (repeatable).",
     )
+    search_parser.add_argument(
+        "--lexical-only",
+        action="store_true",
+        help="Use only full-text search and skip loading the embedding model.",
+    )
 
     page_parser = subparsers.add_parser(
         "page", help="Retrieve retained text for one physical page or selector."
     )
-    _add_evidence_common_args(page_parser)
+    _add_evidence_common_args(page_parser, "cmd_page")
     page_parser.add_argument("source_path")
     page_parser.add_argument("page", nargs="?", default=None)
     page_parser.add_argument("--format", choices=["text", "json"], default="text")
@@ -114,7 +141,7 @@ def _add_evidence_parsers(
     extract_parser = subparsers.add_parser(
         "extract-pages", help="Extract selected pages into a derivative PDF."
     )
-    _add_evidence_common_args(extract_parser)
+    _add_evidence_common_args(extract_parser, "cmd_extract_pages")
     extract_parser.add_argument("source_path")
     extract_parser.add_argument("page", nargs="?", default=None)
     extract_parser.add_argument("--output-dir", type=Path, required=True)
@@ -128,22 +155,25 @@ def _add_evidence_parsers(
     quote_parser = verify_subparsers.add_parser(
         "quote", help="Verify a quotation against retained page text."
     )
-    _add_evidence_common_args(quote_parser)
+    _add_evidence_common_args(quote_parser, "cmd_verify_quote")
     quote_parser.add_argument("source_path")
-    quote_parser.add_argument("page", type=int)
+    quote_parser.add_argument(
+        "page", help="Physical page or contiguous page range, such as 4 or 4-5."
+    )
     quote_parser.add_argument("quote")
     report_parser = verify_subparsers.add_parser(
         "report", help="Verify a Markdown report's citations and quotes."
     )
-    _add_evidence_common_args(report_parser)
+    _add_evidence_common_args(report_parser, "cmd_verify_report")
     report_parser.add_argument("report_path", type=Path)
     report_parser.add_argument("--source-links", type=Path, default=None)
     report_parser.add_argument("--source-links-root", type=Path, default=None)
 
     prune_parser = subparsers.add_parser(
-        "prune", help="Preview or apply removal of unselected indexed paths."
+        "prune",
+        help="Preview or apply removal of indexed paths that are unselected or missing under the root.",
     )
-    _add_evidence_common_args(prune_parser)
+    _add_evidence_common_args(prune_parser, "cmd_prune")
     prune_parser.add_argument("--apply", action="store_true", dest="apply")
     prune_parser.add_argument(
         "--all",
@@ -155,7 +185,7 @@ def _add_evidence_parsers(
     doctor_parser = subparsers.add_parser(
         "doctor", help="Integrity checks: relational rows, FTS, vectors, assets."
     )
-    _add_evidence_common_args(doctor_parser)
+    _add_evidence_common_args(doctor_parser, "cmd_doctor")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -173,28 +203,48 @@ def build_parser() -> argparse.ArgumentParser:
     normalise = table_sub.add_parser(
         "normalise", help="Normalise one Markdown or HTML table"
     )
+    normalise.set_defaults(handler=_table_normalise)
     normalise.add_argument("input", help="Input path or '-' for standard input")
     normalise.add_argument(
         "--from",
         dest="source_format",
         choices=["auto", "pandoc", "html"],
         default="auto",
+        help="Input format; auto reads input containing <table as HTML and "
+        "anything else as Pandoc Markdown.",
     )
     normalise.add_argument(
         "--to",
         dest="target_format",
         choices=["text", "json", "canonical-markdown", "debug-markdown"],
         default="text",
+        help="Output: normalised row text, the full JSON record, canonical "
+        "Markdown, or Markdown with diagnostics.",
     )
-    normalise.add_argument("--output", type=Path)
-    normalise.add_argument("--document-path")
-    normalise.add_argument("--source-code-path")
-    normalise.add_argument("--caption")
-    normalise.add_argument("--table-id")
-    normalise.add_argument("--ordering")
-    normalise.add_argument("--strict", action="store_true")
-    normalise.add_argument("--pandoc")
-    normalise.add_argument("--allow-pipe-fallback", action="store_true")
+    normalise.add_argument(
+        "--output", type=Path, help="Write to this file instead of standard output."
+    )
+    normalise.add_argument(
+        "--document-path",
+        help="Source document named in the normalised text (default: the input path).",
+    )
+    normalise.add_argument(
+        "--source-code-path",
+        help="Executable source file named in the normalised text.",
+    )
+    normalise.add_argument("--caption", help="Table caption for the normalised text.")
+    normalise.add_argument(
+        "--table-id", help="Table identifier to use instead of a generated one."
+    )
+    normalise.add_argument(
+        "--ordering", help="Description of the row order for the normalised text."
+    )
+    normalise.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail when the table has normalisation errors instead of reporting them.",
+    )
+    _add_pandoc_args(normalise)
 
     document = subparsers.add_parser(
         "document", help="Normalise every table in one document"
@@ -203,6 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
     document_normalise = document_sub.add_parser(
         "normalise", help="Normalise document tables"
     )
+    document_normalise.set_defaults(handler=_document_normalise)
     document_normalise.add_argument("input", type=Path)
     document_normalise.add_argument(
         "--to",
@@ -213,20 +264,34 @@ def build_parser() -> argparse.ArgumentParser:
     document_normalise.add_argument("--output", type=Path)
     document_normalise.add_argument("--source-code-path")
     document_normalise.add_argument("--strict", action="store_true")
-    document_normalise.add_argument("--pandoc")
-    document_normalise.add_argument("--allow-pipe-fallback", action="store_true")
+    _add_pandoc_args(document_normalise)
 
     prepare = subparsers.add_parser(
         "prepare",
         help="Prepare table records and optionally keep a complete embedding-Markdown website",
     )
-    prepare.add_argument("source_root", type=Path)
-    prepare.add_argument("--project-config", type=Path)
+    prepare.set_defaults(handler=_prepare)
+    prepare.add_argument(
+        "source_root",
+        type=Path,
+        help="Rendered site directory containing Quarto's retained *.html.md files.",
+    )
+    prepare.add_argument(
+        "--project-config",
+        type=Path,
+        help="Quarto project configuration (_quarto.yml) whose theme and "
+        "navigation the copied site keeps.",
+    )
     prepare.add_argument(
         "--project-profile",
         help="Merge _quarto-<profile>.yml into the copied inspection-site configuration",
     )
-    prepare.add_argument("--source-project", type=Path)
+    prepare.add_argument(
+        "--source-project",
+        type=Path,
+        help="Documentation source project; its extensions and assets are copied "
+        "and each page's executable source is named in the table text.",
+    )
     prepare.add_argument(
         "--keep-embedding-markdown",
         type=Path,
@@ -234,19 +299,38 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Copy the complete retained-Markdown website to DIR and append normalised table text",
     )
-    prepare.add_argument("--render-embedding-site", action="store_true")
-    prepare.add_argument("--debug-tables", action="store_true")
-    prepare.add_argument("--quarto")
-    prepare.add_argument("--pandoc")
-    prepare.add_argument("--strict-tables", action="store_true")
-    prepare.add_argument("--allow-pipe-fallback", action="store_true")
-    prepare.add_argument("--no-clean", action="store_true")
+    prepare.add_argument(
+        "--render-embedding-site",
+        action="store_true",
+        help="Render the copied site with Quarto after writing it.",
+    )
+    prepare.add_argument(
+        "--debug-tables",
+        action="store_true",
+        help="Print each table's size, source format, and diagnostics.",
+    )
+    prepare.add_argument(
+        "--quarto",
+        help="Quarto command for --render-embedding-site (default: quarto on PATH).",
+    )
+    _add_pandoc_args(prepare)
+    prepare.add_argument(
+        "--strict-tables",
+        action="store_true",
+        help="Fail when any table has normalisation errors.",
+    )
+    prepare.add_argument(
+        "--no-clean",
+        action="store_true",
+        help="Write into DIR without first deleting a previous TraceCite output there.",
+    )
 
     docs_parser = subparsers.add_parser("docs", help="Build documentation")
     docs_sub = docs_parser.add_subparsers(dest="docs_command", required=True)
     docs_build = docs_sub.add_parser(
         "build", help="Build a Quarto documentation project"
     )
+    docs_build.set_defaults(handler=_docs_build)
     docs_build.add_argument("project", type=Path)
     docs_build.add_argument("--docs-config", type=Path, default=None)
     docs_build.add_argument("--repo-root", type=Path, default=Path.cwd())
@@ -257,43 +341,70 @@ def build_parser() -> argparse.ArgumentParser:
     docs_build.add_argument("--strict-tables", action="store_true")
     docs_build.add_argument("--check-retained", action="store_true")
     docs_stage = docs_sub.add_parser("stage", help="Stage local or public source links")
+    docs_stage.set_defaults(handler=_docs_stage)
     docs_stage.add_argument("--docs-config", type=Path, required=True)
     docs_stage.add_argument("--repo-root", type=Path, default=Path.cwd())
     docs_stage.add_argument("--target", choices=["local", "public"], required=True)
-    for name in ("author", "check"):
+    for name, operation in (("author", author_docs), ("check", check_docs)):
         mode = docs_sub.add_parser(name, help=f"{name.title()} documentation outputs")
+        mode.set_defaults(handler=functools.partial(_docs_mode, operation=operation))
         mode.add_argument("--docs-config", type=Path, required=True)
         mode.add_argument("--repo-root", type=Path, default=Path.cwd())
-    for name, help_text in (
+    for name, help_text, handler in (
         (
             "index",
             "Build the index-input mirror and synchronise the documentation index",
+            _docs_index,
         ),
-        ("search", "Hybrid FTS + vector search over the documentation index"),
-        ("doctor", "Integrity checks for the documentation index profile"),
+        (
+            "search",
+            "Hybrid FTS + vector search over the documentation index",
+            _docs_search,
+        ),
+        (
+            "doctor",
+            "Integrity checks for the documentation index profile",
+            _docs_doctor,
+        ),
     ):
         command = docs_sub.add_parser(name, help=help_text)
+        command.set_defaults(handler=handler)
         command.add_argument("--docs-config", type=Path, required=True)
         command.add_argument("--repo-root", type=Path, default=Path.cwd())
     docs_search = docs_sub.choices["search"]
     docs_search.add_argument("query")
-    docs_search.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
-    docs_search.add_argument("--fts-limit", type=int, default=DEFAULT_FTS_LIMIT)
-    docs_search.add_argument("--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT)
+    docs_search.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=LIMIT_HELP
+    )
+    docs_search.add_argument(
+        "--fts-limit", type=int, default=DEFAULT_FTS_LIMIT, help=FTS_LIMIT_HELP
+    )
+    docs_search.add_argument(
+        "--vector-limit", type=int, default=DEFAULT_VECTOR_LIMIT, help=VECTOR_LIMIT_HELP
+    )
 
     check = subparsers.add_parser(
         "check", help="Strictly validate generated Markdown tables"
     )
-    check.add_argument("path", type=Path)
-    check.add_argument("--pandoc")
-    check.add_argument("--allow-pipe-fallback", action="store_true")
-    check.add_argument("--debug-tables", action="store_true")
+    check.set_defaults(handler=_check)
+    check.add_argument(
+        "path",
+        type=Path,
+        help="Markdown file, or directory whose *.md files are checked recursively.",
+    )
+    _add_pandoc_args(check)
+    check.add_argument(
+        "--debug-tables",
+        action="store_true",
+        help="Print each table's size, source format, and diagnostics.",
+    )
 
     skills = subparsers.add_parser("skills", help="Install the bundled agent skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)
     skills_install = skills_sub.add_parser(
         "install", help="Copy the bundled agent skills into a skills directory"
     )
+    skills_install.set_defaults(handler=_skills_install)
     skills_install.add_argument("--target", type=Path, default=Path(".agents/skills"))
     _add_evidence_parsers(subparsers)
     return parser
@@ -302,32 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "table":
-            return _table_normalise(args)
-        if args.command == "document":
-            return _document_normalise(args)
-        if args.command == "prepare":
-            return _prepare(args)
-        if args.command == "docs":
-            if args.docs_command == "stage":
-                return _docs_stage(args)
-            if args.docs_command == "author":
-                return _docs_mode(args, author_docs)
-            if args.docs_command == "check":
-                return _docs_mode(args, check_docs)
-            if args.docs_command == "index":
-                return _docs_index(args)
-            if args.docs_command == "search":
-                return _docs_search(args)
-            if args.docs_command == "doctor":
-                return _docs_doctor(args)
-            return _docs_build(args)
-        if args.command == "check":
-            return _check(args)
-        if args.command == "skills":
-            return _skills_install(args)
-        if args.command in EVIDENCE_COMMANDS:
-            return _evidence(args)
+        return args.handler(args)
     except ModuleNotFoundError as error:
         if _is_missing_evidence_dependency(error):
             print(
@@ -338,14 +424,13 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         raise
     except (
-        FileNotFoundError,
+        OSError,
         RuntimeError,
         TableNormalisationError,
         ValueError,
     ) as error:
         print(f"tracecite: {error}", file=sys.stderr)
         return 2
-    return 1
 
 
 def _is_missing_evidence_dependency(error: ModuleNotFoundError) -> bool:
@@ -359,10 +444,10 @@ def _is_missing_evidence_dependency(error: ModuleNotFoundError) -> bool:
     }
 
 
-def _evidence(args: argparse.Namespace) -> int:
-    from .evidence.commands import dispatch
+def _evidence(command: str, args: argparse.Namespace) -> int:
+    from .evidence import commands
 
-    return dispatch(args)
+    return commands.dispatch(getattr(commands, command), args)
 
 
 def _docs_build(args: argparse.Namespace) -> int:
@@ -421,11 +506,16 @@ def _docs_index(args: argparse.Namespace) -> int:
     print(f"Documentation index input: {result.profile.input_root}")
     print(f"Documentation index database: {result.profile.database_path}")
     print(f"Tables normalised: {result.tables_normalized}")
-    print(f"status: {report.status}")
+    from .evidence.commands import cli_sync_status
+
+    status = cli_sync_status(report)
+    print(f"status: {status}")
     print(f"added: {report.sources_added}")
+    for path, reason in report.skipped_sources.items():
+        print(f"skipped: {path}: {reason}")
     print(f"unchanged: {len(report.sources_unchanged)} source(s)")
     print(f"embeddings generated: {report.embeddings_generated}")
-    return 0 if report.status == "ok" else 1
+    return 0 if status == "ok" else 1
 
 
 def _docs_search(args: argparse.Namespace) -> int:
@@ -437,7 +527,7 @@ def _docs_search(args: argparse.Namespace) -> int:
         fts_limit=args.fts_limit,
         vector_limit=args.vector_limit,
     )
-    print(json.dumps(results, indent=2))
+    print(json.dumps(results, indent=2, ensure_ascii=False))
     return 0
 
 

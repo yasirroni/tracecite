@@ -11,24 +11,38 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "ARPST-UniMelb"}]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Text Processing :: Indexing",
+]
 dependencies = [
   "beautifulsoup4>=4.12",
-  "pandas>=2.0",
   "PyYAML>=6.0",
   "tabulate>=0.9",
-  "nbformat>=5.10",
-  "nbclient>=0.11",
-  "ipykernel>=7.3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/yasirroni/tracecite"
+Documentation = "https://yasirroni.github.io/tracecite/"
+Issues = "https://github.com/yasirroni/tracecite/issues"
+
 [project.optional-dependencies]
+# Quarto runs Python documentation pages through a Jupyter kernel.
+docs = ["ipykernel>=7.3", "nbclient>=0.11", "nbformat>=5.10", "tracecite[pandas]"]
 evidence = [
   "huggingface-hub>=1.23,<2",
   "pymupdf>=1.28,<2",
   "sentence-transformers>=5.6,<6",
   "sqlite-vec>=0.1.9,<0.2",
 ]
-test = ["build>=1.2", "pytest>=8.4,<9"]
+# knowledge_table and computed_first_row_summary take a pandas DataFrame.
+pandas = ["pandas>=2.0"]
+test = ["build>=1.2", "pytest>=8.4,<9", "tracecite[pandas]"]
 
 [project.scripts]
 tracecite = "tracecite.cli:main"
@@ -42,6 +56,8 @@ tracecite = ["skills/**/*"]
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 # scripts/bootstrap_docs.py copies docs_quarto_py from docs/. Markdown is not formatted

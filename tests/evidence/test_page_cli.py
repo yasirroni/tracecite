@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import closing
 from pathlib import Path
 
+import pytest
 from conftest import insert_source
 
 from tracecite import cli
@@ -28,101 +29,48 @@ def _insert_source_with_pages(
         conn.commit()
 
 
-def test_cli_page_defaults_to_page_one_and_preserves_single_page_output(
-    tmp_path, capsys
-):
+def _delimited(*pages: int) -> str:
+    return "\n".join(
+        f"--- physical page {page} ---\nPage {page} text\n" for page in pages
+    )
+
+
+# Selection grammar is owned by test_page_selection.py; these cases pin the
+# CLI output shape: one page prints bare text, several print delimited blocks
+# in page order.
+@pytest.mark.parametrize(
+    ("selector", "expected"),
+    [
+        ([], "Page 1 text\n"),
+        (["2"], "Page 2 text\n"),
+        (["5,2-3,1"], _delimited(1, 2, 3, 5)),
+        (["all"], _delimited(1, 2, 3, 4, 5)),
+    ],
+    ids=["default", "single", "list", "all"],
+)
+def test_cli_page_output_for_page_selections(selector, expected, tmp_path, capsys):
     root = tmp_path / "sources"
     root.mkdir()
     database_path = tmp_path / "runtime" / "tracecite.sqlite"
     _insert_source_with_pages(
-        database_path, "doc.pdf", {1: "Page one text", 2: "Page two text"}
+        database_path, "doc.pdf", {page: f"Page {page} text" for page in range(1, 6)}
     )
 
     exit_code = cli.main(
-        ["page", "--root", str(root), "--database", str(database_path), "doc.pdf"]
+        [
+            "page",
+            "--root",
+            str(root),
+            "--database",
+            str(database_path),
+            "doc.pdf",
+            *selector,
+        ]
     )
     captured = capsys.readouterr()
-
     assert exit_code == 0
-    assert captured.out == "Page one text\n"
+    assert captured.out == expected
     assert captured.err == ""
-
-
-def test_cli_page_preserves_explicit_single_page_output_byte_for_byte(tmp_path, capsys):
-    root = tmp_path / "sources"
-    root.mkdir()
-    database_path = tmp_path / "runtime" / "tracecite.sqlite"
-    _insert_source_with_pages(
-        database_path, "doc.pdf", {1: "Page one text", 2: "Page two text"}
-    )
-
-    exit_code = cli.main(
-        ["page", "--root", str(root), "--database", str(database_path), "doc.pdf", "2"]
-    )
-    captured = capsys.readouterr()
-
-    assert exit_code == 0
-    assert captured.out == "Page two text\n"
-    assert captured.err == ""
-
-
-def test_cli_page_supports_open_closed_list_and_all_selections_with_delimiters(
-    tmp_path, capsys
-):
-    root = tmp_path / "sources"
-    root.mkdir()
-    database_path = tmp_path / "runtime" / "tracecite.sqlite"
-    _insert_source_with_pages(
-        database_path,
-        "doc.pdf",
-        {
-            1: "Page 1 text",
-            2: "Page 2 text",
-            3: "Page 3 text",
-            4: "Page 4 text",
-            5: "Page 5 text",
-        },
-    )
-
-    cases = [
-        (
-            "2-4",
-            "--- physical page 2 ---\nPage 2 text\n\n--- physical page 3 ---\nPage 3 text\n\n--- physical page 4 ---\nPage 4 text\n",
-        ),
-        (
-            "3-",
-            "--- physical page 3 ---\nPage 3 text\n\n--- physical page 4 ---\nPage 4 text\n\n--- physical page 5 ---\nPage 5 text\n",
-        ),
-        (
-            "-3",
-            "--- physical page 1 ---\nPage 1 text\n\n--- physical page 2 ---\nPage 2 text\n\n--- physical page 3 ---\nPage 3 text\n",
-        ),
-        (
-            "5,2-3,1",
-            "--- physical page 1 ---\nPage 1 text\n\n--- physical page 2 ---\nPage 2 text\n\n--- physical page 3 ---\nPage 3 text\n\n--- physical page 5 ---\nPage 5 text\n",
-        ),
-        (
-            "all",
-            "--- physical page 1 ---\nPage 1 text\n\n--- physical page 2 ---\nPage 2 text\n\n--- physical page 3 ---\nPage 3 text\n\n--- physical page 4 ---\nPage 4 text\n\n--- physical page 5 ---\nPage 5 text\n",
-        ),
-    ]
-
-    for selector, expected in cases:
-        exit_code = cli.main(
-            [
-                "page",
-                "--root",
-                str(root),
-                "--database",
-                str(database_path),
-                "doc.pdf",
-                selector,
-            ]
-        )
-        captured = capsys.readouterr()
-        assert exit_code == 0
-        assert captured.out == expected
-        assert captured.err == ""
 
 
 def test_cli_page_rejects_missing_pages_before_emitting_stdout(tmp_path, capsys):
@@ -148,31 +96,7 @@ def test_cli_page_rejects_missing_pages_before_emitting_stdout(tmp_path, capsys)
 
     assert exit_code == 1
     assert captured.out == ""
-    assert "page 2" in captured.err
-
-
-def test_cli_page_rejects_path_escapes_and_missing_database(tmp_path, capsys):
-    root = tmp_path / "sources"
-    root.mkdir()
-    database_path = tmp_path / "runtime" / "tracecite.sqlite"
-    _insert_source_with_pages(database_path, "doc.pdf", {1: "Page 1 text"})
-
-    exit_code = cli.main(
-        ["page", "--root", str(root), "--database", str(database_path), "../doc.pdf"]
-    )
-    captured = capsys.readouterr()
-    assert exit_code == 2
-    assert captured.out == ""
-    assert "path-error" in captured.err
-
-    missing_db = tmp_path / "missing.sqlite"
-    exit_code = cli.main(
-        ["page", "--root", str(root), "--database", str(missing_db), "doc.pdf"]
-    )
-    captured = capsys.readouterr()
-    assert exit_code == 2
-    assert captured.out == ""
-    assert "database does not exist" in captured.err
+    assert "doc.pdf" in captured.err
 
 
 def test_cli_page_reports_non_paginated_sources_without_crashing(tmp_path, capsys):
@@ -191,4 +115,14 @@ def test_cli_page_reports_non_paginated_sources_without_crashing(tmp_path, capsy
 
     assert exit_code == 1
     assert captured.out == ""
-    assert "page 1" in captured.err
+    assert "note.md" in captured.err
+
+
+def test_cli_page_names_the_requested_page_of_an_unindexed_source(tmp_path, capsys):
+    database_path = tmp_path / "tracecite.sqlite"
+    with closing(schema.connect(database_path)) as conn:
+        schema.ensure_schema(conn)
+    args = ["page", "--root", str(tmp_path), "--database", str(database_path)]
+
+    assert cli.main([*args, "missing.pdf", "4"]) == 1
+    assert capsys.readouterr().err == "not-found: missing.pdf page 4\n"

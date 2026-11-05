@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+import sqlite3
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .chunking import normalise_text
@@ -12,6 +13,20 @@ _DEFINITION_LIKE_RE = re.compile(r"^\[(?P<key>[^\]]+)\]:")
 _CITATION_RE = re.compile(r"\[[^\]]*\]\[(?P<key>[^\]]+)\]")
 _BLOCKQUOTE_RE = re.compile(r"^>\s?(?P<quote>.*)$")
 _FENCE_RE = re.compile(r"^\s{0,3}(?P<marker>`{3,}|~{3,})(?P<suffix>.*)$")
+# A run of N backticks opens a code span that the next run of exactly N closes.
+_CODE_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`)(?:.*?[^`])??\1(?!`)")
+_STRAIGHT_QUOTES = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201a": "'",
+        "\u201b": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u201e": '"',
+        "\u201f": '"',
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -24,32 +39,45 @@ class QuoteVerification:
 
 
 def verify_quote(
-    conn, source_path: str, physical_page: int, quote: str
+    conn, source_path: str, first_page: int, quote: str, last_page: int | None = None
 ) -> QuoteVerification:
+    """Verify a quotation against consecutive retained pages read as one text.
+
+    Pages ``first_page`` to ``last_page`` (default ``first_page``) are joined
+    in order with a line break, so a quotation that continues across a page
+    break matches after whitespace normalisation. The result reports the
+    first page, and ``page-not-indexed`` when any page in the range is not
+    indexed.
+    """
+    last_page = first_page if last_page is None else last_page
+
+    def result(status: str) -> QuoteVerification:
+        return QuoteVerification(status, first_page, quote, source_path=source_path)
+
     if not quote.strip():
-        return QuoteVerification(
-            "structural-error", physical_page, quote, source_path=source_path
-        )
-    row = conn.execute(
+        return result("structural-error")
+    rows = conn.execute(
         """
         SELECT pages.text FROM pages
         JOIN sources ON sources.source_pk = pages.source_pk
-        WHERE sources.path = ? AND pages.physical_page = ?
+        WHERE sources.path = ? AND pages.physical_page BETWEEN ? AND ?
+        ORDER BY pages.physical_page
         """,
-        (source_path, physical_page),
-    ).fetchone()
-    if row is None:
-        return QuoteVerification(
-            "not-found", physical_page, quote, source_path=source_path
-        )
-    page_text = row["text"]
+        (source_path, first_page, last_page),
+    ).fetchall()
+    if len(rows) != last_page - first_page + 1:
+        return result("page-not-indexed")
+    page_text = "\n".join(row["text"] for row in rows)
     if quote in page_text:
-        return QuoteVerification("exact", physical_page, quote, source_path=source_path)
-    if normalise_text(quote) in normalise_text(page_text):
-        return QuoteVerification(
-            "normalised", physical_page, quote, source_path=source_path
-        )
-    return QuoteVerification("not-found", physical_page, quote, source_path=source_path)
+        return result("exact")
+    if _fold_quote_text(quote) in _fold_quote_text(page_text):
+        return result("normalised")
+    return result("not-found")
+
+
+def _fold_quote_text(text: str) -> str:
+    """Collapse whitespace, straighten curly quote marks, and fold case."""
+    return normalise_text(text).translate(_STRAIGHT_QUOTES).casefold()
 
 
 @dataclass
@@ -146,6 +174,9 @@ def verify_report(
     for line in lines:
         for match in _CITATION_RE.finditer(line):
             result.citation_keys_used.add(match.group("key"))
+    # Citations whose source and page resolve, and their source rows.
+    viable: dict[str, tuple[sqlite3.Row, ReferenceDefinition]] = {}
+    source_rows: dict[str, sqlite3.Row] = {}
     for key in sorted(result.citation_keys_used):
         definition = result.definitions.get(key)
         if key in invalid_definition_keys:
@@ -176,6 +207,7 @@ def verify_report(
                 )
             )
             continue
+        source_rows[key] = source_row
         page_row = conn.execute(
             "SELECT physical_page FROM pages WHERE source_pk = ? AND physical_page = ?",
             (source_row["source_pk"], definition.page),
@@ -188,6 +220,8 @@ def verify_report(
                     f"page {definition.page} is not indexed for {source_row['path']}",
                 )
             )
+            continue
+        viable[key] = (source_row, definition)
     paragraph_keys: list[str] = []
     paragraph_break_pending = False
     index = 0
@@ -196,48 +230,25 @@ def verify_report(
         quote_match = _BLOCKQUOTE_RE.match(line)
         if quote_match:
             quote_parts = [quote_match.group("quote")]
-            while index + 1 < len(lines) and _BLOCKQUOTE_RE.match(lines[index + 1]):
+            while index + 1 < len(lines) and (
+                next_match := _BLOCKQUOTE_RE.match(lines[index + 1])
+            ):
                 index += 1
-                quote_parts.append(_BLOCKQUOTE_RE.match(lines[index]).group("quote"))
+                quote_parts.append(next_match.group("quote"))
             quote_parts[0] = quote_parts[0].lstrip()
             quote_parts[-1] = quote_parts[-1].rstrip()
             quote_parts[0] = quote_parts[0].removeprefix('"')
             quote_parts[-1] = quote_parts[-1].removesuffix('"')
             quote = "\n".join(quote_parts)
-            viable: list[tuple[str, object, ReferenceDefinition]] = []
-            for key in dict.fromkeys(paragraph_keys):
-                definition = result.definitions.get(key)
-                if (
-                    definition is None
-                    or key in invalid_definition_keys
-                    or definition.page <= 0
-                ):
-                    continue
-                try:
-                    source_row = _row_for_definition(
-                        conn, definition, report_path, root
-                    )
-                except PathAuthorityError:
-                    continue
-                if source_row is None:
-                    continue
-                page_row = conn.execute(
-                    "SELECT physical_page FROM pages WHERE source_pk = ? AND physical_page = ?",
-                    (source_row["source_pk"], definition.page),
-                ).fetchone()
-                if page_row is not None:
-                    viable.append((key, source_row, definition))
-            if not quote.strip() or len(viable) != 1:
+            keys = [key for key in dict.fromkeys(paragraph_keys) if key in viable]
+            if not quote.strip() or len(keys) != 1:
                 result.quote_results.append(
                     QuoteVerification("structural-error", 0, quote)
                 )
             else:
-                key, source_row, definition = viable[0]
-                best = verify_quote(conn, source_row["path"], definition.page, quote)
-                best = QuoteVerification(
-                    best.status, best.physical_page, best.quote, key, source_row["path"]
-                )
-                result.quote_results.append(best)
+                source_row, definition = viable[keys[0]]
+                checked = verify_quote(conn, source_row["path"], definition.page, quote)
+                result.quote_results.append(replace(checked, citation_key=keys[0]))
             index += 1
             continue
         if line.strip() == "":
@@ -259,16 +270,7 @@ def verify_report(
         registry_root = Path(source_links_root or root).resolve()
         registry, registry_issues = load_source_links(source_links_path, registry_root)
         result.source_link_issues.extend(registry_issues)
-        for key in sorted(result.citation_keys_used):
-            definition = result.definitions.get(key)
-            if not definition:
-                continue
-            try:
-                source_row = _row_for_definition(conn, definition, report_path, root)
-            except PathAuthorityError:
-                continue
-            if source_row is None:
-                continue
+        for source_row in source_rows.values():
             source_abs = (root / source_row["path"]).resolve()
             entries = registry.get(source_abs, [])
             if not entries:
@@ -330,39 +332,5 @@ def _prose_lines(lines: list[str]) -> list[str]:
                     in_comment = True
                     break
                 line = line[:start] + line[end + 3 :]
-        output.append(_strip_inline_code(line))
+        output.append(_CODE_SPAN_RE.sub("", line))
     return output
-
-
-def _strip_inline_code(line: str) -> str:
-    output: list[str] = []
-    index = 0
-    while index < len(line):
-        if line[index] != "`":
-            output.append(line[index])
-            index += 1
-            continue
-        marker = line[index]
-        end = index
-        while end < len(line) and line[end] == marker:
-            end += 1
-        length = end - index
-        search = end
-        close_end = None
-        while search < len(line):
-            candidate = line.find(marker, search)
-            if candidate < 0:
-                break
-            run_end = candidate
-            while run_end < len(line) and line[run_end] == marker:
-                run_end += 1
-            if run_end - candidate == length:
-                close_end = run_end
-                break
-            search = run_end
-        if close_end is None:
-            output.extend(line[index:end])
-            index = end
-            continue
-        index = close_end
-    return "".join(output)

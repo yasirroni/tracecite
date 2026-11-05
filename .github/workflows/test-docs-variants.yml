@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          uv sync --locked
+          uv sync --locked --extra docs
           julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
           julia --project=docs_jl -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 

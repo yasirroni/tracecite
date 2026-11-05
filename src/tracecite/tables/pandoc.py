@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ._text import collapse_space, strip_caption_id, strip_html
-from .models import TableDiagnostic, TableNormalisationError
+from .models import TableDiagnostic, TableNormalisationError, expand_spans
 
 
 @dataclass(slots=True)
@@ -249,7 +249,7 @@ def _walk_nodes(value: Any) -> Iterable[dict[str, Any]]:
 
 def _nested_block_lists(node: dict[str, Any]) -> Iterable[list[dict[str, Any]]]:
     kind = node.get("t")
-    value = node.get("c")
+    value: Any = node.get("c")
     if kind == "Div" and isinstance(value, list) and len(value) == 2:
         yield value[1]
     elif kind in {"BlockQuote"} and isinstance(value, list):
@@ -295,104 +295,28 @@ def _expand_rows(
     *,
     section: str,
 ) -> list[list[str]]:
-    if not rows:
-        return []
-
+    cell_rows = [
+        row[1] if isinstance(row, list) and len(row) == 2 else [] for row in rows
+    ]
     if not ncols:
         ncols = max(
-            (
-                sum(max(1, int(cell[3])) for cell in row[1])
-                for row in rows
-                if isinstance(row, list) and len(row) == 2
-            ),
+            (sum(max(1, int(cell[3])) for cell in cells) for cells in cell_rows),
             default=0,
         )
+    return expand_spans(
+        ([_cell_span(cell) for cell in cells] for cells in cell_rows),
+        ncols,
+        diagnostics,
+        section,
+    )
 
-    pending: dict[int, tuple[int, str]] = {}
-    expanded: list[list[str]] = []
-    for row_index, row in enumerate(rows, start=1):
-        cells = row[1] if isinstance(row, list) and len(row) == 2 else []
-        values: list[str | None] = [None] * ncols
 
-        for column, (remaining, text) in list(pending.items()):
-            if column < ncols:
-                values[column] = text
-            if remaining <= 1:
-                del pending[column]
-            else:
-                pending[column] = (remaining - 1, text)
-
-        cursor = 0
-        for cell in cells:
-            while cursor < ncols and values[cursor] is not None:
-                cursor += 1
-            if cursor >= ncols:
-                diagnostics.append(
-                    TableDiagnostic(
-                        "table.extra-cell",
-                        "error",
-                        f"A {section} row contains more logical cells than the declared width.",
-                        row=row_index,
-                    )
-                )
-                break
-            try:
-                _cell_attr, _cell_align, rowspan, colspan, blocks = cell
-            except (TypeError, ValueError):
-                diagnostics.append(
-                    TableDiagnostic(
-                        "table.unsupported-cell",
-                        "error",
-                        "A Pandoc table cell has an unsupported AST shape.",
-                        row=row_index,
-                        column=cursor + 1,
-                    )
-                )
-                continue
-
-            rowspan = max(1, int(rowspan))
-            colspan = max(1, int(colspan))
-            text = _blocks_text(blocks)
-            if rowspan > 1 or colspan > 1:
-                diagnostics.append(
-                    TableDiagnostic(
-                        "table.span-expanded",
-                        "warning",
-                        f"A {rowspan}x{colspan} cell span was expanded by repeating its visible value.",
-                        row=row_index,
-                        column=cursor + 1,
-                    )
-                )
-
-            for offset in range(colspan):
-                column = cursor + offset
-                if column >= ncols:
-                    diagnostics.append(
-                        TableDiagnostic(
-                            "table.span-overflow",
-                            "error",
-                            "A cell span exceeds the declared table width.",
-                            row=row_index,
-                            column=cursor + 1,
-                        )
-                    )
-                    break
-                values[column] = text
-                if rowspan > 1:
-                    pending[column] = (rowspan - 1, text)
-            cursor += colspan
-
-        expanded.append([value or "" for value in values])
-
-    if pending:
-        diagnostics.append(
-            TableDiagnostic(
-                "table.rowspan-overflow",
-                "error",
-                "A row span extends beyond the final row in its table section.",
-            )
-        )
-    return expanded
+def _cell_span(cell: Any) -> tuple[int, int, str] | None:
+    try:
+        _attr, _align, rowspan, colspan, blocks = cell
+    except (TypeError, ValueError):
+        return None
+    return max(1, int(rowspan)), max(1, int(colspan)), _blocks_text(blocks)
 
 
 def _combine_header_rows(rows: list[list[str]], ncols: int) -> list[str]:
@@ -429,7 +353,7 @@ def _blocks_text(blocks: Any) -> str:
         if not isinstance(block, dict):
             continue
         kind = block.get("t")
-        value = block.get("c")
+        value: Any = block.get("c")
         if kind in {"Plain", "Para", "Header"}:
             inlines = value if kind != "Header" else value[2]
             parts.append(_inlines_text(inlines))
@@ -463,7 +387,7 @@ def _inlines_text(inlines: Any) -> str:
         if not isinstance(inline, dict):
             continue
         kind = inline.get("t")
-        value = inline.get("c")
+        value: Any = inline.get("c")
         if kind == "Str":
             parts.append(str(value))
         elif kind in {"Space", "SoftBreak", "LineBreak"}:

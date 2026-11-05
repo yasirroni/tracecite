@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import posixpath
+import stat
 from pathlib import Path
 
 
@@ -16,6 +18,28 @@ def _lexical_posix(value: str | Path) -> str:
 def file_sha256(path: Path) -> str:
     with Path(path).open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def source_file_state(root: Path, source_row) -> str:
+    """Compare an indexed source row with its file under ``root``.
+
+    Returns ``"current"``, ``"changed"``, or ``"missing"``. Unchanged size and
+    modification time count as current without hashing; otherwise the file's
+    SHA-256 decides. A symlink counts as missing because sync never reads one.
+    """
+    path = Path(root) / source_row["path"]
+    try:
+        state = os.stat(path, follow_symlinks=False)
+    except OSError:
+        return "missing"
+    if not stat.S_ISREG(state.st_mode):
+        return "missing"
+    if (state.st_size, state.st_mtime_ns) == (
+        source_row["size_bytes"],
+        source_row["mtime_ns"],
+    ):
+        return "current"
+    return "current" if file_sha256(path) == source_row["sha256"] else "changed"
 
 
 def normalise_relative_declaration(value: str | Path) -> str:

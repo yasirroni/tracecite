@@ -10,6 +10,7 @@ without re-reading the file (mirroring the PDF parser's retained-page reuse).
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
 
 from .base import ParsedChunkUnit, ParsedPage, ParseResult
 
@@ -48,6 +49,7 @@ def parse(path, config: dict | None = None) -> ParseResult:
 
     units: list[ParsedChunkUnit] = []
     heading_path: list[str] = []
+    heading_levels: list[int] = []
     heading_occurrence: dict[str, int] = {}
     heading_key = "root#0"
     para_index = 0
@@ -90,7 +92,11 @@ def parse(path, config: dict | None = None) -> ParseResult:
             flush_paragraph(line_no - 1)
             level = len(heading_match.group(1))
             title = heading_match.group(2).strip()
-            heading_path = heading_path[: level - 1] + [title]
+            # Levels can skip, as in a file of only ## headings; the path keeps
+            # the enclosing headings of a lower level.
+            depth = bisect_left(heading_levels, level)
+            heading_levels = heading_levels[:depth] + [level]
+            heading_path = heading_path[:depth] + [title]
             key_base = "/".join(heading_path)
             occurrence = heading_occurrence.get(key_base, 0)
             heading_occurrence[key_base] = occurrence + 1

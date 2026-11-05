@@ -82,6 +82,7 @@ class SourceSelection:
     selected: dict[str, Path]
     missing_explicit_paths: tuple[str, ...]
     unmatched_globs: tuple[str, ...]
+    symlinks: tuple[str, ...] = ()
 
 
 def load_manifest(path: Path) -> ManifestRules:
@@ -162,20 +163,25 @@ def resolve_sources(root: Path, rules: ManifestRules) -> SourceSelection:
     """Scan the declared paths and globs once under ``root``.
 
     ``selected`` maps each existing, non-symlink, supported file that the
-    rules select to its resolved path. Missing explicit paths and include
-    globs that match no file are judged before exclusions apply.
+    rules select to its resolved path; ``symlinks`` lists the selected paths
+    that are symlinks, which sync never reads. Missing explicit paths and
+    include globs that match no file are judged before exclusions apply.
     """
     root = Path(root).resolve()
     candidates = {root / path for path in rules.explicit_paths}
     for pattern in rules.include_globs:
         candidates.update(root.glob(pattern))
     declared: dict[str, Path] = {}
+    symlinks: list[str] = []
     for path in sorted(candidates):
-        if (
-            path.is_symlink()
-            or not path.is_file()
-            or path.suffix.lower() not in SOURCE_TYPES
-        ):
+        if path.suffix.lower() not in SOURCE_TYPES:
+            continue
+        if path.is_symlink():
+            relative = path.relative_to(root).as_posix()
+            if rules.selects_path(relative):
+                symlinks.append(relative)
+            continue
+        if not path.is_file():
             continue
         resolved = path.resolve()
         if resolved.is_relative_to(root):
@@ -187,11 +193,14 @@ def resolve_sources(root: Path, rules: ManifestRules) -> SourceSelection:
             if rules.selects_path(path)
         },
         missing_explicit_paths=tuple(
-            path for path in rules.explicit_paths if path not in declared
+            path
+            for path in rules.explicit_paths
+            if path not in declared and path not in symlinks
         ),
         unmatched_globs=tuple(
             glob
             for glob in rules.include_globs
             if not any(_matches(path, glob) for path in declared)
         ),
+        symlinks=tuple(symlinks),
     )

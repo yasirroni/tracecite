@@ -37,7 +37,7 @@ glob = "workbooks/**/*.xlsm"
 glob = "reports/drafts/**"
 ```
 
-TraceCite rejects absolute paths, traversal, unsupported extensions, unknown fields, duplicate normalised entries, and symlink escapes. Selection rules apply both to files currently on disk and to paths already stored in the database; unavailable selected paths are retained rather than pruned automatically.
+TraceCite rejects absolute paths, traversal, unsupported extensions, unknown fields, duplicate normalised entries, and symlink escapes. Selection rules apply both to files currently on disk and to paths already stored in the database; unavailable selected paths are retained rather than pruned automatically, until an explicit `tracecite prune` removes them.
 
 ## Stored tables
 

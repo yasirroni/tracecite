@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +16,7 @@ import yaml
 from ..tables import SiteExportResult, export_embedding_site
 
 Language = Literal["python", "julia"]
+_SUFFIX_LANGUAGES: dict[str, Language] = {".py": "python", ".jl": "julia"}
 BuildVariant = Literal["combined", "python", "julia", "prose"]
 
 
@@ -88,7 +89,7 @@ def classify_render_inputs(paths: Sequence[Path]) -> dict[Language, tuple[Path, 
     result: dict[Language, list[Path]] = {"python": [], "julia": []}
     for path in paths:
         suffix = path.suffix.lower()
-        language = {".py": "python", ".jl": "julia"}.get(suffix)
+        language = _SUFFIX_LANGUAGES.get(suffix)
         if suffix == ".qmd":
             language = _qmd_language(path)
         if language:
@@ -309,7 +310,7 @@ def _publish_materialised_render(
 def _render_project_root(
     project_root: Path,
     output_root: Path,
-) -> Iterator[tuple[Path, bool]]:
+) -> Generator[tuple[Path, bool], None, None]:
     """Yield a Quarto-safe project root, materialising symlinks when required."""
     if not _contains_source_symlinks(project_root, output_root):
         yield project_root, False

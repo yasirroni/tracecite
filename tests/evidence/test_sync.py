@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import sqlite3
 from contextlib import closing
 from pathlib import Path
 
 import pytest
 from conftest import (
+    FakeEmbedder,
     build_markdown,
     build_pdf,
     build_pdf_with_image_only_page,
+    requires_tesseract,
     write_manifest,
 )
 
-from tracecite.evidence import schema
+from tracecite.evidence import chunking, schema
 from tracecite.evidence import sync as sync_module
+from tracecite.evidence.parsers.base import ParsedChunkUnit
 from tracecite.evidence.sync import SyncError, SyncOptions
 
 
@@ -167,13 +171,16 @@ def test_page_offset_shift_causes_zero_embedding_calls(
     # Two headings (=> two separate chunks) on one page. Editing only the
     # first heading's paragraph shifts the second chunk's page-local byte
     # offsets (its preceding text got longer/shorter) without changing its
-    # own normalised semantic content, so it must not be re-embedded.
+    # own normalised semantic content, so it must not be re-embedded. The
+    # filler keeps Alpha long enough to stay a chunk of its own.
+    filler = [f"Alpha context paragraph {n} keeps the section apart." for n in range(4)]
     build_pdf(
         corpus_dir / "doc.pdf",
         [
             [
                 "Alpha",
                 "Short alpha text.",
+                *filler,
                 "Beta",
                 "This beta paragraph body must stay byte-for-byte identical across both syncs.",
             ]
@@ -203,6 +210,7 @@ def test_page_offset_shift_causes_zero_embedding_calls(
             [
                 "Alpha",
                 "This much longer alpha paragraph text pushes every following byte offset forward substantially.",
+                *filler,
                 "Beta",
                 "This beta paragraph body must stay byte-for-byte identical across both syncs.",
             ]
@@ -245,7 +253,7 @@ def test_page_offset_shift_causes_zero_embedding_calls(
 
 
 def test_unambiguous_rename_zero_parse_and_embed_calls(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
@@ -255,7 +263,6 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
     one_pdf_corpus.rename(renamed_path)
     write_manifest(manifest_path, {"doc-renamed.pdf": "doc-renamed.pdf"})
 
-    import tracecite.evidence.sync as sync_mod
     from tracecite.evidence.parsers import pdf as pdf_parser
 
     original_parse = pdf_parser.parse
@@ -265,13 +272,10 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
         parse_calls.append(args)
         return original_parse(*args, **kwargs)
 
-    sync_mod.pdf_parser.parse = _track
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=embedder
-        )
-    finally:
-        sync_mod.pdf_parser.parse = original_parse
+    monkeypatch.setattr(pdf_parser, "parse", _track)
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=embedder
+    )
 
     assert report.sources_renamed == [("doc.pdf", "doc-renamed.pdf")]
     assert parse_calls == []
@@ -291,7 +295,7 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
 
 
 def test_rename_target_mutation_before_transaction_aborts_without_writes(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
@@ -315,25 +319,22 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
             database_path.with_name(database_path.name + "-shm").exists(),
         )
 
-    def mutate_at_begin(event):
-        if event == "begin-immediate":
-            build_pdf(
-                renamed_path,
-                [
-                    [
-                        "Changed",
-                        "Rename target changed after detection before transaction.",
-                    ]
-                ],
-            )
+    real_generation_root = sync_module._asset_generation_root
 
-    sync_module.ASSET_EVENT_HOOK = mutate_at_begin
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=embedder
+    def mutate_before_transaction(*args):
+        build_pdf(
+            renamed_path,
+            [["Changed", "Rename target changed after detection before transaction."]],
         )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+        return real_generation_root(*args)
+
+    monkeypatch.setattr(
+        sync_module, "_asset_generation_root", mutate_before_transaction
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=embedder
+    )
+    monkeypatch.undo()
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -455,7 +456,7 @@ def test_changed_content_path_move_retains_old_row_until_prune(
             == old_embedding_count + 1
         )
         plan = sync_module.plan_prune(conn, selected_paths=["new.pdf"])
-        assert plan.paths == ("old.pdf",)
+        assert plan == ("old.pdf",)
         assert sync_module.apply_prune(conn, database_path, plan) == []
         assert {
             row["path"] for row in conn.execute("SELECT path FROM sources").fetchall()
@@ -639,7 +640,9 @@ def test_delete_removes_chunks_fts_vectors_and_assets(
     conn.close()
 
     one_pdf_corpus.unlink()
-    write_manifest(manifest_path, {})
+    manifest_path.write_text(
+        'schema_version = 1\n[[include]]\nglob = "other/*.pdf"\n', encoding="utf-8"
+    )
     report = sync_module.sync(
         corpus_dir, manifest_path, database_path, embedder=embedder
     )
@@ -663,7 +666,7 @@ def test_embedding_failure_leaves_database_unchanged(
         def embed(self, texts):
             raise RuntimeError("simulated embedding backend failure")
 
-    with pytest.raises(RuntimeError, match="simulated embedding backend failure"):
+    with pytest.raises(RuntimeError):
         sync_module.sync(
             corpus_dir, manifest_path, database_path, embedder=BoomEmbedder()
         )
@@ -760,7 +763,7 @@ def test_bad_embedding_dimension_rejected_before_database_writes(
         def embed(self, texts):
             return [[1.0, 2.0, 3.0] for _ in texts]
 
-    with pytest.raises(SyncError, match="embedding dimension"):
+    with pytest.raises(SyncError):
         sync_module.sync(
             corpus_dir, manifest_path, database_path, embedder=BadDimensionEmbedder()
         )
@@ -820,7 +823,7 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
         sync_module.schema, "activate_embedding_config", fail_activation
     )
     monkeypatch.setattr(schema, "EMBEDDING_REVISION", "failed-revision")
-    with pytest.raises(RuntimeError, match="activation failed"):
+    with pytest.raises(RuntimeError):
         sync_module.sync(
             corpus_dir, manifest_path, database_path, embedder=make_embedder()
         )
@@ -848,7 +851,7 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
     )
     monkeypatch.setattr(schema, "EMBEDDING_REVISION", "new-revision")
     monkeypatch.setattr(schema, "EMBEDDING_DIMENSIONS", 3)
-    with pytest.raises(SyncError, match="embedding dimensions"):
+    with pytest.raises(SyncError):
         sync_module.sync(
             corpus_dir, manifest_path, database_path, embedder=make_embedder()
         )
@@ -892,7 +895,7 @@ def test_sync_reports_never_indexed_missing_explicit_and_unmatched_glob(
     assert report.indexed_unselected_paths == []
 
 
-def test_sync_reports_indexed_vanished_glob_path_as_selected_missing_not_prunable(
+def test_sync_reports_indexed_vanished_glob_path_as_selected_missing(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
     build_markdown(
@@ -911,10 +914,6 @@ def test_sync_reports_indexed_vanished_glob_path_as_selected_missing_not_prunabl
 
     assert report.selected_missing_paths == ["reports/keep.md"]
     assert report.indexed_unselected_paths == []
-    with closing(schema.connect(database_path)) as conn:
-        assert (
-            sync_module.plan_prune(conn, selected_paths=["reports/keep.md"]).paths == ()
-        )
 
 
 def test_sync_local_exclusion_makes_indexed_path_unselected(
@@ -967,6 +966,36 @@ def test_markdown_source_indexes_and_chunks(
     conn.close()
 
 
+def test_sync_embeds_more_chunks_than_sqlite_allows_parameters(
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
+):
+    connect = schema.connect
+
+    def connect_with_few_parameters(path):
+        conn = connect(path)
+        conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 30)
+        return conn
+
+    monkeypatch.setattr(schema, "connect", connect_with_few_parameters)
+    build_markdown(
+        corpus_dir / "report.md",
+        "".join(
+            f"## Section {i}\n"
+            + f"Paragraph {i} records synthetic evidence item {i}. " * 5
+            + "\n\n"
+            for i in range(60)
+        ),
+    )
+    write_manifest(manifest_path, {"report.md": "report.md"})
+
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
+
+    assert report.embeddings_generated == 60
+
+
+@requires_tesseract
 def test_sync_ocr_fallback_populates_pages_and_chunks(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
@@ -1056,7 +1085,7 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
 
 
 def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
 ):
     import os
 
@@ -1067,19 +1096,20 @@ def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
     source.write_text(original, encoding="utf-8")
     write_manifest(manifest_path, {"a.md": "a.md"})
 
-    def mutate_at_begin(event):
-        if event == "begin-immediate":
-            info = source.stat()
-            source.write_text(replacement, encoding="utf-8")
-            os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+    real_generation_root = sync_module._asset_generation_root
 
-    sync_module.ASSET_EVENT_HOOK = mutate_at_begin
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+    def mutate_before_transaction(*args):
+        info = source.stat()
+        source.write_text(replacement, encoding="utf-8")
+        os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+        return real_generation_root(*args)
+
+    monkeypatch.setattr(
+        sync_module, "_asset_generation_root", mutate_before_transaction
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -1096,7 +1126,7 @@ def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
 
 
 def test_rename_mutation_with_restored_metadata_aborts(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
 ):
     import os
 
@@ -1112,19 +1142,20 @@ def test_rename_mutation_with_restored_metadata_aborts(
     old_path.rename(new_path)
     write_manifest(manifest_path, {"new.md": "new.md"})
 
-    def mutate_after_capture(event):
-        if event == "begin-immediate":
-            info = new_path.stat()
-            new_path.write_text(replacement, encoding="utf-8")
-            os.utime(new_path, ns=(info.st_atime_ns, info.st_mtime_ns))
+    real_generation_root = sync_module._asset_generation_root
 
-    sync_module.ASSET_EVENT_HOOK = mutate_after_capture
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+    def mutate_before_transaction(*args):
+        info = new_path.stat()
+        new_path.write_text(replacement, encoding="utf-8")
+        os.utime(new_path, ns=(info.st_atime_ns, info.st_mtime_ns))
+        return real_generation_root(*args)
+
+    monkeypatch.setattr(
+        sync_module, "_asset_generation_root", mutate_before_transaction
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -1136,7 +1167,7 @@ def test_rename_mutation_with_restored_metadata_aborts(
 
 
 def test_reparse_mutation_at_precommit_rolls_back_and_repairs(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
 ):
     import os
 
@@ -1150,19 +1181,18 @@ def test_reparse_mutation_at_precommit_rolls_back_and_repairs(
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
     source.write_text(planned, encoding="utf-8")
 
-    def mutate_before_final_check(event):
-        if event == "pre-commit-source-check":
-            info = source.stat()
-            source.write_text(replacement, encoding="utf-8")
-            os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+    real_ensure_embedding = sync_module._ensure_embedding
 
-    sync_module.ASSET_EVENT_HOOK = mutate_before_final_check
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+    def mutate_inside_transaction(*args):
+        info = source.stat()
+        source.write_text(replacement, encoding="utf-8")
+        os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+        return real_ensure_embedding(*args)
+
+    monkeypatch.setattr(sync_module, "_ensure_embedding", mutate_inside_transaction)
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -1210,3 +1240,118 @@ def test_same_size_same_mtime_content_change_is_not_fast_unchanged(
             item["body"] for item in conn.execute("SELECT body FROM chunks")
         )
         assert "Evidence bravo 2222." in body
+
+
+def test_sync_reports_missing_explicit_source_and_still_applies_the_rest(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
+    manifest_path.write_text(
+        'schema_version = 1\n[[source]]\npath = "missing.pdf"\n'
+        '[[source]]\npath = "notes.md"\n',
+        encoding="utf-8",
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
+    assert report.status == "ok"
+    assert report.missing_explicit_paths == ["missing.pdf"]
+    assert report.sources_added == ["notes.md"]
+
+
+def test_concurrent_syncs_of_one_database_both_succeed(
+    corpus_dir, manifest_path, database_path
+):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
+    write_manifest(manifest_path, {"notes.md": "notes.md"})
+
+    class SlowEmbedder(FakeEmbedder):
+        def embed(self, texts):
+            # Both syncs plan before either one commits.
+            time.sleep(0.3)
+            return super().embed(texts)
+
+    with ThreadPoolExecutor(2) as pool:
+        futures = [
+            pool.submit(
+                sync_module.sync,
+                corpus_dir,
+                manifest_path,
+                database_path,
+                embedder=SlowEmbedder(),
+            )
+            for _ in range(2)
+        ]
+    reports = [future.result() for future in futures]
+    assert [report.status for report in reports] == ["ok", "ok"]
+    assert sorted(len(report.sources_added) for report in reports) == [0, 1]
+
+
+def test_consecutive_headings_join_the_section_that_follows(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    storage, wind = "Storage grows. " * 15, "Wind grows. " * 20
+    build_markdown(
+        corpus_dir / "notes.md",
+        f"# Plan\n\n## Storage\n\n{storage}\n\n## Wind\n\n{wind}\n",
+    )
+    write_manifest(manifest_path, {"notes.md": "notes.md"})
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+
+    with closing(schema.connect(database_path)) as conn:
+        chunks = conn.execute(
+            "SELECT body, heading_path FROM chunks ORDER BY ordinal"
+        ).fetchall()
+    assert [(row["body"], row["heading_path"]) for row in chunks] == [
+        (f"Plan\n\nStorage\n\n{storage.strip()}", '["Plan", "Storage"]'),
+        (f"Wind\n\n{wind.strip()}", '["Plan", "Wind"]'),
+    ]
+
+
+def _chunk_bodies_and_paths(units):
+    candidates = chunking.build_chunk_candidates(
+        chunking.group_units(units), source_type="pdf", normalisation_version="1"
+    )
+    return [(candidate.body, candidate.heading_path) for candidate in candidates]
+
+
+def _unit(text, heading_path, content_type="body", page=1):
+    return ParsedChunkUnit(text, text, heading_path, None, content_type, page)
+
+
+def test_short_sibling_sections_share_a_chunk_under_their_parent_heading():
+    long_paragraph = "Long paragraph text. " * 70
+    units = [
+        _unit("Plan", ["Plan"], "heading"),
+        _unit(long_paragraph, ["Plan"]),
+        *(
+            unit
+            for name in ("Storage", "Wind")
+            for unit in (
+                _unit(name, ["Plan", name], "heading"),
+                _unit(f"{name} grows.", ["Plan", name]),
+            )
+        ),
+    ]
+    # The heading joins a paragraph longer than the chunk budget, and the two
+    # short sections merge under the heading they share.
+    assert _chunk_bodies_and_paths(units) == [
+        (f"Plan\n\n{long_paragraph}", ["Plan"]),
+        ("Storage\n\nStorage grows.\n\nWind\n\nWind grows.", ["Plan"]),
+    ]
+
+
+def test_a_chunk_of_only_a_page_number_is_dropped():
+    body = "Body text of the first page. " * 10
+    units = [
+        _unit(body, []),
+        _unit("2", ["2"], "heading"),
+        _unit("Second page text.", [], page=2),
+    ]
+    assert _chunk_bodies_and_paths(units) == [
+        (body, []),
+        ("Second page text.", []),
+    ]

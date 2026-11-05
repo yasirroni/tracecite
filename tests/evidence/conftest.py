@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import tomllib
+import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
 import pymupdf
@@ -11,12 +12,16 @@ import pytest
 from tracecite.evidence import schema
 from tracecite.evidence import sync as sync_module
 
+requires_tesseract = pytest.mark.skipif(
+    shutil.which("tesseract") is None, reason="Tesseract is not installed"
+)
+
 
 class FakeEmbedder:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
         self.calls.append(list(texts))
         vectors: list[list[float]] = []
         for text in texts:
@@ -66,12 +71,6 @@ def sync_with_fake_model(monkeypatch, corpus_dir, manifest_path, database_path) 
         corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
     )
     assert report.status == "ok"
-
-
-def read_manifest(path: Path) -> dict[str, str]:
-    with Path(path).open("rb") as handle:
-        data = tomllib.load(handle)
-    return {entry["path"]: entry["path"] for entry in data.get("source", [])}
 
 
 def build_pdf(path: Path, pages: list[list[str]]) -> Path:

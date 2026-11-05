@@ -28,12 +28,12 @@ FTS_CONFIG = "fts5-unicode61-v1"
 PARSER_NAME_PDF = "pdf-pymupdf"
 PARSER_VERSION_PDF = "1"
 PARSER_NAME_MARKDOWN = "markdown-heading"
-PARSER_VERSION_MARKDOWN = "1"
+PARSER_VERSION_MARKDOWN = "2"
 PARSER_NAME_WORKBOOK = "workbook-ooxml"
 PARSER_VERSION_WORKBOOK = "1"
 
 CHUNKER_NAME = "greedy-char-budget"
-CHUNKER_VERSION = "2"
+CHUNKER_VERSION = "4"
 
 NORMALISATION_VERSION = "1"
 
@@ -133,20 +133,37 @@ class IncompatibleDatabaseError(RuntimeError):
     """Raised when a database path already holds data this tool did not create."""
 
 
+class UnreadableDatabaseError(RuntimeError):
+    """Raised when a database file cannot be read as SQLite."""
+
+
+def _open(database_path: Path, target: str, *, uri: bool) -> sqlite3.Connection:
+    # True autocommit: every statement outside an explicit BEGIN commits
+    # immediately, and nothing implicitly opens a transaction. sync.py relies
+    # on this so its single explicit ``BEGIN IMMEDIATE`` block is the only
+    # write transaction in the whole synchronisation lifecycle.
+    conn = sqlite3.connect(target, uri=uri, isolation_level=None)
+    try:
+        # SQLite opens files lazily; reading the schema table rejects a
+        # non-SQLite or damaged file here instead of at the first query.
+        conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    except sqlite3.DatabaseError as exc:
+        conn.close()
+        raise UnreadableDatabaseError(
+            f"cannot read database {database_path}: {exc}"
+        ) from exc
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    vector_backend.ensure_loaded(conn)
+    return conn
+
+
 def connect(database_path: Path) -> sqlite3.Connection:
     """Open a connection with sqlite-vec loaded and foreign keys enforced."""
 
     database_path = Path(database_path)
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    # True autocommit: every statement outside an explicit BEGIN commits
-    # immediately, and nothing implicitly opens a transaction. sync.py relies
-    # on this so its single explicit ``BEGIN IMMEDIATE`` block is the only
-    # write transaction in the whole synchronisation lifecycle.
-    conn = sqlite3.connect(database_path, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    vector_backend.ensure_loaded(conn)
-    return conn
+    return _open(database_path, str(database_path), uri=False)
 
 
 def connect_existing(database_path: Path, *, read_only: bool) -> sqlite3.Connection:
@@ -157,11 +174,7 @@ def connect_existing(database_path: Path, *, read_only: bool) -> sqlite3.Connect
         raise FileNotFoundError(f"database does not exist: {database_path}")
     mode = "ro" if read_only else "rw"
     uri = database_path.resolve().as_uri() + f"?mode={mode}"
-    conn = sqlite3.connect(uri, uri=True, isolation_level=None)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    vector_backend.ensure_loaded(conn)
-    return conn
+    return _open(database_path, uri, uri=True)
 
 
 def ensure_schema(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
@@ -243,13 +256,6 @@ def _validate_schema_objects(conn: sqlite3.Connection) -> None:
             raise IncompatibleDatabaseError(
                 f"schema v{SCHEMA_VERSION} table {table} is missing required column(s) {', '.join(sorted(missing))}"
             )
-    absolute = conn.execute(
-        "SELECT asset_path FROM assets WHERE asset_path GLOB '/*' LIMIT 1"
-    ).fetchone()
-    if absolute is not None:
-        raise IncompatibleDatabaseError(
-            "schema v3 database contains absolute asset paths and must be rebuilt"
-        )
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:

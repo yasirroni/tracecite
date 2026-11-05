@@ -13,8 +13,12 @@ normalisation-only change reconstructs the same units via `pdf.units_from_page_l
 reopening the PDF.
 
 `chunking.group_units()` merges adjacent units into one chunk while they share the same
-`heading_path` and `physical_page` and stay under `--max-chunk-chars` (default 1200) — so a chunk
-never silently straddles a heading or page boundary. PDF chunks are page-local: a chunk never spans two pages.
+`physical_page` and stay under `--max-chunk-chars` (default 1200). A new `heading_path` starts a new
+chunk once the chunk holds body text, so consecutive headings, including the short lines the PDF
+parser takes for headings, join the section that follows, even when its first unit alone exceeds the budget.
+A chunk shorter than a sixth of the budget then takes in the sections that follow it on the same page while
+it stays within the budget, and reports the heading path those sections share. A chunk of only digits, such
+as a lone page number, is dropped. PDF chunks are page-local: a chunk never spans two pages.
 
 ## Markdown extraction
 
@@ -37,11 +41,14 @@ Plain-text output for one selected page retains the original page command contra
 ## Quotation verification
 
 `tracecite verify quote <source-path> <physical-page> <quote>` checks, in order: (1) exact substring
-match against `pages.text`; (2) a whitespace-normalised match (`chunking.normalise_text`: collapse
-all whitespace, no case-folding) against the normalised page text; (3) otherwise `"not-found"`.
-An empty quotation is `"structural-error"`. Only `exact` and `normalised` return process status
-`0`; all other verification states return non-zero. This is intentionally independent of chunk
-boundaries — a quotation may straddle two chunks.
+match against `pages.text`; (2) a normalised match that collapses all whitespace, straightens curly
+single and double quotes, and folds case, against the page text normalised the same way; (3)
+otherwise `"not-found"`. A changed word never matches. An empty quotation is `"structural-error"`;
+a page range outside the indexed pages is `"page-not-indexed"` and an unindexed source is
+`"source-not-indexed"`, both with process status `2`.
+Only `exact` and `normalised` return process status `0`; all other verification states return
+non-zero. This is intentionally independent of chunk boundaries — a quotation may straddle two
+chunks.
 
 ## Report verification
 

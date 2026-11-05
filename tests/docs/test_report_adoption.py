@@ -49,6 +49,13 @@ PUBLIC_2026_URL = (
     "2026-integrated-system-plan-isp.pdf?rev=7f5dfd18aa1b4a3aab704c424f75afd3&sc_lang=en#page=76"
 )
 
+needs_quarto_and_lfs_pdfs = pytest.mark.skipif(
+    shutil.which("quarto") is None
+    or (EXAMPLE_ROOT / "sources/aemo/2024-integrated-system-plan.pdf").read_bytes()[:5]
+    != b"%PDF-",
+    reason="needs Quarto and the Git LFS source PDFs",
+)
+
 # Generated/ignored trees that must not be copied into the test fixture: they
 # are rebuilt fresh by the test itself, and copying stale copies from a prior
 # manual run would make tests depend on leftover local state.
@@ -108,6 +115,7 @@ def _extract_local_destination(text: str, pdf_name: str, page: int) -> str:
     return match.group(1)
 
 
+@needs_quarto_and_lfs_pdfs
 def test_report_structure_callout_and_real_pdfs(tmp_path: Path) -> None:
     root = _copy_example(tmp_path)
 
@@ -175,6 +183,7 @@ def test_pdfs_are_tracked_through_git_lfs() -> None:
         assert line == f"{relative}: filter: lfs"
 
 
+@needs_quarto_and_lfs_pdfs
 def test_author_renders_retained_with_callout_and_verified_page_citations(
     tmp_path: Path,
 ) -> None:
@@ -195,6 +204,7 @@ def test_author_renders_retained_with_callout_and_verified_page_citations(
     assert (root / "docs/authored/report.qmd").read_bytes() == authored_before
 
 
+@needs_quarto_and_lfs_pdfs
 def test_local_and_public_staging_resolve_correctly_and_preserve_website_citation(
     tmp_path: Path,
 ) -> None:
@@ -227,6 +237,7 @@ def test_local_and_public_staging_resolve_correctly_and_preserve_website_citatio
     assert WEBSITE_CITATION in public_text
 
 
+@needs_quarto_and_lfs_pdfs
 def test_author_index_search_doctor_check_succeed_in_order(
     tmp_path: Path, make_embedder
 ) -> None:
@@ -268,6 +279,7 @@ def test_author_index_search_doctor_check_succeed_in_order(
     assert check_result.ok
 
 
+@needs_quarto_and_lfs_pdfs
 def test_index_input_mirror_excludes_non_report_paths(
     tmp_path: Path, make_embedder
 ) -> None:
@@ -284,6 +296,7 @@ def test_index_input_mirror_excludes_non_report_paths(
     assert mirrored == {"report.md"}
 
 
+@needs_quarto_and_lfs_pdfs
 def test_two_fresh_copies_are_deterministic_for_sources_and_search(
     tmp_path: Path, make_embedder
 ) -> None:
@@ -348,11 +361,10 @@ def test_publish_static_is_isolated_and_matches_committed_public_snapshot(
     assert not (output_dir / "docs").exists()
 
 
+@pytest.mark.skipif(shutil.which("quarto") is None, reason="quarto not installed")
 def test_quarto_rendered_html_contains_callout_and_citation_links(
     tmp_path: Path,
 ) -> None:
-    if shutil.which("quarto") is None:
-        pytest.skip("quarto not installed")
     root = _copy_example(tmp_path)
 
     subprocess.run(

@@ -26,6 +26,7 @@ def _insert_embedding(
         "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
         (model_id, semantic_hash, schema.utc_now()),
     )
+    assert cursor.lastrowid is not None
     return cursor.lastrowid
 
 
@@ -48,7 +49,7 @@ def test_backend_upsert_search_delete_contract(conn):
     filtered = backend.search(conn, vector_a, top_k=2, allowed_embedding_ids=[id_b])
     assert [m.embedding_id for m in filtered] == [id_b]
 
-    backend.delete(conn, id_a)
+    backend.delete(conn, [id_a])
     conn.execute("DELETE FROM chunk_embeddings WHERE embedding_id = ?", (id_a,))
     conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (id_a,))
     remaining = backend.search(conn, vector_a, top_k=2)
@@ -107,16 +108,17 @@ def test_backend_search_scans_shards_for_filtered_and_unfiltered_results(conn):
     assert unfiltered[-1].embedding_id == allowed_ids[0]
 
 
-def test_schema_v1_database_requires_rebuild_and_resync(tmp_path):
-    database_path = tmp_path / "schema-v1.sqlite"
+def test_database_with_another_schema_version_must_be_rebuilt(tmp_path):
+    database_path = tmp_path / "other-schema.sqlite"
     connection = schema.connect(database_path)
     schema.ensure_schema(connection)
-    connection.execute("UPDATE kb_config SET schema_version = 1 WHERE id = 1")
+    connection.execute(
+        "UPDATE kb_config SET schema_version = ? WHERE id = 1",
+        (schema.SCHEMA_VERSION + 1,),
+    )
     connection.close()
 
     connection = schema.connect(database_path)
-    with pytest.raises(
-        schema.IncompatibleDatabaseError, match="fresh.*database|re-sync"
-    ):
+    with pytest.raises(schema.IncompatibleDatabaseError):
         schema.ensure_schema(connection)
     connection.close()

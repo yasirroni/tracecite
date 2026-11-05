@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,10 @@ PIPE_TABLE = """<!-- tracecite-table: {"ordering":"temperature descending","row_
 """
 
 
+NO_PANDOC = shutil.which("pandoc") is None and shutil.which("quarto") is None
+
+
+@unittest.skipIf(NO_PANDOC, "Pandoc or Quarto is not installed")
 class PandocTableTests(unittest.TestCase):
     def test_normalises_pipe_table(self) -> None:
         table = normalise_pandoc_table(
@@ -185,6 +190,7 @@ class HtmlTableTests(unittest.TestCase):
             normalise_html_table(source, strict=True)
 
 
+@unittest.skipIf(NO_PANDOC, "Pandoc or Quarto is not installed")
 class DocumentTests(unittest.TestCase):
     def test_document_extracts_pipe_and_html_tables_but_not_code_fence(self) -> None:
         markdown = """# Report\n\n## Pandoc\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n: Native. {#tbl-native}\n\n```markdown\n| X | Y |\n|---|---|\n| 3 | 4 |\n```\n\n## Documenter\n\n<table id="tbl-doc"><tr><th>Name</th><th>Value</th></tr><tr><td>x</td><td>5</td></tr></table>\n"""
@@ -266,6 +272,7 @@ class DocumentTests(unittest.TestCase):
         self.assertEqual(tables[0].metadata["raw_headers"], ["A", "B"])
 
 
+@unittest.skipIf(NO_PANDOC, "Pandoc or Quarto is not installed")
 class SiteExportTests(unittest.TestCase):
     def test_export_copies_site_and_mutates_only_the_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

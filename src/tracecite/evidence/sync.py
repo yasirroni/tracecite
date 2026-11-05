@@ -2,9 +2,7 @@
 
     scan filesystem
         |
-    identify candidate changes from mtime and size
-        |
-    hash candidate files
+    hash each selected file
         |
     parse only genuinely changed or invalidated files
         |
@@ -12,15 +10,13 @@
         |
     reuse or generate only missing embeddings
         |
-    recheck source state
-        |
-    apply one SQLite transaction
+    apply one SQLite transaction, rechecking source state before commit
 
 Embeddings are generated before ``BEGIN IMMEDIATE``. If embedding fails, the
 exception propagates before any write happens, so the database is left
-unchanged. If a source's file changes between the initial parse and the
-pre-commit recheck, the whole sync call aborts before opening the
-transaction (status ``"aborted-source-changed"``) so callers can retry.
+unchanged. If a source's file changes between its first hash and the recheck
+before commit, the transaction rolls back and the sync returns status
+``"aborted-source-changed"`` so callers can retry.
 """
 
 from __future__ import annotations
@@ -48,13 +44,6 @@ from .parsers import workbook as workbook_parser
 from .parsers.base import ParsedChunkUnit, units_from_layout
 from .paths import file_sha256
 
-ASSET_EVENT_HOOK = None
-
-
-def _asset_event(name: str) -> None:
-    if ASSET_EVENT_HOOK is not None:
-        ASSET_EVENT_HOOK(name)
-
 
 class SyncError(RuntimeError):
     """A sync precondition failed (bad manifest, unmapped file, etc.)."""
@@ -73,14 +62,28 @@ class SyncOptions:
     reembed: bool = False
 
 
-def _parser_identity(source_type: str) -> tuple[str, str]:
-    if source_type == "pdf":
-        return schema.PARSER_NAME_PDF, schema.PARSER_VERSION_PDF
-    if source_type == "markdown":
-        return schema.PARSER_NAME_MARKDOWN, schema.PARSER_VERSION_MARKDOWN
-    if source_type == "workbook":
-        return schema.PARSER_NAME_WORKBOOK, schema.PARSER_VERSION_WORKBOOK
-    raise SyncError(f"unsupported source type: {source_type}")
+def _parser(source_type: str) -> tuple:
+    """Return the parser module, name, version, and config for a source type."""
+    return {
+        "pdf": (
+            pdf_parser,
+            schema.PARSER_NAME_PDF,
+            schema.PARSER_VERSION_PDF,
+            {"ocr_lang": pdf_parser.DEFAULT_OCR_LANG},
+        ),
+        "markdown": (
+            markdown_parser,
+            schema.PARSER_NAME_MARKDOWN,
+            schema.PARSER_VERSION_MARKDOWN,
+            {},
+        ),
+        "workbook": (
+            workbook_parser,
+            schema.PARSER_NAME_WORKBOOK,
+            schema.PARSER_VERSION_WORKBOOK,
+            {},
+        ),
+    }[source_type]
 
 
 @dataclass
@@ -92,6 +95,12 @@ class SyncReport:
     sources_unchanged: list[str] = field(default_factory=list)
     sources_renamed: list[tuple[str, str]] = field(default_factory=list)
     selected_missing_paths: list[str] = field(default_factory=list)
+    missing_explicit_paths: list[str] = field(default_factory=list)
+    # Selected sources this run did not index, with the reason. A source
+    # indexed earlier keeps its previous rows.
+    skipped_sources: dict[str, str] = field(default_factory=dict)
+    # PDF physical pages with no extracted text, keyed by source path.
+    pages_without_text: dict[str, list[int]] = field(default_factory=dict)
     indexed_unselected_paths: list[str] = field(default_factory=list)
     unmatched_globs: list[str] = field(default_factory=list)
     cleanup_warnings: list[str] = field(default_factory=list)
@@ -101,38 +110,12 @@ class SyncReport:
     embeddings_generated: int = 0
 
 
-@dataclass
-class AssetGeneration:
-    root: Path
-    referenced_files: tuple[Path, ...] = ()
-    staging_dir: Path | None = None
-
-    def finalize_new_source(self, source_pk: int) -> dict[Path, Path]:
-        if self.staging_dir is None:
-            return {}
-        final_dir = self.root / str(source_pk)
-        os.replace(self.staging_dir, final_dir)
-        mapping = {path: final_dir / path.name for path in self.referenced_files}
-        self.referenced_files = tuple(mapping[path] for path in self.referenced_files)
-        self.staging_dir = None
-        return mapping
-
-
 def load_manifest_rules(
     manifest_paths: Path | Sequence[Path],
 ) -> manifest_module.ManifestRules:
-    paths = (
-        list(manifest_paths)
-        if isinstance(manifest_paths, (list, tuple))
-        else [manifest_paths]
-    )
-    return manifest_module.merge_manifests(paths)
-
-
-def _parser_config_for(source_type: str) -> dict:
-    if source_type == "pdf":
-        return {"ocr_lang": pdf_parser.DEFAULT_OCR_LANG}
-    return {}
+    if isinstance(manifest_paths, (str, os.PathLike)):
+        return manifest_module.merge_manifests([Path(manifest_paths)])
+    return manifest_module.merge_manifests(list(manifest_paths))
 
 
 def _identity(state: os.stat_result) -> tuple[int, int, int, int]:
@@ -171,16 +154,15 @@ def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
     return digest.hexdigest(), after.st_size, after.st_mtime_ns
 
 
-@dataclass(frozen=True)
-class _SourceSnapshot:
-    path: Path
-    sha256: str
-    size_bytes: int
-    mtime_ns: int
+def _capture_source_snapshot(
+    path: Path, snapshot_root: Path
+) -> tuple[Path, tuple[str, int, int]] | None:
+    """Copy one source into an immutable per-sync parsing snapshot, and return
+    the copy's path with the file state it was copied from.
 
-
-def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot | None:
-    """Copy one stable source into an immutable per-sync parsing snapshot."""
+    A write during the copy leaves a hash the file no longer has, so the
+    recheck before commit aborts the sync.
+    """
 
     try:
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -194,18 +176,9 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
                 digest.update(block)
                 output.write(block)
         after = os.fstat(descriptor)
-    except Exception:
-        snapshot_path.unlink(missing_ok=True)
-        raise
     finally:
         os.close(descriptor)
-    # Equal hashes mean the copied bytes are the file's current stable content,
-    # which also rejects writes, replacement, and symlinks during the copy.
-    expected = (digest.hexdigest(), after.st_size, after.st_mtime_ns)
-    if _capture_stable_file_state(path) != expected:
-        snapshot_path.unlink(missing_ok=True)
-        return None
-    return _SourceSnapshot(snapshot_path, *expected)
+    return snapshot_path, (digest.hexdigest(), after.st_size, after.st_mtime_ns)
 
 
 def _observed_sources_match(
@@ -224,19 +197,26 @@ class _SourcePlan:
     abs_path: Path
     source_type: str
     action: str  # "add" | "reparse" | "rechunk"
-    sha256: str
-    size_bytes: int
-    mtime_ns: int
-    parser_config: dict
-    chunker_config: dict
-    normalisation_config: dict
+    file_state: tuple[str, int, int]  # (sha256, size_bytes, mtime_ns)
     snapshot_path: Path | None = None
     units: list[ParsedChunkUnit] = field(default_factory=list)
     pages: list = field(default_factory=list)
+    # The chunk diff: (existing row, candidate) pairs, the chunk ids to
+    # delete, and the candidates to insert.
+    matched: list = field(default_factory=list)
+    deleted_chunk_ids: list[str] = field(default_factory=list)
+    new_candidates: list[chunking.ChunkCandidate] = field(default_factory=list)
 
     @property
     def content_path(self) -> Path:
         return self.snapshot_path or self.abs_path
+
+
+def _source_error(exc: Exception, plan: _SourcePlan) -> str:
+    """Describe a parser failure with the source path instead of its snapshot copy."""
+    return (str(exc) or type(exc).__name__).replace(
+        str(plan.content_path), plan.source_path
+    )
 
 
 def _match_chunks(
@@ -297,11 +277,17 @@ def _match_chunks(
 
 def _config_matches(row: sqlite3.Row, options: SyncOptions, source_type: str) -> bool:
     return (
-        (row["parser_name"], row["parser_version"]) == _parser_identity(source_type)
+        (row["parser_name"], row["parser_version"]) == _parser(source_type)[1:3]
         and row["chunker_version"] == schema.CHUNKER_VERSION
         and row["normalisation_version"] == schema.NORMALISATION_VERSION
         and json.loads(row["chunker_config"]).get("max_chunk_chars")
         == options.max_chunk_chars
+    )
+
+
+def _needs_new_embedding(row: sqlite3.Row, candidate, options: SyncOptions) -> bool:
+    return (
+        options.reembed or row["semantic_input_hash"] != candidate.semantic_input_hash
     )
 
 
@@ -323,19 +309,19 @@ def _chunks_missing_active_embedding(
     ).fetchall()
 
 
-def _source_values(plan: _SourcePlan) -> tuple:
+def _source_values(plan: _SourcePlan, options: SyncOptions) -> tuple:
+    _, parser_name, parser_version, parser_config = _parser(plan.source_type)
     return (
         plan.source_path,
-        plan.sha256,
-        plan.size_bytes,
-        plan.mtime_ns,
-        *_parser_identity(plan.source_type),
-        json.dumps(plan.parser_config),
+        *plan.file_state,
+        parser_name,
+        parser_version,
+        json.dumps(parser_config),
         schema.CHUNKER_NAME,
         schema.CHUNKER_VERSION,
-        json.dumps(plan.chunker_config),
+        json.dumps({"max_chunk_chars": options.max_chunk_chars}),
         schema.NORMALISATION_VERSION,
-        json.dumps(plan.normalisation_config),
+        "{}",
         schema.utc_now(),
     )
 
@@ -361,6 +347,82 @@ def _chunk_values(candidate: chunking.ChunkCandidate) -> tuple:
     )
 
 
+def _load_units(
+    conn: sqlite3.Connection, plan: _SourcePlan, report: SyncReport
+) -> bool:
+    """Fill a plan's chunk units, by parsing the source or, for a rechunk, from
+    its retained page layouts, and record the outcome in the report.
+
+    Returns False when the parser fails, so the sync skips the source.
+    """
+    if plan.action == "rechunk":  # no re-read of the source file
+        for page_row in conn.execute(
+            "SELECT physical_page, layout_json FROM pages "
+            "WHERE source_pk = ? ORDER BY physical_page",
+            (plan.source_pk,),
+        ):
+            if plan.source_type == "pdf":
+                plan.units.extend(
+                    pdf_parser.units_from_page_layout(
+                        page_row["physical_page"], page_row["layout_json"]
+                    )
+                )
+            else:
+                plan.units.extend(units_from_layout(page_row["layout_json"]))
+        report.sources_rechunked.append(plan.source_path)
+        return True
+    parser_module, _, _, parser_config = _parser(plan.source_type)
+    # Parsers raise arbitrary errors on damaged files; skip the file so the
+    # rest of the selection still syncs.
+    try:
+        result = parser_module.parse(plan.content_path, parser_config)
+    except Exception as exc:  # noqa: BLE001
+        report.skipped_sources[plan.source_path] = (
+            f"cannot parse: {_source_error(exc, plan)}"
+        )
+        return False
+    plan.units = result.units
+    plan.pages = result.pages
+    empty_pages = [page.physical_page for page in result.pages if not page.text.strip()]
+    if plan.source_type == "pdf" and empty_pages:
+        report.pages_without_text[plan.source_path] = empty_pages
+    if plan.action == "add":
+        report.sources_added.append(plan.source_path)
+    else:
+        report.sources_reparsed.append(plan.source_path)
+    return True
+
+
+def _embed_pending(
+    conn: sqlite3.Connection,
+    embedder: Embedder,
+    model_id: str,
+    pending: dict[str, str],
+    reembed: bool,
+) -> dict[str, list[float]]:
+    """Embed the pending texts, keyed by semantic input hash, that have no
+    embedding of the model yet, or all of them when ``reembed`` is set."""
+    if pending and not reembed:
+        # One JSON parameter, not one per hash: SQLite caps the parameters
+        # in a statement, and a large source set exceeds that cap.
+        cached = {
+            row["semantic_input_hash"]
+            for row in conn.execute(
+                "SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
+                "AND semantic_input_hash IN (SELECT value FROM json_each(?))",
+                (model_id, json.dumps(list(pending))),
+            )
+        }
+        pending = {
+            semantic_hash: text
+            for semantic_hash, text in pending.items()
+            if semantic_hash not in cached
+        }
+    vectors = embedder.embed(list(pending.values())) if pending else []
+    _validate_embedding_dimensions(vectors, schema.EMBEDDING_DIMENSIONS)
+    return dict(zip(pending, vectors))
+
+
 def _validate_embedding_dimensions(
     vectors: list[list[float]], expected_dimensions: int
 ) -> None:
@@ -371,9 +433,21 @@ def _validate_embedding_dimensions(
             )
 
 
-@dataclass(frozen=True)
-class PrunePlan:
-    paths: tuple[str, ...]
+def _lock_database(database_path: Path) -> int:
+    """Wait for the exclusive sync and prune lock of a database.
+
+    Two syncs that plan from the same database state would both insert the
+    same sources, so a second sync or prune waits for the first to finish.
+    The lock is an flock on ``<database>.lock`` beside the database, so it is
+    POSIX only. Close the returned descriptor to release the lock.
+    """
+    import fcntl
+
+    descriptor = os.open(
+        f"{Path(database_path).resolve()}.lock", os.O_RDONLY | os.O_CREAT, 0o644
+    )
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    return descriptor
 
 
 def sync(
@@ -391,11 +465,19 @@ def sync(
     database_path = Path(database_path)
 
     rules = load_manifest_rules(manifest_path)
+    if not (rules.explicit_paths or rules.include_globs):
+        raise SyncError(
+            "sync requires at least one [[source]] or [[include]] rule; "
+            "[[exclude]] rules only narrow a selection"
+        )
     selection = manifest_module.resolve_sources(sources_dir, rules)
 
-    conn = schema.connect(database_path)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = _lock_database(database_path)
+    conn: sqlite3.Connection | None = None
     snapshot_root: Path | None = None
     try:
+        conn = schema.connect(database_path)
         config = schema.ensure_schema(conn)
         snapshot_root = Path(
             tempfile.mkdtemp(
@@ -443,6 +525,18 @@ def sync(
             added_ids &= only_relative_paths
             continuing_ids &= only_relative_paths
 
+        report = SyncReport()
+        report.skipped_sources = {
+            path: "symlink; sync reads only regular files"
+            for path in selection.symlinks
+            if only_relative_paths is None or path in only_relative_paths
+        }
+        for path in sorted(added_ids | continuing_ids):
+            if not os.access(sources_dir / path, os.R_OK):
+                report.skipped_sources[path] = "no read permission"
+        added_ids -= report.skipped_sources.keys()
+        continuing_ids -= report.skipped_sources.keys()
+
         # ---- rename detection: gone id <-> added id sharing an unambiguous hash ----
         observed_states: dict[str, tuple[Path, str, int, int]] = {}
         renames: dict[str, str] = {}
@@ -456,7 +550,7 @@ def sync(
                 added_abs = sources_dir / sid
                 captured = _capture_stable_file_state(added_abs)
                 if captured is None:
-                    return SyncReport(status="aborted-source-changed")
+                    raise _SourceChangedDuringSync
                 file_hash, size_bytes, mtime_ns = captured
                 observed_states[sid] = (added_abs, file_hash, size_bytes, mtime_ns)
                 by_hash_added[file_hash].append(sid)
@@ -468,12 +562,16 @@ def sync(
         renamed_new_ids = set(renames.values())
         true_added_ids = added_ids - renamed_new_ids
 
-        report = SyncReport()
         report.selected_missing_paths.extend(
             sorted(
                 (missing_selected_paths | never_indexed_missing_paths)
                 - set(renames.keys())
             )
+        )
+        report.missing_explicit_paths.extend(
+            path
+            for path in selection.missing_explicit_paths
+            if only_relative_paths is None or path in only_relative_paths
         )
         report.indexed_unselected_paths.extend(
             sorted(indexed_unselected_paths - set(renames.keys()))
@@ -482,149 +580,82 @@ def sync(
 
         # ---- build per-source plans needing (re)parsing or rechunking ----
         plans: list[_SourcePlan] = []
-        hint_updates: list[tuple[str, int, int]] = []
+        hint_updates: list[tuple[int, int, str]] = []  # (size, mtime, path)
         # (chunk_id, semantic_input_hash) pairs needing only a fresh embedding
         # mapping: the embedding model changed but the source did not.
         reembed_only_chunks: list[tuple[str, str]] = []
         pending_embeddings: dict[str, str] = {}  # semantic_input_hash -> body text
 
-        for source_path in sorted(true_added_ids):
+        # Adds come first so new sources get their source_pk in path order.
+        for source_path in [*sorted(true_added_ids), *sorted(continuing_ids)]:
             abs_path = sources_dir / source_path
             source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
-            snapshot = _capture_source_snapshot(abs_path, snapshot_root)
-            if snapshot is None:
-                return SyncReport(status="aborted-source-changed")
-            file_hash = snapshot.sha256
-            size_bytes = snapshot.size_bytes
-            mtime_ns = snapshot.mtime_ns
-            observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
-            plans.append(
-                _SourcePlan(
-                    source_path=source_path,
-                    source_pk=None,
-                    abs_path=abs_path,
-                    source_type=source_type,
-                    action="add",
-                    sha256=file_hash,
-                    size_bytes=size_bytes,
-                    mtime_ns=mtime_ns,
-                    parser_config=_parser_config_for(source_type),
-                    chunker_config={"max_chunk_chars": options.max_chunk_chars},
-                    normalisation_config={},
-                    snapshot_path=snapshot.path,
-                )
-            )
-
-        for source_path in sorted(continuing_ids):
-            abs_path = sources_dir / source_path
-            source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
-            row = existing_sources[source_path]
-            source_pk = row["source_pk"]
-            captured = _capture_stable_file_state(abs_path)
-            if captured is None:
-                return SyncReport(status="aborted-source-changed")
-            file_hash, size_bytes, mtime_ns = captured
-            observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
-
-            config_matches = _config_matches(row, options, source_type)
-            content_changed = file_hash != row["sha256"]
-            if not content_changed and config_matches and not options.full:
-                if size_bytes != row["size_bytes"] or mtime_ns != row["mtime_ns"]:
-                    hint_updates.append((source_path, size_bytes, mtime_ns))
-                if not options.reembed:
-                    missing_rows = _chunks_missing_active_embedding(
-                        conn, source_pk, model_id
-                    )
-                    if not missing_rows:
-                        report.sources_unchanged.append(source_path)
-                    for missing_row in missing_rows:
-                        reembed_only_chunks.append(
-                            (
-                                missing_row["chunk_id"],
-                                missing_row["semantic_input_hash"],
-                            )
-                        )
-                        pending_embeddings.setdefault(
-                            missing_row["semantic_input_hash"], missing_row["body"]
-                        )
-                    continue
-
-            needs_full_reparse = (
-                content_changed
-                or (row["parser_name"], row["parser_version"])
-                != _parser_identity(source_type)
-                or options.full
-            )
-
-            action = "reparse" if needs_full_reparse else "rechunk"
-            snapshot = None
-            if action == "reparse":
-                snapshot = _capture_source_snapshot(abs_path, snapshot_root)
+            row = existing_sources.get(source_path)
+            action = "add"
+            state = None
+            if row is not None:
+                state = _capture_stable_file_state(abs_path)
+                if state is None:
+                    raise _SourceChangedDuringSync
+                observed_states[source_path] = (abs_path, *state)
+                content_changed = state[0] != row["sha256"]
                 if (
-                    snapshot is None
-                    or (
-                        snapshot.sha256,
-                        snapshot.size_bytes,
-                        snapshot.mtime_ns,
-                    )
-                    != captured
+                    not content_changed
+                    and _config_matches(row, options, source_type)
+                    and not options.full
                 ):
-                    return SyncReport(status="aborted-source-changed")
+                    if state[1:] != (row["size_bytes"], row["mtime_ns"]):
+                        hint_updates.append((*state[1:], source_path))
+                    if not options.reembed:
+                        missing_rows = _chunks_missing_active_embedding(
+                            conn, row["source_pk"], model_id
+                        )
+                        if not missing_rows:
+                            report.sources_unchanged.append(source_path)
+                        for missing_row in missing_rows:
+                            reembed_only_chunks.append(
+                                (
+                                    missing_row["chunk_id"],
+                                    missing_row["semantic_input_hash"],
+                                )
+                            )
+                            pending_embeddings.setdefault(
+                                missing_row["semantic_input_hash"], missing_row["body"]
+                            )
+                        continue
+                reparse = (
+                    content_changed
+                    or options.full
+                    or (row["parser_name"], row["parser_version"])
+                    != _parser(source_type)[1:3]
+                )
+                action = "reparse" if reparse else "rechunk"
+
+            snapshot_path = None
+            if action != "rechunk":
+                snapshot = _capture_source_snapshot(abs_path, snapshot_root)
+                # A continuing source must still hold the bytes just hashed.
+                if snapshot is None or (state is not None and state != snapshot[1]):
+                    raise _SourceChangedDuringSync
+                snapshot_path, state = snapshot
+                observed_states[source_path] = (abs_path, *state)
+            assert state is not None
             plans.append(
                 _SourcePlan(
                     source_path=source_path,
-                    source_pk=source_pk,
+                    source_pk=None if row is None else row["source_pk"],
                     abs_path=abs_path,
                     source_type=source_type,
                     action=action,
-                    sha256=file_hash,
-                    size_bytes=size_bytes,
-                    mtime_ns=mtime_ns,
-                    parser_config=_parser_config_for(source_type),
-                    chunker_config={"max_chunk_chars": options.max_chunk_chars},
-                    normalisation_config={},
-                    snapshot_path=snapshot.path if snapshot is not None else None,
+                    file_state=state,
+                    snapshot_path=snapshot_path,
                 )
             )
 
         # ---- parse or rechunk each plan ----
-        for plan in plans:
-            if plan.action in ("add", "reparse"):
-                parser_module = {
-                    "pdf": pdf_parser,
-                    "markdown": markdown_parser,
-                    "workbook": workbook_parser,
-                }[plan.source_type]
-                result = parser_module.parse(plan.content_path, plan.parser_config)
-                plan.units = result.units
-                plan.pages = result.pages
-                if plan.action == "add":
-                    report.sources_added.append(plan.source_path)
-                else:
-                    report.sources_reparsed.append(plan.source_path)
-            else:  # rechunk from retained extraction, no re-read of the source file
-                assert plan.source_pk is not None
-                page_rows = conn.execute(
-                    "SELECT * FROM pages WHERE source_pk = ? ORDER BY physical_page",
-                    (plan.source_pk,),
-                ).fetchall()
-                units: list[ParsedChunkUnit] = []
-                for page_row in page_rows:
-                    if plan.source_type == "pdf":
-                        units.extend(
-                            pdf_parser.units_from_page_layout(
-                                page_row["physical_page"], page_row["layout_json"]
-                            )
-                        )
-                    else:
-                        units.extend(units_from_layout(page_row["layout_json"]))
-                plan.units = units
-                plan.pages = []
-                report.sources_rechunked.append(plan.source_path)
+        plans = [plan for plan in plans if _load_units(conn, plan, report)]
 
         # ---- build chunk candidates and diff against existing rows ----
-        source_diffs: dict[str, dict] = {}
-
         for plan in plans:
             groups = chunking.group_units(plan.units, max_chars=options.max_chunk_chars)
             candidates = chunking.build_chunk_candidates(
@@ -635,95 +666,66 @@ def sync(
             existing_rows = conn.execute(
                 "SELECT * FROM chunks WHERE source_pk = ?", (plan.source_pk,)
             ).fetchall()
-            matched, to_delete_ids, new_candidates = _match_chunks(
+            plan.matched, plan.deleted_chunk_ids, plan.new_candidates = _match_chunks(
                 existing_rows, candidates
             )
-
-            diff = {
-                "matched": [],
-                "to_delete_ids": to_delete_ids,
-                "new": new_candidates,
-            }
-            for row, candidate in matched:
-                hash_changed = (
-                    row["semantic_input_hash"] != candidate.semantic_input_hash
-                )
-                diff["matched"].append((row["chunk_id"], candidate, hash_changed))
-                if hash_changed or options.reembed:
+            for row, candidate in plan.matched:
+                if _needs_new_embedding(row, candidate, options):
                     pending_embeddings[candidate.semantic_input_hash] = candidate.body
-            for candidate in new_candidates:
+            for candidate in plan.new_candidates:
                 pending_embeddings[candidate.semantic_input_hash] = candidate.body
 
-            source_diffs[plan.source_path] = diff
-
-        # skip hashes already cached for the active model, unless forcing re-embed
-        if pending_embeddings and not options.reembed:
-            placeholders = ",".join("?" for _ in pending_embeddings)
-            cached_rows = conn.execute(
-                f"SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
-                f"AND semantic_input_hash IN ({placeholders})",
-                (model_id, *pending_embeddings.keys()),
-            ).fetchall()
-            for row in cached_rows:
-                pending_embeddings.pop(row["semantic_input_hash"], None)
-
-        missing_hashes = list(pending_embeddings)
-        missing_texts = [pending_embeddings[h] for h in missing_hashes]
-        vectors = embedder.embed(missing_texts) if missing_texts else []
-        _validate_embedding_dimensions(vectors, schema.EMBEDDING_DIMENSIONS)
-        hash_to_vector = dict(zip(missing_hashes, vectors))
-        report.embeddings_generated = len(missing_hashes)
-
-        # ---- recheck: abort if any selected source changed mid-flight ----
-        if not _observed_sources_match(observed_states):
-            return SyncReport(status="aborted-source-changed")
-
-        nothing_to_do = (
-            not plans
-            and not hint_updates
-            and not renames
-            and not reembed_only_chunks
-            and not active_config_changed
+        hash_to_vector = _embed_pending(
+            conn, embedder, model_id, pending_embeddings, options.reembed
         )
-        if nothing_to_do:
+        report.embeddings_generated = len(hash_to_vector)
+
+        if not (
+            plans
+            or hint_updates
+            or renames
+            or reembed_only_chunks
+            or active_config_changed
+        ):
             return report
 
-        generation = uuid.uuid4().hex
         rendered_assets: dict[str, list] = {}
-        asset_generations: dict[str, AssetGeneration] = {}
-        generation_root = _asset_generation_root(database_path, generation)
-        try:
-            for plan in plans:
-                if (
-                    plan.action in ("add", "reparse")
-                    and plan.source_type == "pdf"
-                    and options.generate_assets
-                ):
-                    asset_generation, assets = _render_assets(
-                        database_path, plan, generation
-                    )
-                    asset_generations[plan.source_path] = asset_generation
-                    rendered_assets[plan.source_path] = assets
-        except Exception:
-            shutil.rmtree(generation_root, ignore_errors=True)
-            raise
+        # A new source has no source_pk until its row is inserted, so its
+        # assets render into a staging directory renamed after the insert.
+        staging_dirs: dict[str, Path] = {}
+        generation_root = _asset_generation_root(database_path, uuid.uuid4().hex)
+        for plan in plans:
+            if (
+                plan.action == "rechunk"
+                or plan.source_type != "pdf"
+                or not options.generate_assets
+            ):
+                continue
+            if plan.source_pk is None:
+                base_dir = generation_root / f".staging-{uuid.uuid4().hex}"
+                staging_dirs[plan.source_path] = base_dir
+            else:
+                base_dir = generation_root / str(plan.source_pk)
+            try:
+                rendered_assets[plan.source_path] = _render_assets(plan, base_dir)
+            except Exception as exc:
+                shutil.rmtree(generation_root, ignore_errors=True)
+                raise SyncError(
+                    f"cannot render pages of {plan.source_path}: "
+                    f"{_source_error(exc, plan)}"
+                ) from exc
 
         # ==== single write transaction ====
-        _asset_event("begin-immediate")
-        if not _observed_sources_match(observed_states):
-            shutil.rmtree(generation_root, ignore_errors=True)
-            return SyncReport(status="aborted-source-changed")
         conn.execute("BEGIN IMMEDIATE")
         try:
             backend = vector_backend.SqliteVecBackend()
 
             # size/mtime hint-only updates for sources whose content, parser,
             # chunker, and normalisation metadata are all unchanged
-            for source_path, size_bytes, mtime_ns in hint_updates:
-                conn.execute(
-                    "UPDATE sources SET size_bytes = ?, mtime_ns = ? WHERE path = ?",
-                    (size_bytes, mtime_ns, source_path),
-                )
+            conn.executemany(
+                "UPDATE sources SET size_bytes = ?, mtime_ns = ? WHERE path = ?",
+                hint_updates,
+            )
 
             # renames: relabel path while retaining internal source_pk
             for old_id, new_id in sorted(renames.items()):
@@ -734,14 +736,11 @@ def sync(
                 )
                 report.sources_renamed.append((old_id, new_id))
 
-            # apply per-plan chunk/page/source changes
+            links: list[tuple[str, str]] = []  # (chunk_id, semantic_input_hash)
             for plan in plans:
-                diff = source_diffs[plan.source_path]
-
-                # A brand-new source's row must exist before any chunk that
-                # references it via a foreign key is inserted.
                 if plan.action == "add":
-                    conn.execute(
+                    # A new source's row must exist before its chunks reference it.
+                    plan.source_pk = conn.execute(
                         """
                         INSERT INTO sources (
                             path, sha256, size_bytes, mtime_ns,
@@ -751,97 +750,97 @@ def sync(
                             indexed_at_utc, source_type, index_status
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
                         """,
-                        (*_source_values(plan), plan.source_type),
-                    )
-                    plan.source_pk = conn.execute(
-                        "SELECT source_pk FROM sources WHERE path = ?",
-                        (plan.source_path,),
-                    ).fetchone()["source_pk"]
-                    asset_generation = asset_generations.get(plan.source_path)
-                    if asset_generation is not None:
-                        path_mapping = asset_generation.finalize_new_source(
-                            plan.source_pk
-                        )
+                        (*_source_values(plan, options), plan.source_type),
+                    ).lastrowid
+                    staging_dir = staging_dirs.get(plan.source_path)
+                    if staging_dir is not None:
+                        final_dir = staging_dir.with_name(str(plan.source_pk))
+                        os.replace(staging_dir, final_dir)
                         rendered_assets[plan.source_path] = [
-                            (page, path_mapping.get(path, path), *rest)
+                            (page, final_dir / path.name, *rest)
                             for page, path, *rest in rendered_assets[plan.source_path]
                         ]
-                    assert plan.source_pk is not None
-
-                for chunk_id in diff["to_delete_ids"]:
-                    conn.execute("DELETE FROM chunks WHERE chunk_id = ?", (chunk_id,))
-                    report.chunks_deleted += 1
-
-                for chunk_id, candidate, hash_changed in diff["matched"]:
+                else:
                     conn.execute(
                         """
-                        UPDATE chunks SET
-                            logical_key = ?, ordinal = ?, heading_path = ?, symbol = ?,
-                            body = ?, semantic_input_hash = ?, lexical_hash = ?,
-                            content_type = ?, physical_page = ?, page_start_offset = ?,
-                            page_end_offset = ?, page_range_start = ?, page_range_end = ?,
-                            line_start = ?, line_end = ?, locator_json = ?
-                        WHERE chunk_id = ?
+                        UPDATE sources SET
+                            path = ?, sha256 = ?, size_bytes = ?, mtime_ns = ?,
+                            parser_name = ?, parser_version = ?, parser_config = ?,
+                            chunker_name = ?, chunker_version = ?, chunker_config = ?,
+                            normalisation_version = ?, normalisation_config = ?,
+                            indexed_at_utc = ?, index_status = 'ok'
+                        WHERE source_pk = ?
                         """,
-                        (*_chunk_values(candidate), chunk_id),
-                    )
-                    report.chunks_updated += 1
-                    if hash_changed or options.reembed:
-                        embedding_id = _ensure_embedding(
-                            conn,
-                            backend,
-                            model_id,
-                            candidate.semantic_input_hash,
-                            hash_to_vector,
-                        )
-                        conn.execute(
-                            "DELETE FROM chunk_embeddings WHERE chunk_id = ?",
-                            (chunk_id,),
-                        )
-                        conn.execute(
-                            "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
-                            (chunk_id, embedding_id),
-                        )
-
-                for candidate in diff["new"]:
-                    chunk_id = uuid.uuid4().hex
-                    conn.execute(
-                        """
-                        INSERT INTO chunks (
-                            chunk_id, source_pk, logical_key, ordinal, heading_path, symbol,
-                            body, semantic_input_hash, lexical_hash, content_type,
-                            physical_page, page_start_offset, page_end_offset,
-                            page_range_start, page_range_end, line_start, line_end, locator_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (chunk_id, plan.source_pk, *_chunk_values(candidate)),
-                    )
-                    report.chunks_added += 1
-                    embedding_id = _ensure_embedding(
-                        conn,
-                        backend,
-                        model_id,
-                        candidate.semantic_input_hash,
-                        hash_to_vector,
-                    )
-                    conn.execute(
-                        "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
-                        (chunk_id, embedding_id),
+                        (*_source_values(plan, options), plan.source_pk),
                     )
 
-                # pages + source metadata for add/reparse; assets regenerated only then
-                if plan.action in ("add", "reparse"):
+                conn.executemany(
+                    "DELETE FROM chunks WHERE chunk_id = ?",
+                    [(chunk_id,) for chunk_id in plan.deleted_chunk_ids],
+                )
+                conn.executemany(
+                    """
+                    UPDATE chunks SET
+                        logical_key = ?, ordinal = ?, heading_path = ?, symbol = ?,
+                        body = ?, semantic_input_hash = ?, lexical_hash = ?,
+                        content_type = ?, physical_page = ?, page_start_offset = ?,
+                        page_end_offset = ?, page_range_start = ?, page_range_end = ?,
+                        line_start = ?, line_end = ?, locator_json = ?
+                    WHERE chunk_id = ?
+                    """,
+                    [
+                        (*_chunk_values(candidate), row["chunk_id"])
+                        for row, candidate in plan.matched
+                    ],
+                )
+                relinked = [
+                    (row["chunk_id"], candidate.semantic_input_hash)
+                    for row, candidate in plan.matched
+                    if _needs_new_embedding(row, candidate, options)
+                ]
+                conn.executemany(
+                    "DELETE FROM chunk_embeddings WHERE chunk_id = ?",
+                    [(chunk_id,) for chunk_id, _ in relinked],
+                )
+                new_chunks = [
+                    (uuid.uuid4().hex, candidate) for candidate in plan.new_candidates
+                ]
+                conn.executemany(
+                    """
+                    INSERT INTO chunks (
+                        chunk_id, source_pk, logical_key, ordinal, heading_path, symbol,
+                        body, semantic_input_hash, lexical_hash, content_type,
+                        physical_page, page_start_offset, page_end_offset,
+                        page_range_start, page_range_end, line_start, line_end, locator_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (chunk_id, plan.source_pk, *_chunk_values(candidate))
+                        for chunk_id, candidate in new_chunks
+                    ],
+                )
+                links.extend(relinked)
+                links.extend(
+                    (chunk_id, candidate.semantic_input_hash)
+                    for chunk_id, candidate in new_chunks
+                )
+                report.chunks_deleted += len(plan.deleted_chunk_ids)
+                report.chunks_updated += len(plan.matched)
+                report.chunks_added += len(new_chunks)
+
+                # pages and assets change only when the source was parsed
+                if plan.action != "rechunk":
                     conn.execute(
                         "DELETE FROM pages WHERE source_pk = ?", (plan.source_pk,)
                     )
-                    for page in plan.pages:
-                        conn.execute(
-                            """
-                            INSERT INTO pages (
-                                source_pk, physical_page, printed_label, text,
-                                extraction_method, extraction_status, section_candidates, layout_json
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
+                    conn.executemany(
+                        """
+                        INSERT INTO pages (
+                            source_pk, physical_page, printed_label, text,
+                            extraction_method, extraction_status, section_candidates, layout_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
                             (
                                 plan.source_pk,
                                 page.physical_page,
@@ -850,26 +849,13 @@ def sync(
                                 page.extraction_method,
                                 page.extraction_status,
                                 json.dumps(page.section_candidates),
-                                json.dumps(page.layout)
-                                if page.layout is not None
-                                else None,
-                            ),
-                        )
-
-                    if plan.action == "reparse":
-                        conn.execute(
-                            """
-                            UPDATE sources SET
-                                path = ?, sha256 = ?, size_bytes = ?, mtime_ns = ?,
-                                parser_name = ?, parser_version = ?, parser_config = ?,
-                                chunker_name = ?, chunker_version = ?, chunker_config = ?,
-                                normalisation_version = ?, normalisation_config = ?,
-                                indexed_at_utc = ?, index_status = 'ok'
-                            WHERE source_pk = ?
-                            """,
-                            (*_source_values(plan), plan.source_pk),
-                        )
-
+                                None
+                                if page.layout is None
+                                else json.dumps(page.layout),
+                            )
+                            for page in plan.pages
+                        ],
+                    )
                     if plan.source_type == "pdf" and options.generate_assets:
                         _persist_assets(
                             conn,
@@ -877,38 +863,19 @@ def sync(
                             rendered_assets.get(plan.source_path, []),
                             database_path,
                         )
-                else:
-                    conn.execute(
-                        """
-                        UPDATE sources SET
-                            chunker_name = ?, chunker_version = ?, chunker_config = ?,
-                            normalisation_version = ?, normalisation_config = ?,
-                            indexed_at_utc = ?, index_status = 'ok'
-                        WHERE source_pk = ?
-                        """,
-                        (
-                            schema.CHUNKER_NAME,
-                            schema.CHUNKER_VERSION,
-                            json.dumps(plan.chunker_config),
-                            schema.NORMALISATION_VERSION,
-                            json.dumps(plan.normalisation_config),
-                            schema.utc_now(),
-                            plan.source_pk,
-                        ),
-                    )
 
-            # top up embeddings for otherwise-untouched sources whose only
-            # invalidation is a changed active embedding model
-            for chunk_id, semantic_input_hash in reembed_only_chunks:
-                embedding_id = _ensure_embedding(
-                    conn, backend, model_id, semantic_input_hash, hash_to_vector
-                )
-                conn.execute(
-                    "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
-                    (chunk_id, embedding_id),
+            # Link each new or changed chunk, then each chunk of an unchanged
+            # source that lacks an embedding of the active model.
+            for chunk_id, semantic_input_hash in [*links, *reembed_only_chunks]:
+                _ensure_embedding(
+                    conn,
+                    backend,
+                    model_id,
+                    hash_to_vector,
+                    chunk_id,
+                    semantic_input_hash,
                 )
 
-            _asset_event("pre-commit-source-check")
             if not _observed_sources_match(observed_states):
                 raise _SourceChangedDuringSync
 
@@ -920,13 +887,11 @@ def sync(
                 embedding_dimensions=schema.EMBEDDING_DIMENSIONS,
             )
             conn.execute("COMMIT")
-        except Exception as exc:
+        except Exception:
             with contextlib.suppress(sqlite3.Error):
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
             shutil.rmtree(generation_root, ignore_errors=True)
-            if isinstance(exc, _SourceChangedDuringSync):
-                return SyncReport(status="aborted-source-changed")
             raise
 
         if options.cleanup_asset_generations:
@@ -935,16 +900,23 @@ def sync(
             )
 
         return report
+    except _SourceChangedDuringSync:
+        return SyncReport(status="aborted-source-changed")
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
         if snapshot_root is not None:
             shutil.rmtree(snapshot_root, ignore_errors=True)
+        os.close(lock)
 
 
-def plan_prune(conn: sqlite3.Connection, selected_paths: Collection[str]) -> PrunePlan:
+def plan_prune(
+    conn: sqlite3.Connection, selected_paths: Collection[str]
+) -> tuple[str, ...]:
+    """Return the indexed source paths outside ``selected_paths``."""
     rows = conn.execute("SELECT path FROM sources ORDER BY path").fetchall()
     selected = set(selected_paths)
-    return PrunePlan(tuple(row["path"] for row in rows if row["path"] not in selected))
+    return tuple(row["path"] for row in rows if row["path"] not in selected)
 
 
 def _canonical_asset_parts(
@@ -991,11 +963,11 @@ def _prune_asset_target(
 
 
 def validate_prune_plan(
-    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+    conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> set[Path]:
     """Return the asset directories the plan would remove, or raise if any stored asset path is unsafe."""
     targets_by_source: dict[int, set[Path]] = defaultdict(set)
-    for path in plan.paths:
+    for path in plan:
         for row in conn.execute(
             "SELECT source_pk, asset_path FROM assets JOIN sources USING (source_pk) WHERE path = ?",
             (path,),
@@ -1011,209 +983,29 @@ def validate_prune_plan(
     return set().union(*targets_by_source.values())
 
 
-def _require_dirfd_primitives() -> None:
-    required = (os.open, os.stat, os.unlink, os.rename, os.rmdir)
-    if not all(func in os.supports_dir_fd for func in required):
-        raise OSError("safe asset cleanup requires POSIX dir_fd support")
-    if os.stat not in os.supports_follow_symlinks:
-        raise OSError("safe asset cleanup requires no-follow stat support")
-    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
-        raise OSError("safe asset cleanup requires O_DIRECTORY and O_NOFOLLOW")
-
-
-def _open_dir_at(parent_fd: int, name: str) -> int:
-    return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
-
-
-def _unlink_symlink_at(parent_fd: int, name: str) -> bool:
-    try:
-        mode = os.stat(name, dir_fd=parent_fd, follow_symlinks=False).st_mode
-    except FileNotFoundError:
-        return True
-    if stat.S_ISLNK(mode):
-        os.unlink(name, dir_fd=parent_fd)
-        return True
-    return False
-
-
-def _rmtree_dir_at(parent_fd: int, name: str) -> None:
-    child_fd = _open_dir_at(parent_fd, name)
-    try:
-        for entry in os.listdir(child_fd):
-            mode = os.stat(entry, dir_fd=child_fd, follow_symlinks=False).st_mode
-            if stat.S_ISDIR(mode) and not stat.S_ISLNK(mode):
-                _rmtree_dir_at(child_fd, entry)
-            else:
-                os.unlink(entry, dir_fd=child_fd)
-    finally:
-        os.close(child_fd)
-    os.rmdir(name, dir_fd=parent_fd)
-
-
-def _quarantine_fd_at(generations_fd: int) -> int:
-    quarantine_root = ".prune-quarantine"
-    with contextlib.suppress(FileExistsError):
-        os.mkdir(quarantine_root, dir_fd=generations_fd)
-    try:
-        return _open_dir_at(generations_fd, quarantine_root)
-    except OSError:
-        if _unlink_symlink_at(generations_fd, quarantine_root):
-            os.mkdir(quarantine_root, dir_fd=generations_fd)
-            return _open_dir_at(generations_fd, quarantine_root)
-        raise
-
-
-def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
-    try:
-        generation_fd = _open_dir_at(generations_fd, generation)
-    except FileNotFoundError:
-        return
-    except OSError:
-        if _unlink_symlink_at(generations_fd, generation):
-            return
-        raise
-    else:
-        os.close(generation_fd)
-    _quarantine_and_remove(
-        generations_fd,
-        generations_fd,
-        generation,
-        f"{generation}-{uuid.uuid4().hex}",
-        f"quarantined asset generation is not a directory: {generation}",
-    )
-
-
-def _quarantine_and_remove(
-    generations_fd: int, parent_fd: int, name: str, quarantine_name: str, error: str
-) -> None:
-    """Move ``name`` into the quarantine, then delete it, restoring it on failure."""
-    quarantine_fd = _quarantine_fd_at(generations_fd)
-    try:
-        os.rename(name, quarantine_name, src_dir_fd=parent_fd, dst_dir_fd=quarantine_fd)
-        try:
-            mode = os.stat(
-                quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False
-            ).st_mode
-            if stat.S_ISLNK(mode):
-                os.unlink(quarantine_name, dir_fd=quarantine_fd)
-            elif stat.S_ISDIR(mode):
-                _rmtree_dir_at(quarantine_fd, quarantine_name)
-            else:
-                raise ValueError(error)
-        except Exception:
-            with contextlib.suppress(OSError):
-                os.rename(
-                    quarantine_name,
-                    name,
-                    src_dir_fd=quarantine_fd,
-                    dst_dir_fd=parent_fd,
-                )
-            raise
-    finally:
-        os.close(quarantine_fd)
-    with contextlib.suppress(OSError):
-        os.rmdir(".prune-quarantine", dir_fd=generations_fd)
-
-
-def _remove_source_entry_at(
-    generations_fd: int, generation: str, source_pk: str, source_dir: Path
-) -> None:
-    try:
-        generation_fd = _open_dir_at(generations_fd, generation)
-    except FileNotFoundError:
-        return
-    except OSError:
-        if _unlink_symlink_at(generations_fd, generation):
-            return
-        raise
-    try:
-        try:
-            mode = os.stat(
-                source_pk, dir_fd=generation_fd, follow_symlinks=False
-            ).st_mode
-        except FileNotFoundError:
-            return
-        if stat.S_ISLNK(mode):
-            os.unlink(source_pk, dir_fd=generation_fd)
-            return
-        if not stat.S_ISDIR(mode):
-            raise ValueError(f"pruned asset path is not a directory: {source_dir}")
-        _quarantine_and_remove(
-            generations_fd,
-            generation_fd,
-            source_pk,
-            f"{generation}-{source_pk}-{uuid.uuid4().hex}",
-            f"quarantined asset path is not a directory: {source_dir}",
-        )
-    finally:
-        os.close(generation_fd)
-
-
-def _with_generations_fd(database_path: Path, action) -> None:
-    _require_dirfd_primitives()
-    with contextlib.ExitStack() as stack:
-        fd = os.open(Path(database_path).resolve().parent, os.O_RDONLY | os.O_DIRECTORY)
-        stack.callback(os.close, fd)
-        for name in ("imgs", "generations"):
-            fd = _open_dir_at(fd, name)
-            stack.callback(os.close, fd)
-        action(fd)
-
-
-def _safe_remove_asset_generation(database_path: Path, generation_dir: Path) -> None:
-    generations_root = Path(database_path).resolve().parent / "imgs" / "generations"
-    try:
-        generation = Path(generation_dir).relative_to(generations_root).parts
-    except ValueError as exc:
-        raise ValueError(
-            f"asset generation escapes image root: {generation_dir}"
-        ) from exc
-    if len(generation) != 1:
-        raise ValueError(
-            f"asset generation cleanup expects a generation directory: {generation_dir}"
-        )
-    _with_generations_fd(
-        database_path, lambda fd: _remove_generation_entry_at(fd, generation[0])
-    )
-
-
-def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None:
-    generations_root = Path(database_path).resolve().parent / "imgs" / "generations"
-    try:
-        relative_parts = Path(source_dir).relative_to(generations_root).parts
-    except ValueError as exc:
-        raise ValueError(
-            f"pruned asset directory escapes image root: {source_dir}"
-        ) from exc
-    if len(relative_parts) != 2:
-        raise ValueError(
-            f"pruned asset directory must be a generation/source directory: {source_dir}"
-        )
-    generation, source_pk = relative_parts
-    _with_generations_fd(
-        database_path,
-        lambda fd: _remove_source_entry_at(fd, generation, source_pk, source_dir),
-    )
-
-
 def apply_prune(
-    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+    conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
+) -> list[str]:
+    lock = _lock_database(database_path)
+    try:
+        return _apply_prune(conn, database_path, plan)
+    finally:
+        os.close(lock)
+
+
+def _apply_prune(
+    conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> list[str]:
     backend = vector_backend.SqliteVecBackend()
     conn.execute("BEGIN IMMEDIATE")
     try:
         pruned_asset_targets = validate_prune_plan(conn, database_path, plan)
         conn.executemany(
-            "DELETE FROM sources WHERE path = ?", [(path,) for path in plan.paths]
+            "DELETE FROM sources WHERE path = ?", [(path,) for path in plan]
         )
-        orphan_rows = conn.execute(
-            "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
-        ).fetchall()
-        for row in orphan_rows:
-            backend.delete(conn, row["embedding_id"])
-            conn.execute(
-                "DELETE FROM embeddings WHERE embedding_id = ?", (row["embedding_id"],)
-            )
+        orphans = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
+        backend.delete(conn, [row["embedding_id"] for row in conn.execute(orphans)])
+        conn.execute(f"DELETE FROM embeddings WHERE embedding_id IN ({orphans})")
         schema.touch_config(conn)
         conn.execute("COMMIT")
     except Exception:
@@ -1232,16 +1024,22 @@ def apply_prune(
         for row in conn.execute("SELECT source_pk, asset_path FROM assets").fetchall()
     }
     for asset_dir in sorted(pruned_asset_targets, key=str):
-        if asset_dir in referenced_dirs:
+        if asset_dir in referenced_dirs or not asset_dir.exists():
             continue
         try:
-            _safe_remove_pruned_asset_dir(asset_dir, database_path)
-        except Exception as exc:  # noqa: BLE001
+            shutil.rmtree(asset_dir)
+        except OSError as exc:
             leaks.append(f"failed to remove pruned asset directory {asset_dir}: {exc}")
     try:
         leaks.extend(cleanup_asset_generations(conn, database_path))
     except Exception as exc:  # noqa: BLE001
         leaks.append(f"failed to clean unreferenced asset generations: {exc}")
+    # Deleted rows leave free pages inside the file; VACUUM returns them to
+    # the filesystem so a prune also shrinks the database.
+    try:
+        conn.execute("VACUUM")
+    except sqlite3.Error as exc:
+        leaks.append(f"failed to vacuum the database after pruning: {exc}")
     return leaks
 
 
@@ -1249,31 +1047,36 @@ def _ensure_embedding(
     conn: sqlite3.Connection,
     backend: vector_backend.SqliteVecBackend,
     model_id: str,
-    semantic_input_hash: str,
     hash_to_vector: dict[str, list[float]],
-) -> int:
+    chunk_id: str,
+    semantic_input_hash: str,
+) -> None:
+    """Link a chunk to the model's embedding of its text, storing a vector
+    generated in this sync."""
     row = conn.execute(
         "SELECT embedding_id FROM embeddings WHERE model_id = ? AND semantic_input_hash = ?",
         (model_id, semantic_input_hash),
     ).fetchone()
     vector = hash_to_vector.get(semantic_input_hash)
-    if row is not None:
-        if vector is not None:
-            backend.upsert(conn, row["embedding_id"], vector)
-        return row["embedding_id"]
-
-    if vector is None:
+    if row is None and vector is None:
         raise SyncError(
             f"no embedding available for semantic_input_hash={semantic_input_hash!r}; "
             "this indicates a bug in the pending-embedding queue"
         )
-    cursor = conn.execute(
-        "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
-        (model_id, semantic_input_hash, schema.utc_now()),
+    if row is None:
+        embedding_id = conn.execute(
+            "INSERT INTO embeddings(model_id, semantic_input_hash, created_at_utc) VALUES (?, ?, ?)",
+            (model_id, semantic_input_hash, schema.utc_now()),
+        ).lastrowid
+        assert embedding_id is not None
+    else:
+        embedding_id = row["embedding_id"]
+    if vector is not None:
+        backend.upsert(conn, embedding_id, vector)
+    conn.execute(
+        "INSERT OR IGNORE INTO chunk_embeddings(chunk_id, embedding_id) VALUES (?, ?)",
+        (chunk_id, embedding_id),
     )
-    embedding_id = cursor.lastrowid
-    backend.upsert(conn, embedding_id, vector)
-    return embedding_id
 
 
 def _asset_generation_root(database_path: Path, generation: str) -> Path:
@@ -1281,35 +1084,23 @@ def _asset_generation_root(database_path: Path, generation: str) -> Path:
 
 
 def _render_assets(
-    database_path: Path, plan: _SourcePlan, generation: str
-) -> tuple[AssetGeneration, list[tuple[int, Path, object, str]]]:
-    generation_root = _asset_generation_root(database_path, generation)
-    staging_dir = None
-    if plan.source_pk is None:
-        staging_dir = generation_root / f".staging-{uuid.uuid4().hex}"
-    base_dir = staging_dir or generation_root / str(plan.source_pk)
+    plan: _SourcePlan, base_dir: Path
+) -> list[tuple[int, Path, object, str, str]]:
     base_dir.mkdir(parents=True, exist_ok=False)
-    rendered = []
+    rendered: list[tuple[int, Path, object, str, str]] = []
     physical_pages = sorted({page.physical_page for page in plan.pages})
     for physical_page in physical_pages:
         render = pdf_parser.render_page(plan.content_path, physical_page)
         asset_path = base_dir / f"page-{physical_page:04d}.{render.ext}"
         asset_path.write_bytes(render.image_bytes)
         sha256 = file_sha256(asset_path)
-        _asset_event("asset-hash")
         rendered.append((physical_page, asset_path, render, "page-render", sha256))
         for crop in pdf_parser.render_figure_crops(plan.content_path, physical_page):
             crop_path = base_dir / f"{crop.label}.{crop.ext}"
             crop_path.write_bytes(crop.image_bytes)
             sha256 = file_sha256(crop_path)
-            _asset_event("asset-hash")
             rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
-    generation_obj = AssetGeneration(
-        root=generation_root,
-        referenced_files=tuple(path for _, path, _, _, _ in rendered),
-        staging_dir=staging_dir,
-    )
-    return generation_obj, rendered
+    return rendered
 
 
 def _persist_assets(
@@ -1376,9 +1167,7 @@ def cleanup_asset_generations(
     referenced = referenced_asset_generations(conn, database_path)
     for generation in root.iterdir():
         symlink = generation.is_symlink()
-        if generation.name == ".prune-quarantine" or (
-            not symlink and generation in referenced
-        ):
+        if not symlink and generation in referenced:
             continue
         kind = (
             "invalid asset generation symlink"
@@ -1386,8 +1175,11 @@ def cleanup_asset_generations(
             else "unreferenced asset generation"
         )
         try:
-            _safe_remove_asset_generation(database_path, generation)
-        except Exception as exc:  # noqa: BLE001
+            if symlink:
+                generation.unlink()
+            else:
+                shutil.rmtree(generation)
+        except OSError as exc:
             leaks.append(f"failed to remove {kind} {generation}: {exc}")
     return leaks
 

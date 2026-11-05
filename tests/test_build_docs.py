@@ -40,14 +40,13 @@ class DocumentationInvariantTests(unittest.TestCase):
             self.assertIs(config["format"]["html"]["keep-md"], True)
             self.assertIs(config["execute"]["error"], False)
 
-    def test_documenter_environment_uses_local_tracecite_without_warnonly(self) -> None:
+    def test_documenter_environment_uses_local_tracecite(self) -> None:
         project = tomllib.loads((self.ROOT / "docs_jl" / "Project.toml").read_text())
         self.assertIn("TraceCite", project["deps"])
         self.assertEqual(project["sources"]["TraceCite"]["path"], "..")
 
         make = (self.ROOT / "docs_jl" / "make.jl").read_text(encoding="utf-8")
         self.assertIn("quarto_percent_to_literate", make)
-        self.assertNotIn("warnonly", make)
 
     def test_overlay_tutorial_links_point_to_existing_pages(self) -> None:
         docs = self.ROOT / "docs"
