@@ -93,6 +93,9 @@ class SyncReport:
     sources_renamed: list[tuple[str, str]] = field(default_factory=list)
     selected_missing_paths: list[str] = field(default_factory=list)
     missing_explicit_paths: list[str] = field(default_factory=list)
+    # Selected sources this run could not index, with the reason. A source
+    # indexed earlier keeps its previous rows.
+    skipped_sources: dict[str, str] = field(default_factory=dict)
     # PDF physical pages with no extracted text, keyed by source path.
     pages_without_text: dict[str, list[int]] = field(default_factory=dict)
     indexed_unselected_paths: list[str] = field(default_factory=list)
@@ -144,12 +147,11 @@ def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
 
     The descriptor identity and the path identity must still agree after the
     read.  This catches path replacement as well as ordinary in-place writes.
+    Returns ``None`` when the file changed during the read and raises
+    ``OSError`` when it cannot be opened.
     """
 
-    try:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except OSError:
-        return None
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     try:
         before = os.fstat(descriptor)
         digest = hashlib.sha256()
@@ -180,12 +182,13 @@ class _SourceSnapshot:
 
 
 def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot | None:
-    """Copy one stable source into an immutable per-sync parsing snapshot."""
+    """Copy one stable source into an immutable per-sync parsing snapshot.
 
-    try:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except OSError:
-        return None
+    Returns ``None`` when the file changed during the copy and raises
+    ``OSError`` when it cannot be opened.
+    """
+
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     snapshot_path = snapshot_root / f"{uuid.uuid4().hex}{Path(path).suffix.lower()}"
     try:
         digest = hashlib.sha256()
@@ -211,10 +214,13 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
 def _observed_sources_match(
     observed_states: dict[str, tuple[Path, str, int, int]],
 ) -> bool:
-    return all(
-        _capture_stable_file_state(path) == tuple(expected)
-        for path, *expected in observed_states.values()
-    )
+    try:
+        return all(
+            _capture_stable_file_state(path) == tuple(expected)
+            for path, *expected in observed_states.values()
+        )
+    except OSError:
+        return False
 
 
 @dataclass
@@ -455,8 +461,48 @@ def sync(
             added_ids &= only_relative_paths
             continuing_ids &= only_relative_paths
 
-        # ---- rename detection: gone id <-> added id sharing an unambiguous hash ----
+        report = SyncReport()
+        report.skipped_sources.update(
+            (path, "symlink; sync reads only regular files")
+            for path in selection.symlinks
+            if only_relative_paths is None or path in only_relative_paths
+        )
         observed_states: dict[str, tuple[Path, str, int, int]] = {}
+
+        def skip(source_path: str, reason: str) -> None:
+            report.skipped_sources[source_path] = reason
+            observed_states.pop(source_path, None)
+
+        def capture(source_path: str, copy: bool = False) -> _SourceSnapshot | None:
+            """Hash one selected file, copying it for parsing when ``copy`` is set.
+
+            Returns ``None`` and records the skip when the file cannot be
+            read; raises ``_SourceChangedDuringSync`` when it changed while
+            being read.
+            """
+            abs_path = sources_dir / source_path
+            try:
+                if copy:
+                    captured = _capture_source_snapshot(abs_path, snapshot_root)
+                else:
+                    state = _capture_stable_file_state(abs_path)
+                    captured = (
+                        None if state is None else _SourceSnapshot(abs_path, *state)
+                    )
+            except OSError as exc:
+                skip(source_path, f"cannot read: {exc.strerror or exc}")
+                return None
+            if captured is None:
+                raise _SourceChangedDuringSync
+            observed_states[source_path] = (
+                abs_path,
+                captured.sha256,
+                captured.size_bytes,
+                captured.mtime_ns,
+            )
+            return captured
+
+        # ---- rename detection: gone id <-> added id sharing an unambiguous hash ----
         renames: dict[str, str] = {}
         rename_candidates = missing_selected_paths | indexed_unselected_paths
         if rename_candidates and added_ids:
@@ -465,22 +511,16 @@ def sync(
                 by_hash_gone[existing_sources[sid]["sha256"]].append(sid)
             by_hash_added: dict[str, list[str]] = defaultdict(list)
             for sid in added_ids:
-                added_abs = sources_dir / sid
-                captured = _capture_stable_file_state(added_abs)
-                if captured is None:
-                    return SyncReport(status="aborted-source-changed")
-                file_hash, size_bytes, mtime_ns = captured
-                observed_states[sid] = (added_abs, file_hash, size_bytes, mtime_ns)
-                by_hash_added[file_hash].append(sid)
+                if captured := capture(sid):
+                    by_hash_added[captured.sha256].append(sid)
             for file_hash, gone_list in by_hash_gone.items():
                 added_list = by_hash_added.get(file_hash, [])
                 if len(gone_list) == 1 and len(added_list) == 1:
                     renames[gone_list[0]] = added_list[0]
 
         renamed_new_ids = set(renames.values())
-        true_added_ids = added_ids - renamed_new_ids
+        true_added_ids = added_ids - renamed_new_ids - set(report.skipped_sources)
 
-        report = SyncReport()
         report.selected_missing_paths.extend(
             sorted(
                 (missing_selected_paths | never_indexed_missing_paths)
@@ -508,13 +548,9 @@ def sync(
         for source_path in sorted(true_added_ids):
             abs_path = sources_dir / source_path
             source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
-            snapshot = _capture_source_snapshot(abs_path, snapshot_root)
+            snapshot = capture(source_path, copy=True)
             if snapshot is None:
-                return SyncReport(status="aborted-source-changed")
-            file_hash = snapshot.sha256
-            size_bytes = snapshot.size_bytes
-            mtime_ns = snapshot.mtime_ns
-            observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
+                continue
             plans.append(
                 _SourcePlan(
                     source_path=source_path,
@@ -522,9 +558,9 @@ def sync(
                     abs_path=abs_path,
                     source_type=source_type,
                     action="add",
-                    sha256=file_hash,
-                    size_bytes=size_bytes,
-                    mtime_ns=mtime_ns,
+                    sha256=snapshot.sha256,
+                    size_bytes=snapshot.size_bytes,
+                    mtime_ns=snapshot.mtime_ns,
                     parser_config=_parser_config_for(source_type),
                     chunker_config={"max_chunk_chars": options.max_chunk_chars},
                     normalisation_config={},
@@ -537,11 +573,12 @@ def sync(
             source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
             row = existing_sources[source_path]
             source_pk = row["source_pk"]
-            captured = _capture_stable_file_state(abs_path)
+            captured = capture(source_path)
             if captured is None:
-                return SyncReport(status="aborted-source-changed")
-            file_hash, size_bytes, mtime_ns = captured
-            observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
+                continue
+            file_hash = captured.sha256
+            size_bytes = captured.size_bytes
+            mtime_ns = captured.mtime_ns
 
             config_matches = _config_matches(row, options, source_type)
             content_changed = file_hash != row["sha256"]
@@ -576,17 +613,13 @@ def sync(
             action = "reparse" if needs_full_reparse else "rechunk"
             snapshot = None
             if action == "reparse":
-                snapshot = _capture_source_snapshot(abs_path, snapshot_root)
-                if (
-                    snapshot is None
-                    or (
-                        snapshot.sha256,
-                        snapshot.size_bytes,
-                        snapshot.mtime_ns,
-                    )
-                    != captured
+                snapshot = capture(source_path, copy=True)
+                if snapshot is None:
+                    continue
+                if snapshot.sha256 != file_hash or (
+                    (snapshot.size_bytes, snapshot.mtime_ns) != (size_bytes, mtime_ns)
                 ):
-                    return SyncReport(status="aborted-source-changed")
+                    raise _SourceChangedDuringSync
             plans.append(
                 _SourcePlan(
                     source_path=source_path,
@@ -614,21 +647,11 @@ def sync(
                 }[plan.source_type]
                 try:
                     result = parser_module.parse(plan.content_path, plan.parser_config)
-                except Exception as exc:
-                    raise SyncError(
-                        f"cannot parse {plan.source_path}: {_source_error(exc, plan)}"
-                    ) from exc
+                except Exception as exc:  # noqa: BLE001
+                    skip(plan.source_path, f"cannot parse: {_source_error(exc, plan)}")
+                    continue
                 plan.units = result.units
                 plan.pages = result.pages
-                empty_pages = [
-                    page.physical_page for page in result.pages if not page.text.strip()
-                ]
-                if plan.source_type == "pdf" and empty_pages:
-                    report.pages_without_text[plan.source_path] = empty_pages
-                if plan.action == "add":
-                    report.sources_added.append(plan.source_path)
-                else:
-                    report.sources_reparsed.append(plan.source_path)
             else:  # rechunk from retained extraction, no re-read of the source file
                 assert plan.source_pk is not None
                 page_rows = conn.execute(
@@ -647,7 +670,9 @@ def sync(
                         units.extend(units_from_layout(page_row["layout_json"]))
                 plan.units = units
                 plan.pages = []
-                report.sources_rechunked.append(plan.source_path)
+        plans = [
+            plan for plan in plans if plan.source_path not in report.skipped_sources
+        ]
 
         # ---- build chunk candidates and diff against existing rows ----
         source_diffs: dict[str, dict] = {}
@@ -704,7 +729,7 @@ def sync(
 
         # ---- recheck: abort if any selected source changed mid-flight ----
         if not _observed_sources_match(observed_states):
-            return SyncReport(status="aborted-source-changed")
+            raise _SourceChangedDuringSync
 
         nothing_to_do = (
             not plans
@@ -720,33 +745,33 @@ def sync(
         rendered_assets: dict[str, list] = {}
         asset_generations: dict[str, AssetGeneration] = {}
         generation_root = _asset_generation_root(database_path, generation)
-        try:
-            for plan in plans:
-                if (
-                    plan.action in ("add", "reparse")
-                    and plan.source_type == "pdf"
-                    and options.generate_assets
-                ):
-                    try:
-                        asset_generation, assets = _render_assets(
-                            database_path, plan, generation
-                        )
-                    except Exception as exc:
-                        raise SyncError(
-                            f"cannot render pages of {plan.source_path}: "
-                            f"{_source_error(exc, plan)}"
-                        ) from exc
-                    asset_generations[plan.source_path] = asset_generation
-                    rendered_assets[plan.source_path] = assets
-        except Exception:
-            shutil.rmtree(generation_root, ignore_errors=True)
-            raise
+        for plan in plans:
+            if (
+                plan.action in ("add", "reparse")
+                and plan.source_type == "pdf"
+                and options.generate_assets
+            ):
+                try:
+                    asset_generation, assets = _render_assets(
+                        database_path, plan, generation
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    skip(
+                        plan.source_path,
+                        f"cannot render pages: {_source_error(exc, plan)}",
+                    )
+                    continue
+                asset_generations[plan.source_path] = asset_generation
+                rendered_assets[plan.source_path] = assets
+        plans = [
+            plan for plan in plans if plan.source_path not in report.skipped_sources
+        ]
 
         # ==== single write transaction ====
         _asset_event("begin-immediate")
         if not _observed_sources_match(observed_states):
             shutil.rmtree(generation_root, ignore_errors=True)
-            return SyncReport(status="aborted-source-changed")
+            raise _SourceChangedDuringSync
         conn.execute("BEGIN IMMEDIATE")
         try:
             backend = vector_backend.SqliteVecBackend()
@@ -771,6 +796,16 @@ def sync(
             # apply per-plan chunk/page/source changes
             for plan in plans:
                 diff = source_diffs[plan.source_path]
+                {
+                    "add": report.sources_added,
+                    "reparse": report.sources_reparsed,
+                    "rechunk": report.sources_rechunked,
+                }[plan.action].append(plan.source_path)
+                empty_pages = [
+                    page.physical_page for page in plan.pages if not page.text.strip()
+                ]
+                if plan.source_type == "pdf" and empty_pages:
+                    report.pages_without_text[plan.source_path] = empty_pages
 
                 # A brand-new source's row must exist before any chunk that
                 # references it via a foreign key is inserted.
@@ -953,13 +988,11 @@ def sync(
                 embedding_dimensions=schema.EMBEDDING_DIMENSIONS,
             )
             conn.execute("COMMIT")
-        except Exception as exc:
+        except Exception:
             with contextlib.suppress(sqlite3.Error):
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
             shutil.rmtree(generation_root, ignore_errors=True)
-            if isinstance(exc, _SourceChangedDuringSync):
-                return SyncReport(status="aborted-source-changed")
             raise
 
         if options.cleanup_asset_generations:
@@ -968,6 +1001,8 @@ def sync(
             )
 
         return report
+    except _SourceChangedDuringSync:
+        return SyncReport(status="aborted-source-changed")
     finally:
         conn.close()
         if snapshot_root is not None:
@@ -1331,19 +1366,25 @@ def _render_assets(
     base_dir.mkdir(parents=True, exist_ok=False)
     rendered: list[tuple[int, Path, object, str, str]] = []
     physical_pages = sorted({page.physical_page for page in plan.pages})
-    for physical_page in physical_pages:
-        render = pdf_parser.render_page(plan.content_path, physical_page)
-        asset_path = base_dir / f"page-{physical_page:04d}.{render.ext}"
-        asset_path.write_bytes(render.image_bytes)
-        sha256 = file_sha256(asset_path)
-        _asset_event("asset-hash")
-        rendered.append((physical_page, asset_path, render, "page-render", sha256))
-        for crop in pdf_parser.render_figure_crops(plan.content_path, physical_page):
-            crop_path = base_dir / f"{crop.label}.{crop.ext}"
-            crop_path.write_bytes(crop.image_bytes)
-            sha256 = file_sha256(crop_path)
+    try:
+        for physical_page in physical_pages:
+            render = pdf_parser.render_page(plan.content_path, physical_page)
+            asset_path = base_dir / f"page-{physical_page:04d}.{render.ext}"
+            asset_path.write_bytes(render.image_bytes)
+            sha256 = file_sha256(asset_path)
             _asset_event("asset-hash")
-            rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
+            rendered.append((physical_page, asset_path, render, "page-render", sha256))
+            for crop in pdf_parser.render_figure_crops(
+                plan.content_path, physical_page
+            ):
+                crop_path = base_dir / f"{crop.label}.{crop.ext}"
+                crop_path.write_bytes(crop.image_bytes)
+                sha256 = file_sha256(crop_path)
+                _asset_event("asset-hash")
+                rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
+    except Exception:
+        shutil.rmtree(base_dir, ignore_errors=True)
+        raise
     generation_obj = AssetGeneration(
         root=generation_root,
         referenced_files=tuple(path for _, path, _, _, _ in rendered),

@@ -159,8 +159,8 @@ def test_asset_render_failure_discards_candidate_generation_and_keeps_old_assets
         raise RuntimeError("render failed")
 
     monkeypatch.setattr(sync_module.pdf_parser, "render_page", boom)
-    with pytest.raises(RuntimeError, match="render failed"):
-        _sync(corpus_dir, manifest_path, database_path)
+    report = _sync(corpus_dir, manifest_path, database_path)
+    assert "render failed" in report.skipped_sources["doc.pdf"]
     assert _asset_state(database_path) == before
     generations = list((database_path.parent / "imgs" / "generations").glob("*"))
     assert len(generations) == 1

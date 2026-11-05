@@ -13,6 +13,7 @@ import pymupdf
 import pytest
 from conftest import (
     FakeEmbedder,
+    build_markdown,
     build_pdf,
     build_pdf_with_image_only_page,
     insert_source,
@@ -783,31 +784,82 @@ def test_cli_sync_without_positive_rule_fails_before_creating_database(
         assert not database_path.parent.exists()
 
 
-def test_cli_sync_names_the_source_that_cannot_be_parsed(tmp_path, capsys, monkeypatch):
+def test_cli_sync_skips_a_source_that_cannot_be_parsed_and_indexes_the_rest(
+    tmp_path, capsys, monkeypatch
+):
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
     for name, content in (
         ("papers/random.pdf", os.urandom(4096)),
         ("papers/truncated.pdf", b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog"),
         ("notes/latin1.md", "Café notes\n".encode("latin-1")),
     ):
-        root = tmp_path / name.replace("/", "-")
-        (root / name).parent.mkdir(parents=True)
+        case_dir = tmp_path / name.replace("/", "-")
+        case_dir.mkdir()
+        root = _make_root(case_dir, "new.md")
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
         (root / name).write_bytes(content)
-        manifest_path = write_manifest(tmp_path / "manifest.toml", {name: name})
-        database_path = root.parent / f"{root.name}.sqlite"
+        manifest_path = write_manifest(
+            tmp_path / "manifest.toml", {name: name, "new.md": "new.md"}
+        )
+        database_path = root.parent / "tracecite.sqlite"
 
         exit_code = _sync(root, manifest_path, database_path)
-        err = capsys.readouterr().err
-        assert exit_code == 2
-        assert name in err
-        assert ".tracecite-source-snapshots" not in err
-        assert len(err.strip().splitlines()) == 1
+        captured = capsys.readouterr()
+        assert exit_code == 1
+        assert f"skipped: 1\n  {name}: cannot parse: " in captured.out
+        assert captured.out.rstrip().splitlines()[-1].startswith("status: incomplete")
+        assert ".tracecite-source-snapshots" not in captured.out + captured.err
+        assert name in captured.err
+        assert _source_paths(database_path) == ["new.md"]
 
 
-def test_cli_sync_names_the_source_whose_pages_cannot_be_rendered(
+@pytest.mark.skipif(
+    os.geteuid() == 0, reason="root can read a file without read permission"
+)
+def test_cli_sync_skips_an_unreadable_source_and_indexes_the_rest(
+    tmp_path, capsys, monkeypatch
+):
+    root = _make_root(tmp_path, "locked.md", "new.md")
+    (root / "locked.md").chmod(0)
+    manifest_path = write_manifest(
+        tmp_path / "manifest.toml", {"locked.md": "locked.md", "new.md": "new.md"}
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+    try:
+        assert _sync(root, manifest_path, database_path) == 1
+    finally:
+        (root / "locked.md").chmod(0o644)
+    out = capsys.readouterr().out
+    assert "skipped: 1\n  locked.md: cannot read: " in out
+    assert _source_paths(database_path) == ["new.md"]
+
+
+def test_cli_sync_reports_a_selected_symlink_it_does_not_follow(
+    tmp_path, capsys, monkeypatch
+):
+    root = _make_root(tmp_path, "notes.md")
+    outside = tmp_path / "outside.md"
+    outside.write_text("# Outside\n", encoding="utf-8")
+    (root / "link.md").symlink_to(outside)
+    manifest_path = _write_manifest(
+        tmp_path / "manifest.toml",
+        'schema_version = 1\n[[include]]\nglob = "*.md"\n',
+    )
+    database_path = tmp_path / "tracecite.sqlite"
+    monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
+
+    assert _sync(root, manifest_path, database_path) == 1
+    assert "skipped: 1\n  link.md: symlink; " in capsys.readouterr().out
+    assert _source_paths(database_path) == ["notes.md"]
+
+
+def test_cli_sync_skips_the_source_whose_pages_cannot_be_rendered(
     tmp_path, capsys, monkeypatch
 ):
     corpus_dir, manifest_path, database_path = _make_corpus(tmp_path)
+    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
+    write_manifest(manifest_path, {"doc.pdf": "doc.pdf", "notes.md": "notes.md"})
     monkeypatch.setattr(sync_module, "EmbeddingModel", _fake_model)
 
     def fail_render(path, physical_page):
@@ -815,10 +867,12 @@ def test_cli_sync_names_the_source_whose_pages_cannot_be_rendered(
 
     monkeypatch.setattr(sync_module.pdf_parser, "render_page", fail_render)
 
-    assert _sync(corpus_dir, manifest_path, database_path) == 2
-    err = capsys.readouterr().err
-    assert "doc.pdf" in err
-    assert ".tracecite-source-snapshots" not in err
+    assert _sync(corpus_dir, manifest_path, database_path) == 1
+    out = capsys.readouterr().out
+    assert "skipped: 1\n  doc.pdf: cannot render pages: " in out
+    assert ".tracecite-source-snapshots" not in out
+    assert _source_paths(database_path) == ["notes.md"]
+    assert not list((database_path.parent / "imgs").rglob("*.png"))
 
 
 def test_prune_removes_selected_sources_whose_files_are_gone(

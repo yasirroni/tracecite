@@ -90,7 +90,8 @@ def test_manifest_rejects_unknown_fields_absolute_paths_and_symlink_escape(
     rules = load_manifest(manifest)
     selection = resolve_sources(root, rules)
     assert selection.selected == {}
-    assert selection.missing_explicit_paths == ("escape.md",)
+    assert selection.missing_explicit_paths == ()
+    assert selection.symlinks == ("escape.md",)
 
 
 def test_manifest_duplicate_normalized_declarations_collapse_with_tracked_then_local_order(

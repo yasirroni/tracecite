@@ -67,23 +67,25 @@ def cmd_sync(args: argparse.Namespace) -> int:
         model_cache_dir=args.model_cache_dir,
         only_relative_paths=only_paths,
     )
+    # The library status says whether the sync applied; the CLI also reports a
+    # selected source that it could not index, so the status matches the exit code.
+    not_indexed = [*report.missing_explicit_paths, *report.skipped_sources]
+    if report.status == "ok" and not_indexed:
+        report.status = "incomplete"
     if args.json:
         print(_json(dataclasses.asdict(report), indent=2))
     else:
         _print_sync_report(report)
-    if report.missing_explicit_paths:
+    if not_indexed:
         print(
-            f"tracecite: {len(report.missing_explicit_paths)} declared [[source]] "
-            f"path(s) do not exist under the root: "
-            f"{', '.join(report.missing_explicit_paths)}",
+            f"tracecite: {len(not_indexed)} selected source(s) were not indexed: "
+            f"{', '.join(not_indexed)}",
             file=sys.stderr,
         )
-        return 1
     return 0 if report.status == "ok" else 1
 
 
 def _print_sync_report(report) -> None:
-    print(f"status: {report.status}")
     for heading, items in (
         ("added", report.sources_added),
         ("reparsed", report.sources_reparsed),
@@ -91,6 +93,10 @@ def _print_sync_report(report) -> None:
         ("renamed", [f"{old} -> {new}" for old, new in report.sources_renamed]),
         ("selected-missing", report.selected_missing_paths),
         ("missing-sources", report.missing_explicit_paths),
+        (
+            "skipped",
+            [f"{path}: {reason}" for path, reason in report.skipped_sources.items()],
+        ),
         ("unmatched-globs", report.unmatched_globs),
         ("indexed-but-unselected", report.indexed_unselected_paths),
         ("cleanup-warnings", report.cleanup_warnings),
@@ -116,6 +122,15 @@ def _print_sync_report(report) -> None:
         f"deleted={report.chunks_deleted}"
     )
     print(f"embeddings generated: {report.embeddings_generated}")
+    print(
+        {
+            "ok": "status: ok",
+            "incomplete": "status: incomplete; the sources under missing-sources "
+            "and skipped were not indexed",
+            "aborted-source-changed": "status: aborted-source-changed; a source "
+            "changed during sync and nothing was written, so run sync again",
+        }[report.status]
+    )
 
 
 # Han, kana, and Hangul. The unicode61 tokenizer indexes an unspaced run of
