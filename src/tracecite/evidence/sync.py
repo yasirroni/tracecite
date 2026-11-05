@@ -64,14 +64,28 @@ class SyncOptions:
     reembed: bool = False
 
 
-def _parser_identity(source_type: str) -> tuple[str, str]:
-    if source_type == "pdf":
-        return schema.PARSER_NAME_PDF, schema.PARSER_VERSION_PDF
-    if source_type == "markdown":
-        return schema.PARSER_NAME_MARKDOWN, schema.PARSER_VERSION_MARKDOWN
-    if source_type == "workbook":
-        return schema.PARSER_NAME_WORKBOOK, schema.PARSER_VERSION_WORKBOOK
-    raise SyncError(f"unsupported source type: {source_type}")
+def _parser(source_type: str) -> tuple:
+    """Return the parser module, name, version, and config for a source type."""
+    return {
+        "pdf": (
+            pdf_parser,
+            schema.PARSER_NAME_PDF,
+            schema.PARSER_VERSION_PDF,
+            {"ocr_lang": pdf_parser.DEFAULT_OCR_LANG},
+        ),
+        "markdown": (
+            markdown_parser,
+            schema.PARSER_NAME_MARKDOWN,
+            schema.PARSER_VERSION_MARKDOWN,
+            {},
+        ),
+        "workbook": (
+            workbook_parser,
+            schema.PARSER_NAME_WORKBOOK,
+            schema.PARSER_VERSION_WORKBOOK,
+            {},
+        ),
+    }[source_type]
 
 
 @dataclass
@@ -104,12 +118,6 @@ def load_manifest_rules(
     if isinstance(manifest_paths, (str, os.PathLike)):
         return manifest_module.merge_manifests([Path(manifest_paths)])
     return manifest_module.merge_manifests(list(manifest_paths))
-
-
-def _parser_config_for(source_type: str) -> dict:
-    if source_type == "pdf":
-        return {"ocr_lang": pdf_parser.DEFAULT_OCR_LANG}
-    return {}
 
 
 def _identity(state: os.stat_result) -> tuple[int, int, int, int]:
@@ -276,7 +284,7 @@ def _match_chunks(
 
 def _config_matches(row: sqlite3.Row, options: SyncOptions, source_type: str) -> bool:
     return (
-        (row["parser_name"], row["parser_version"]) == _parser_identity(source_type)
+        (row["parser_name"], row["parser_version"]) == _parser(source_type)[1:3]
         and row["chunker_version"] == schema.CHUNKER_VERSION
         and row["normalisation_version"] == schema.NORMALISATION_VERSION
         and json.loads(row["chunker_config"]).get("max_chunk_chars")
@@ -303,13 +311,15 @@ def _chunks_missing_active_embedding(
 
 
 def _source_values(plan: _SourcePlan) -> tuple:
+    _, parser_name, parser_version, parser_config = _parser(plan.source_type)
     return (
         plan.source_path,
         plan.sha256,
         plan.size_bytes,
         plan.mtime_ns,
-        *_parser_identity(plan.source_type),
-        json.dumps(_parser_config_for(plan.source_type)),
+        parser_name,
+        parser_version,
+        json.dumps(parser_config),
         schema.CHUNKER_NAME,
         schema.CHUNKER_VERSION,
         json.dumps(plan.chunker_config),
@@ -564,7 +574,7 @@ def sync(
             needs_full_reparse = (
                 content_changed
                 or (row["parser_name"], row["parser_version"])
-                != _parser_identity(source_type)
+                != _parser(source_type)[1:3]
                 or options.full
             )
 
@@ -600,17 +610,11 @@ def sync(
         # ---- parse or rechunk each plan ----
         for plan in plans:
             if plan.action in ("add", "reparse"):
-                parser_module = {
-                    "pdf": pdf_parser,
-                    "markdown": markdown_parser,
-                    "workbook": workbook_parser,
-                }[plan.source_type]
+                parser_module, _, _, parser_config = _parser(plan.source_type)
                 # Parsers raise arbitrary errors on damaged files; skip the
                 # file so the rest of the selection still syncs.
                 try:
-                    result = parser_module.parse(
-                        plan.content_path, _parser_config_for(plan.source_type)
-                    )
+                    result = parser_module.parse(plan.content_path, parser_config)
                 except Exception as exc:  # noqa: BLE001
                     report.skipped_sources[plan.source_path] = (
                         f"cannot parse: {_source_error(exc, plan)}"
