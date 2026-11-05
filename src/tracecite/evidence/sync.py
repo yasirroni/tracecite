@@ -12,15 +12,13 @@
         |
     reuse or generate only missing embeddings
         |
-    recheck source state
-        |
-    apply one SQLite transaction
+    apply one SQLite transaction, rechecking source state before commit
 
 Embeddings are generated before ``BEGIN IMMEDIATE``. If embedding fails, the
 exception propagates before any write happens, so the database is left
-unchanged. If a source's file changes between the initial parse and the
-pre-commit recheck, the whole sync call aborts before opening the
-transaction (status ``"aborted-source-changed"``) so callers can retry.
+unchanged. If a source's file changes between its first hash and the recheck
+before commit, the transaction rolls back and the sync returns status
+``"aborted-source-changed"`` so callers can retry.
 """
 
 from __future__ import annotations
@@ -159,7 +157,11 @@ class _SourceSnapshot:
 
 
 def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot | None:
-    """Copy one stable source into an immutable per-sync parsing snapshot."""
+    """Copy one source into an immutable per-sync parsing snapshot.
+
+    A write during the copy leaves a hash the file no longer has, so the
+    recheck before commit aborts the sync.
+    """
 
     try:
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -173,18 +175,11 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
                 digest.update(block)
                 output.write(block)
         after = os.fstat(descriptor)
-    except Exception:
-        snapshot_path.unlink(missing_ok=True)
-        raise
     finally:
         os.close(descriptor)
-    # Equal hashes mean the copied bytes are the file's current stable content,
-    # which also rejects writes, replacement, and symlinks during the copy.
-    expected = (digest.hexdigest(), after.st_size, after.st_mtime_ns)
-    if _capture_stable_file_state(path) != expected:
-        snapshot_path.unlink(missing_ok=True)
-        return None
-    return _SourceSnapshot(snapshot_path, *expected)
+    return _SourceSnapshot(
+        snapshot_path, digest.hexdigest(), after.st_size, after.st_mtime_ns
+    )
 
 
 def _observed_sources_match(
@@ -708,10 +703,6 @@ def sync(
         hash_to_vector = dict(zip(missing_hashes, vectors))
         report.embeddings_generated = len(missing_hashes)
 
-        # ---- recheck: abort if any selected source changed mid-flight ----
-        if not _observed_sources_match(observed_states):
-            return SyncReport(status="aborted-source-changed")
-
         nothing_to_do = (
             not plans
             and not hint_updates
@@ -754,9 +745,6 @@ def sync(
             raise
 
         # ==== single write transaction ====
-        if not _observed_sources_match(observed_states):
-            shutil.rmtree(generation_root, ignore_errors=True)
-            return SyncReport(status="aborted-source-changed")
         conn.execute("BEGIN IMMEDIATE")
         try:
             backend = vector_backend.SqliteVecBackend()
