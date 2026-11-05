@@ -33,3 +33,6 @@ Manifest.toml
 # Temporary files
 .tmp/
 *.zip
+
+# Artifacts
+.coverage

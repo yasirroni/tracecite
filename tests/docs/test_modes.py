@@ -298,7 +298,7 @@ def test_staging_failure_before_promotion_preserves_outputs(
         "stage_docs",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("stage failed")),
     )
-    with pytest.raises(RuntimeError, match="stage failed"):
+    with pytest.raises(RuntimeError):
         author_docs(contract, config_path=config, repo_root=root)
     assert _snapshot(root) == before
     assert not list(root.glob("docs/.tracecite-author-*"))

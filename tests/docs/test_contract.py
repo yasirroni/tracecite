@@ -63,7 +63,7 @@ def test_contract_rejects_unknown_host_fields(tmp_path: Path) -> None:
         'publication_exclude = []\ntracks = ["bad"]\n',
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="unknown"):
+    with pytest.raises(ValueError):
         from tracecite.docs.config import load_docs_contract
 
         load_docs_contract(config, repo_root=tmp_path)

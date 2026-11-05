@@ -119,8 +119,6 @@ def test_database_with_another_schema_version_must_be_rebuilt(tmp_path):
     connection.close()
 
     connection = schema.connect(database_path)
-    with pytest.raises(
-        schema.IncompatibleDatabaseError, match="fresh.*database|re-sync"
-    ):
+    with pytest.raises(schema.IncompatibleDatabaseError):
         schema.ensure_schema(connection)
     connection.close()

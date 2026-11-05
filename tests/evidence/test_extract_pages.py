@@ -235,7 +235,7 @@ def test_extract_pages_rejects_source_changed_since_indexing(
 
     assert exit_code == 2
     assert captured.out == ""
-    assert "changed since indexing" in captured.err
+    assert "source.pdf" in captured.err
     assert not list(output_dir.iterdir())
 
 

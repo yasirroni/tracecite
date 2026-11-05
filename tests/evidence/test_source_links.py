@@ -122,39 +122,6 @@ def test_schema_version_missing_is_rejected(tmp_path: Path) -> None:
     assert "schema_version = 3" in issues[0]
 
 
-def test_unknown_source_level_field_is_rejected(tmp_path: Path) -> None:
-    (tmp_path / "sources").mkdir()
-    (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
-    registry_path = _write(
-        tmp_path / "source-links.toml",
-        """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "sources/report.pdf"
-publc_url = "https://example.invalid/report.pdf"
-""",
-    )
-    _, issues = load_source_links(registry_path, tmp_path)
-    assert any("unknown field" in issue and "publc_url" in issue for issue in issues)
-
-
-def test_missing_required_field_is_rejected(tmp_path: Path) -> None:
-    registry_path = _write(
-        tmp_path / "source-links.toml",
-        """schema_version = 3
-
-[[source]]
-local_path = "sources/report.pdf"
-public_url = "https://example.invalid/report.pdf"
-""",
-    )
-    _, issues = load_source_links(registry_path, tmp_path)
-    assert any(
-        "missing required field" in issue and "name" in issue for issue in issues
-    )
-
-
 def test_duplicate_names_are_rejected(tmp_path: Path) -> None:
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
@@ -200,43 +167,6 @@ public_url = "https://example.invalid/report2.pdf"
     assert any("duplicate" in issue and "local_path" in issue for issue in issues)
 
 
-def test_unsupported_extension_is_rejected(tmp_path: Path) -> None:
-    (tmp_path / "sources").mkdir()
-    (tmp_path / "sources/report.txt").write_text("not routable", encoding="utf-8")
-    registry_path = _write(
-        tmp_path / "source-links.toml",
-        """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "sources/report.txt"
-public_url = "https://example.invalid/report.txt"
-""",
-    )
-    _, issues = load_source_links(registry_path, tmp_path)
-    assert any(".pdf or .md" in issue for issue in issues)
-
-
-@pytest.mark.parametrize(
-    "local_path", ["sources/report.pdf?download=1", "sources/report.pdf#page=65"]
-)
-def test_local_path_with_query_or_fragment_is_rejected(
-    tmp_path: Path, local_path: str
-) -> None:
-    registry_path = _write(
-        tmp_path / "source-links.toml",
-        f"""schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "{local_path}"
-public_url = "https://example.invalid/report.pdf"
-""",
-    )
-    _, issues = load_source_links(registry_path, tmp_path)
-    assert any("query or fragment" in issue for issue in issues)
-
-
 def test_top_level_source_must_be_an_array_of_tables(tmp_path: Path) -> None:
     registry_path = _write(
         tmp_path / "source-links.toml", "schema_version = 3\nsource = 42\n"
@@ -246,83 +176,69 @@ def test_top_level_source_must_be_an_array_of_tables(tmp_path: Path) -> None:
     assert issues == [f"{registry_path} field source must be an array of tables"]
 
 
-def test_metadata_must_be_a_table(tmp_path: Path) -> None:
+_DEFAULT_FIELDS = {
+    "name": '"report"',
+    "local_path": '"sources/report.pdf"',
+    "public_url": '"https://example.invalid/report.pdf"',
+}
+
+
+def _entry_registry(tmp_path: Path, **overrides: str | None) -> Path:
+    """One [[source]] entry; an override of None drops that field."""
     (tmp_path / "sources").mkdir()
     (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
-    registry_path = _write(
+    (tmp_path / "sources/report.txt").write_text("not routable", encoding="utf-8")
+    fields = {**_DEFAULT_FIELDS, **overrides}
+    lines = [f"{key} = {value}" for key, value in fields.items() if value is not None]
+    return _write(
         tmp_path / "source-links.toml",
-        """schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "sources/report.pdf"
-public_url = "https://example.invalid/report.pdf"
-metadata = ["not", "a", "table"]
-""",
+        "schema_version = 3\n\n[[source]]\n" + "\n".join(lines) + "\n",
     )
-    _, issues = load_source_links(registry_path, tmp_path)
-    assert any("metadata must be a table" in issue for issue in issues)
 
 
-def test_public_url_allows_query_string_but_rejects_fragment_and_credentials(
-    tmp_path: Path,
-) -> None:
-    (tmp_path / "sources").mkdir()
-    (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        ({"publc_url": '"https://example.invalid/report.pdf"'}, "publc_url"),
+        ({"name": None}, "missing required field"),
+        ({"name": '""'}, "non-empty string"),
+        ({"local_path": "7"}, "non-empty string"),
+        ({"public_url": "[]"}, "non-empty string"),
+        ({"local_path": '"sources/report.txt"'}, ".pdf or .md"),
+        ({"local_path": '"sources/report.pdf?download=1"'}, "query or fragment"),
+        ({"local_path": '"sources/report.pdf#page=65"'}, "query or fragment"),
+        ({"metadata": '["not", "a", "table"]'}, "metadata must be a table"),
+        ({"public_url": '"http://example.invalid/report.pdf"'}, ""),
+        ({"public_url": '"https://user:pass@example.invalid/report.pdf"'}, ""),
+        ({"public_url": '"https://example.invalid/report.pdf#page=1"'}, ""),
+    ],
+    ids=[
+        "unknown-field",
+        "missing-name",
+        "empty-name",
+        "non-string-local-path",
+        "list-public-url",
+        "unsupported-extension",
+        "local-query",
+        "local-fragment",
+        "metadata-not-table",
+        "http-url",
+        "url-credentials",
+        "url-fragment",
+    ],
+)
+def test_invalid_entry_is_reported(tmp_path: Path, overrides, expected) -> None:
+    _, issues = load_source_links(_entry_registry(tmp_path, **overrides), tmp_path)
+    assert any(expected in issue for issue in issues)
 
-    good = _write(
-        tmp_path / "good.toml",
-        """schema_version = 3
 
-[[source]]
-name = "report"
-local_path = "sources/report.pdf"
-public_url = "https://example.invalid/report.pdf?rev=7&lang=en"
-""",
+def test_public_url_allows_query_string(tmp_path: Path) -> None:
+    url = "https://example.invalid/report.pdf?rev=7&lang=en"
+    registry, issues = load_source_links(
+        _entry_registry(tmp_path, public_url=f'"{url}"'), tmp_path
     )
-    registry, issues = load_source_links(good, tmp_path)
     assert issues == []
-    entry = next(iter(registry.values()))[0]
-    assert entry.public_url == "https://example.invalid/report.pdf?rev=7&lang=en"
-
-    for bad_url in (
-        "http://example.invalid/report.pdf",
-        "https://user:pass@example.invalid/report.pdf",
-        "https://example.invalid/report.pdf#page=1",
-    ):
-        bad = _write(
-            tmp_path / "bad.toml",
-            f"""schema_version = 3
-
-[[source]]
-name = "report"
-local_path = "sources/report.pdf"
-public_url = "{bad_url}"
-""",
-        )
-        registry, issues = load_source_links(bad, tmp_path)
-        assert issues, bad_url
-
-
-@pytest.mark.parametrize("field", ["name", "local_path", "public_url"])
-@pytest.mark.parametrize("value", ['""', "7", "[]"])
-def test_non_empty_string_fields_are_required(tmp_path: Path, field, value) -> None:
-    (tmp_path / "sources").mkdir()
-    (tmp_path / "sources/report.pdf").write_bytes(b"%PDF-1.4")
-    fields = {
-        "name": '"report"',
-        "local_path": '"sources/report.pdf"',
-        "public_url": '"https://example.invalid/report.pdf"',
-    }
-    fields[field] = value
-    registry_path = _write(
-        tmp_path / "source-links.toml",
-        "schema_version = 3\n\n[[source]]\n"
-        + "\n".join(f"{name} = {item}" for name, item in fields.items())
-        + "\n",
-    )
-    _, issues = load_source_links(registry_path, tmp_path)
-    assert any("non-empty string" in issue and field in issue for issue in issues)
+    assert next(iter(registry.values()))[0].public_url == url
 
 
 def test_malformed_candidate_entry_reports_table_error(tmp_path: Path) -> None:

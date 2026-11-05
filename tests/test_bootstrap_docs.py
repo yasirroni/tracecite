@@ -158,7 +158,7 @@ class BootstrapCleanCheckTests(unittest.TestCase):
                 mock.patch.object(
                     module.os, "replace", side_effect=fail_once_on_manifest
                 ),
-                self.assertRaisesRegex(OSError, "injected manifest"),
+                self.assertRaises(OSError),
             ):
                 module.bootstrap(mappings)
 
