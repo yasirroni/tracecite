@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -79,31 +80,63 @@ def group_units(
     A single unit is never split, and a chunk never crosses a page. A new
     heading path starts a new chunk once the current chunk holds body text,
     so consecutive headings, such as a title and a subtitle or the short
-    lines a PDF parser takes for headings, join the section that follows.
+    lines a PDF parser takes for headings, join the section that follows,
+    even when its first unit alone exceeds ``max_chars``. A chunk shorter than
+    a sixth of ``max_chars`` then takes in the sections that follow it on the
+    same page while it stays within ``max_chars``, and a chunk of only digits,
+    such as a lone page number, is dropped.
     """
 
     groups: list[list[ParsedChunkUnit]] = []
+    lengths: list[int] = []
     current: list[ParsedChunkUnit] = []
     current_len = 0
     for unit in units:
         unit_len = len(unit.text)
-        breaks_group = current and (
-            current_len + unit_len > max_chars
-            or unit.physical_page != current[-1].physical_page
+        if current and (
+            unit.physical_page != current[-1].physical_page
             or (
-                unit.heading_path != current[-1].heading_path
+                (
+                    current_len + unit_len > max_chars
+                    or unit.heading_path != current[-1].heading_path
+                )
                 and any(part.content_type != "heading" for part in current)
             )
-        )
-        if breaks_group:
-            groups.append(current)
+        ):
+            _add_group(groups, lengths, current, current_len, max_chars)
             current = []
             current_len = 0
         current.append(unit)
         current_len += unit_len + 2
     if current:
-        groups.append(current)
+        _add_group(groups, lengths, current, current_len, max_chars)
     return groups
+
+
+def _add_group(
+    groups: list[list[ParsedChunkUnit]],
+    lengths: list[int],
+    group: list[ParsedChunkUnit],
+    group_len: int,
+    max_chars: int,
+) -> None:
+    """Append a finished group, add it to a short previous group, or drop it
+    when it holds only digits."""
+    short = max_chars // 6
+    if group_len < short and all(unit.text.strip().isdigit() for unit in group):
+        return
+    if (
+        groups
+        and lengths[-1] < short
+        and group[0].content_type == "heading"
+        and group[0].physical_page == groups[-1][-1].physical_page
+        and lengths[-1] + group_len <= max_chars
+    ):
+        groups[-1].extend(group)
+        lengths[-1] += group_len
+    else:
+        groups.append(group)
+        lengths.append(group_len)
 
 
 def _cell_coordinates(reference: str) -> tuple[int, int] | None:
@@ -187,11 +220,21 @@ def build_chunk_candidates(
         physical_page = first.physical_page if len(physical_pages) <= 1 else None
         page_range_start = min(physical_pages) if physical_pages else None
         page_range_end = max(physical_pages) if physical_pages else None
+        heading_path = last.heading_path
+        if first.heading_path != heading_path:
+            # Leading headings join their section, and a chunk that spans
+            # sibling sections belongs to the heading those sections share.
+            heading_path = list(
+                os.path.commonprefix(
+                    [u.heading_path for u in group if u.content_type != "heading"]
+                    or [heading_path]
+                )
+            )
 
         semantic_hash = compute_semantic_input_hash(
             normalisation_version=normalisation_version,
             source_type=source_type,
-            heading_path=last.heading_path,
+            heading_path=heading_path,
             symbol=first.symbol,
             body=body,
         )
@@ -199,7 +242,7 @@ def build_chunk_candidates(
             ChunkCandidate(
                 logical_key=first.logical_key,
                 ordinal=ordinal,
-                heading_path=last.heading_path,
+                heading_path=heading_path,
                 symbol=first.symbol,
                 body=body,
                 content_type=content_type,

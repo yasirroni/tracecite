@@ -15,7 +15,10 @@ reopening the PDF.
 `chunking.group_units()` merges adjacent units into one chunk while they share the same
 `physical_page` and stay under `--max-chunk-chars` (default 1200). A new `heading_path` starts a new
 chunk once the chunk holds body text, so consecutive headings, including the short lines the PDF
-parser takes for headings, join the section that follows. PDF chunks are page-local: a chunk never spans two pages.
+parser takes for headings, join the section that follows, even when its first unit alone exceeds the budget.
+A chunk shorter than a sixth of the budget then takes in the sections that follow it on the same page while
+it stays within the budget, and reports the heading path those sections share. A chunk of only digits, such
+as a lone page number, is dropped. PDF chunks are page-local: a chunk never spans two pages.
 
 ## Markdown extraction
 

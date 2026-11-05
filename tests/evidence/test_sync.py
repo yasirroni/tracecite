@@ -16,8 +16,9 @@ from conftest import (
     write_manifest,
 )
 
-from tracecite.evidence import schema
+from tracecite.evidence import chunking, schema
 from tracecite.evidence import sync as sync_module
+from tracecite.evidence.parsers.base import ParsedChunkUnit
 from tracecite.evidence.sync import SyncError, SyncOptions
 
 
@@ -170,13 +171,16 @@ def test_page_offset_shift_causes_zero_embedding_calls(
     # Two headings (=> two separate chunks) on one page. Editing only the
     # first heading's paragraph shifts the second chunk's page-local byte
     # offsets (its preceding text got longer/shorter) without changing its
-    # own normalised semantic content, so it must not be re-embedded.
+    # own normalised semantic content, so it must not be re-embedded. The
+    # filler keeps Alpha long enough to stay a chunk of its own.
+    filler = [f"Alpha context paragraph {n} keeps the section apart." for n in range(4)]
     build_pdf(
         corpus_dir / "doc.pdf",
         [
             [
                 "Alpha",
                 "Short alpha text.",
+                *filler,
                 "Beta",
                 "This beta paragraph body must stay byte-for-byte identical across both syncs.",
             ]
@@ -206,6 +210,7 @@ def test_page_offset_shift_causes_zero_embedding_calls(
             [
                 "Alpha",
                 "This much longer alpha paragraph text pushes every following byte offset forward substantially.",
+                *filler,
                 "Beta",
                 "This beta paragraph body must stay byte-for-byte identical across both syncs.",
             ]
@@ -975,7 +980,9 @@ def test_sync_embeds_more_chunks_than_sqlite_allows_parameters(
     build_markdown(
         corpus_dir / "report.md",
         "".join(
-            f"## Section {i}\nParagraph {i} records synthetic evidence item {i}.\n\n"
+            f"## Section {i}\n"
+            + f"Paragraph {i} records synthetic evidence item {i}. " * 5
+            + "\n\n"
             for i in range(60)
         ),
     )
@@ -1300,9 +1307,10 @@ def test_concurrent_syncs_of_one_database_both_succeed(
 def test_consecutive_headings_join_the_section_that_follows(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
+    storage, wind = "Storage grows. " * 15, "Wind grows. " * 20
     build_markdown(
         corpus_dir / "notes.md",
-        "# Plan\n\n## Storage\n\nStorage grows.\n\n## Wind\n\nWind grows.\n",
+        f"# Plan\n\n## Storage\n\n{storage}\n\n## Wind\n\n{wind}\n",
     )
     write_manifest(manifest_path, {"notes.md": "notes.md"})
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
@@ -1312,6 +1320,52 @@ def test_consecutive_headings_join_the_section_that_follows(
             "SELECT body, heading_path FROM chunks ORDER BY ordinal"
         ).fetchall()
     assert [(row["body"], row["heading_path"]) for row in chunks] == [
-        ("Plan\n\nStorage\n\nStorage grows.", '["Plan", "Storage"]'),
-        ("Wind\n\nWind grows.", '["Plan", "Wind"]'),
+        (f"Plan\n\nStorage\n\n{storage.strip()}", '["Plan", "Storage"]'),
+        (f"Wind\n\n{wind.strip()}", '["Plan", "Wind"]'),
+    ]
+
+
+def _chunk_bodies_and_paths(units):
+    candidates = chunking.build_chunk_candidates(
+        chunking.group_units(units), source_type="pdf", normalisation_version="1"
+    )
+    return [(candidate.body, candidate.heading_path) for candidate in candidates]
+
+
+def _unit(text, heading_path, content_type="body", page=1):
+    return ParsedChunkUnit(text, text, heading_path, None, content_type, page)
+
+
+def test_short_sibling_sections_share_a_chunk_under_their_parent_heading():
+    long_paragraph = "Long paragraph text. " * 70
+    units = [
+        _unit("Plan", ["Plan"], "heading"),
+        _unit(long_paragraph, ["Plan"]),
+        *(
+            unit
+            for name in ("Storage", "Wind")
+            for unit in (
+                _unit(name, ["Plan", name], "heading"),
+                _unit(f"{name} grows.", ["Plan", name]),
+            )
+        ),
+    ]
+    # The heading joins a paragraph longer than the chunk budget, and the two
+    # short sections merge under the heading they share.
+    assert _chunk_bodies_and_paths(units) == [
+        (f"Plan\n\n{long_paragraph}", ["Plan"]),
+        ("Storage\n\nStorage grows.\n\nWind\n\nWind grows.", ["Plan"]),
+    ]
+
+
+def test_a_chunk_of_only_a_page_number_is_dropped():
+    body = "Body text of the first page. " * 10
+    units = [
+        _unit(body, []),
+        _unit("2", ["2"], "heading"),
+        _unit("Second page text.", [], page=2),
+    ]
+    assert _chunk_bodies_and_paths(units) == [
+        (body, []),
+        ("Second page text.", []),
     ]
