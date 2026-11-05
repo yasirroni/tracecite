@@ -2,9 +2,7 @@
 
     scan filesystem
         |
-    identify candidate changes from mtime and size
-        |
-    hash candidate files
+    hash each selected file
         |
     parse only genuinely changed or invalidated files
         |
@@ -349,6 +347,82 @@ def _chunk_values(candidate: chunking.ChunkCandidate) -> tuple:
     )
 
 
+def _load_units(
+    conn: sqlite3.Connection, plan: _SourcePlan, report: SyncReport
+) -> bool:
+    """Fill a plan's chunk units, by parsing the source or, for a rechunk, from
+    its retained page layouts, and record the outcome in the report.
+
+    Returns False when the parser fails, so the sync skips the source.
+    """
+    if plan.action == "rechunk":  # no re-read of the source file
+        for page_row in conn.execute(
+            "SELECT physical_page, layout_json FROM pages "
+            "WHERE source_pk = ? ORDER BY physical_page",
+            (plan.source_pk,),
+        ):
+            if plan.source_type == "pdf":
+                plan.units.extend(
+                    pdf_parser.units_from_page_layout(
+                        page_row["physical_page"], page_row["layout_json"]
+                    )
+                )
+            else:
+                plan.units.extend(units_from_layout(page_row["layout_json"]))
+        report.sources_rechunked.append(plan.source_path)
+        return True
+    parser_module, _, _, parser_config = _parser(plan.source_type)
+    # Parsers raise arbitrary errors on damaged files; skip the file so the
+    # rest of the selection still syncs.
+    try:
+        result = parser_module.parse(plan.content_path, parser_config)
+    except Exception as exc:  # noqa: BLE001
+        report.skipped_sources[plan.source_path] = (
+            f"cannot parse: {_source_error(exc, plan)}"
+        )
+        return False
+    plan.units = result.units
+    plan.pages = result.pages
+    empty_pages = [page.physical_page for page in result.pages if not page.text.strip()]
+    if plan.source_type == "pdf" and empty_pages:
+        report.pages_without_text[plan.source_path] = empty_pages
+    if plan.action == "add":
+        report.sources_added.append(plan.source_path)
+    else:
+        report.sources_reparsed.append(plan.source_path)
+    return True
+
+
+def _embed_pending(
+    conn: sqlite3.Connection,
+    embedder: Embedder,
+    model_id: str,
+    pending: dict[str, str],
+    reembed: bool,
+) -> dict[str, list[float]]:
+    """Embed the pending texts, keyed by semantic input hash, that have no
+    embedding of the model yet, or all of them when ``reembed`` is set."""
+    if pending and not reembed:
+        # One JSON parameter, not one per hash: SQLite caps the parameters
+        # in a statement, and a large source set exceeds that cap.
+        cached = {
+            row["semantic_input_hash"]
+            for row in conn.execute(
+                "SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
+                "AND semantic_input_hash IN (SELECT value FROM json_each(?))",
+                (model_id, json.dumps(list(pending))),
+            )
+        }
+        pending = {
+            semantic_hash: text
+            for semantic_hash, text in pending.items()
+            if semantic_hash not in cached
+        }
+    vectors = embedder.embed(list(pending.values())) if pending else []
+    _validate_embedding_dimensions(vectors, schema.EMBEDDING_DIMENSIONS)
+    return dict(zip(pending, vectors))
+
+
 def _validate_embedding_dimensions(
     vectors: list[list[float]], expected_dimensions: int
 ) -> None:
@@ -578,51 +652,7 @@ def sync(
             )
 
         # ---- parse or rechunk each plan ----
-        for plan in plans:
-            if plan.action in ("add", "reparse"):
-                parser_module, _, _, parser_config = _parser(plan.source_type)
-                # Parsers raise arbitrary errors on damaged files; skip the
-                # file so the rest of the selection still syncs.
-                try:
-                    result = parser_module.parse(plan.content_path, parser_config)
-                except Exception as exc:  # noqa: BLE001
-                    report.skipped_sources[plan.source_path] = (
-                        f"cannot parse: {_source_error(exc, plan)}"
-                    )
-                    continue
-                plan.units = result.units
-                plan.pages = result.pages
-                empty_pages = [
-                    page.physical_page for page in result.pages if not page.text.strip()
-                ]
-                if plan.source_type == "pdf" and empty_pages:
-                    report.pages_without_text[plan.source_path] = empty_pages
-                if plan.action == "add":
-                    report.sources_added.append(plan.source_path)
-                else:
-                    report.sources_reparsed.append(plan.source_path)
-            else:  # rechunk from retained extraction, no re-read of the source file
-                assert plan.source_pk is not None
-                page_rows = conn.execute(
-                    "SELECT * FROM pages WHERE source_pk = ? ORDER BY physical_page",
-                    (plan.source_pk,),
-                ).fetchall()
-                units: list[ParsedChunkUnit] = []
-                for page_row in page_rows:
-                    if plan.source_type == "pdf":
-                        units.extend(
-                            pdf_parser.units_from_page_layout(
-                                page_row["physical_page"], page_row["layout_json"]
-                            )
-                        )
-                    else:
-                        units.extend(units_from_layout(page_row["layout_json"]))
-                plan.units = units
-                plan.pages = []
-                report.sources_rechunked.append(plan.source_path)
-        plans = [
-            plan for plan in plans if plan.source_path not in report.skipped_sources
-        ]
+        plans = [plan for plan in plans if _load_units(conn, plan, report)]
 
         # ---- build chunk candidates and diff against existing rows ----
         for plan in plans:
@@ -644,65 +674,45 @@ def sync(
             for candidate in plan.new_candidates:
                 pending_embeddings[candidate.semantic_input_hash] = candidate.body
 
-        # skip hashes already cached for the active model, unless forcing re-embed
-        if pending_embeddings and not options.reembed:
-            # One JSON parameter, not one per hash: SQLite caps the parameters
-            # in a statement, and a large source set exceeds that cap.
-            cached_rows = conn.execute(
-                "SELECT semantic_input_hash FROM embeddings WHERE model_id = ? "
-                "AND semantic_input_hash IN (SELECT value FROM json_each(?))",
-                (model_id, json.dumps(list(pending_embeddings))),
-            ).fetchall()
-            for row in cached_rows:
-                pending_embeddings.pop(row["semantic_input_hash"], None)
-
-        missing_hashes = list(pending_embeddings)
-        missing_texts = [pending_embeddings[h] for h in missing_hashes]
-        vectors = embedder.embed(missing_texts) if missing_texts else []
-        _validate_embedding_dimensions(vectors, schema.EMBEDDING_DIMENSIONS)
-        hash_to_vector = dict(zip(missing_hashes, vectors))
-        report.embeddings_generated = len(missing_hashes)
-
-        nothing_to_do = (
-            not plans
-            and not hint_updates
-            and not renames
-            and not reembed_only_chunks
-            and not active_config_changed
+        hash_to_vector = _embed_pending(
+            conn, embedder, model_id, pending_embeddings, options.reembed
         )
-        if nothing_to_do:
+        report.embeddings_generated = len(hash_to_vector)
+
+        if not (
+            plans
+            or hint_updates
+            or renames
+            or reembed_only_chunks
+            or active_config_changed
+        ):
             return report
 
-        generation = uuid.uuid4().hex
         rendered_assets: dict[str, list] = {}
         # A new source has no source_pk until its row is inserted, so its
         # assets render into a staging directory renamed after the insert.
         staging_dirs: dict[str, Path] = {}
-        generation_root = _asset_generation_root(database_path, generation)
-        try:
-            for plan in plans:
-                if (
-                    plan.action in ("add", "reparse")
-                    and plan.source_type == "pdf"
-                    and options.generate_assets
-                ):
-                    if plan.source_pk is None:
-                        base_dir = generation_root / f".staging-{uuid.uuid4().hex}"
-                        staging_dirs[plan.source_path] = base_dir
-                    else:
-                        base_dir = generation_root / str(plan.source_pk)
-                    try:
-                        rendered_assets[plan.source_path] = _render_assets(
-                            plan, base_dir
-                        )
-                    except Exception as exc:
-                        raise SyncError(
-                            f"cannot render pages of {plan.source_path}: "
-                            f"{_source_error(exc, plan)}"
-                        ) from exc
-        except Exception:
-            shutil.rmtree(generation_root, ignore_errors=True)
-            raise
+        generation_root = _asset_generation_root(database_path, uuid.uuid4().hex)
+        for plan in plans:
+            if (
+                plan.action == "rechunk"
+                or plan.source_type != "pdf"
+                or not options.generate_assets
+            ):
+                continue
+            if plan.source_pk is None:
+                base_dir = generation_root / f".staging-{uuid.uuid4().hex}"
+                staging_dirs[plan.source_path] = base_dir
+            else:
+                base_dir = generation_root / str(plan.source_pk)
+            try:
+                rendered_assets[plan.source_path] = _render_assets(plan, base_dir)
+            except Exception as exc:
+                shutil.rmtree(generation_root, ignore_errors=True)
+                raise SyncError(
+                    f"cannot render pages of {plan.source_path}: "
+                    f"{_source_error(exc, plan)}"
+                ) from exc
 
         # ==== single write transaction ====
         conn.execute("BEGIN IMMEDIATE")
