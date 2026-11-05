@@ -32,6 +32,7 @@ import os
 import shutil
 import sqlite3
 import stat
+import sys
 import tempfile
 import uuid
 from collections import defaultdict, deque
@@ -384,6 +385,29 @@ def _validate_embedding_dimensions(
             )
 
 
+def _lock_database(database_path: Path) -> int:
+    """Wait for the exclusive sync and prune lock of a database.
+
+    Two syncs that plan from the same database state would both insert the
+    same sources, so a second sync or prune waits for the first to finish.
+    Close the returned descriptor to release the lock.
+    """
+    # ponytail: one flock on the database directory, so databases that share a
+    # directory also share the lock; POSIX only, like the asset cleanup.
+    import fcntl
+
+    descriptor = os.open(Path(database_path).resolve().parent, os.O_RDONLY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(
+            "tracecite: waiting for another sync or prune of this database to finish",
+            file=sys.stderr,
+        )
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+    return descriptor
+
+
 @dataclass(frozen=True)
 class PrunePlan:
     paths: tuple[str, ...]
@@ -411,9 +435,12 @@ def sync(
         )
     selection = manifest_module.resolve_sources(sources_dir, rules)
 
-    conn = schema.connect(database_path)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = _lock_database(database_path)
+    conn: sqlite3.Connection | None = None
     snapshot_root: Path | None = None
     try:
+        conn = schema.connect(database_path)
         config = schema.ensure_schema(conn)
         snapshot_root = Path(
             tempfile.mkdtemp(
@@ -1004,9 +1031,11 @@ def sync(
     except _SourceChangedDuringSync:
         return SyncReport(status="aborted-source-changed")
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
         if snapshot_root is not None:
             shutil.rmtree(snapshot_root, ignore_errors=True)
+        os.close(lock)
 
 
 def plan_prune(conn: sqlite3.Connection, selected_paths: Collection[str]) -> PrunePlan:
@@ -1265,6 +1294,16 @@ def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None
 
 
 def apply_prune(
+    conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
+) -> list[str]:
+    lock = _lock_database(database_path)
+    try:
+        return _apply_prune(conn, database_path, plan)
+    finally:
+        os.close(lock)
+
+
+def _apply_prune(
     conn: sqlite3.Connection, database_path: Path, plan: PrunePlan
 ) -> list[str]:
     backend = vector_backend.SqliteVecBackend()

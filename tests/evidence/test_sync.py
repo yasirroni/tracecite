@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from conftest import (
+    FakeEmbedder,
     build_markdown,
     build_pdf,
     build_pdf_with_image_only_page,
@@ -1263,3 +1264,43 @@ def test_sync_reports_missing_explicit_source_and_still_applies_the_rest(
     assert report.status == "ok"
     assert report.missing_explicit_paths == ["missing.pdf"]
     assert report.sources_added == ["notes.md"]
+
+
+def test_concurrent_syncs_of_one_database_both_succeed(
+    corpus_dir, manifest_path, database_path
+):
+    import threading
+    import time
+
+    build_markdown(corpus_dir / "notes.md", "# Notes\n\nA note.\n")
+    write_manifest(manifest_path, {"notes.md": "notes.md"})
+
+    class SlowEmbedder(FakeEmbedder):
+        def embed(self, texts):
+            # Both syncs plan before either one commits.
+            time.sleep(0.3)
+            return super().embed(texts)
+
+    outcomes: list = []
+
+    def run() -> None:
+        try:
+            outcomes.append(
+                sync_module.sync(
+                    corpus_dir, manifest_path, database_path, embedder=SlowEmbedder()
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            outcomes.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert [getattr(outcome, "status", outcome) for outcome in outcomes] == [
+        "ok",
+        "ok",
+    ]
+    assert sorted(len(outcome.sources_added) for outcome in outcomes) == [0, 1]
