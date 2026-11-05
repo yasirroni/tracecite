@@ -156,16 +156,11 @@ def _capture_stable_file_state(path: Path) -> tuple[str, int, int] | None:
     return digest.hexdigest(), after.st_size, after.st_mtime_ns
 
 
-@dataclass(frozen=True)
-class _SourceSnapshot:
-    path: Path
-    sha256: str
-    size_bytes: int
-    mtime_ns: int
-
-
-def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot | None:
-    """Copy one source into an immutable per-sync parsing snapshot.
+def _capture_source_snapshot(
+    path: Path, snapshot_root: Path
+) -> tuple[Path, tuple[str, int, int]] | None:
+    """Copy one source into an immutable per-sync parsing snapshot, and return
+    the copy's path with the file state it was copied from.
 
     A write during the copy leaves a hash the file no longer has, so the
     recheck before commit aborts the sync.
@@ -185,9 +180,7 @@ def _capture_source_snapshot(path: Path, snapshot_root: Path) -> _SourceSnapshot
         after = os.fstat(descriptor)
     finally:
         os.close(descriptor)
-    return _SourceSnapshot(
-        snapshot_path, digest.hexdigest(), after.st_size, after.st_mtime_ns
-    )
+    return snapshot_path, (digest.hexdigest(), after.st_size, after.st_mtime_ns)
 
 
 def _observed_sources_match(
@@ -206,10 +199,7 @@ class _SourcePlan:
     abs_path: Path
     source_type: str
     action: str  # "add" | "reparse" | "rechunk"
-    sha256: str
-    size_bytes: int
-    mtime_ns: int
-    chunker_config: dict
+    file_state: tuple[str, int, int]  # (sha256, size_bytes, mtime_ns)
     snapshot_path: Path | None = None
     units: list[ParsedChunkUnit] = field(default_factory=list)
     pages: list = field(default_factory=list)
@@ -321,19 +311,17 @@ def _chunks_missing_active_embedding(
     ).fetchall()
 
 
-def _source_values(plan: _SourcePlan) -> tuple:
+def _source_values(plan: _SourcePlan, options: SyncOptions) -> tuple:
     _, parser_name, parser_version, parser_config = _parser(plan.source_type)
     return (
         plan.source_path,
-        plan.sha256,
-        plan.size_bytes,
-        plan.mtime_ns,
+        *plan.file_state,
         parser_name,
         parser_version,
         json.dumps(parser_config),
         schema.CHUNKER_NAME,
         schema.CHUNKER_VERSION,
-        json.dumps(plan.chunker_config),
+        json.dumps({"max_chunk_chars": options.max_chunk_chars}),
         schema.NORMALISATION_VERSION,
         "{}",
         schema.utc_now(),
@@ -523,98 +511,69 @@ def sync(
         reembed_only_chunks: list[tuple[str, str]] = []
         pending_embeddings: dict[str, str] = {}  # semantic_input_hash -> body text
 
-        for source_path in sorted(true_added_ids):
+        # Adds come first so new sources get their source_pk in path order.
+        for source_path in [*sorted(true_added_ids), *sorted(continuing_ids)]:
             abs_path = sources_dir / source_path
             source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
-            snapshot = _capture_source_snapshot(abs_path, snapshot_root)
-            if snapshot is None:
-                raise _SourceChangedDuringSync
-            file_hash = snapshot.sha256
-            size_bytes = snapshot.size_bytes
-            mtime_ns = snapshot.mtime_ns
-            observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
-            plans.append(
-                _SourcePlan(
-                    source_path=source_path,
-                    source_pk=None,
-                    abs_path=abs_path,
-                    source_type=source_type,
-                    action="add",
-                    sha256=file_hash,
-                    size_bytes=size_bytes,
-                    mtime_ns=mtime_ns,
-                    chunker_config={"max_chunk_chars": options.max_chunk_chars},
-                    snapshot_path=snapshot.path,
-                )
-            )
-
-        for source_path in sorted(continuing_ids):
-            abs_path = sources_dir / source_path
-            source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
-            row = existing_sources[source_path]
-            source_pk = row["source_pk"]
-            captured = _capture_stable_file_state(abs_path)
-            if captured is None:
-                raise _SourceChangedDuringSync
-            file_hash, size_bytes, mtime_ns = captured
-            observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
-
-            config_matches = _config_matches(row, options, source_type)
-            content_changed = file_hash != row["sha256"]
-            if not content_changed and config_matches and not options.full:
-                if size_bytes != row["size_bytes"] or mtime_ns != row["mtime_ns"]:
-                    hint_updates.append((size_bytes, mtime_ns, source_path))
-                if not options.reembed:
-                    missing_rows = _chunks_missing_active_embedding(
-                        conn, source_pk, model_id
-                    )
-                    if not missing_rows:
-                        report.sources_unchanged.append(source_path)
-                    for missing_row in missing_rows:
-                        reembed_only_chunks.append(
-                            (
-                                missing_row["chunk_id"],
-                                missing_row["semantic_input_hash"],
-                            )
-                        )
-                        pending_embeddings.setdefault(
-                            missing_row["semantic_input_hash"], missing_row["body"]
-                        )
-                    continue
-
-            needs_full_reparse = (
-                content_changed
-                or (row["parser_name"], row["parser_version"])
-                != _parser(source_type)[1:3]
-                or options.full
-            )
-
-            action = "reparse" if needs_full_reparse else "rechunk"
-            snapshot = None
-            if action == "reparse":
-                snapshot = _capture_source_snapshot(abs_path, snapshot_root)
-                if (
-                    snapshot is None
-                    or (
-                        snapshot.sha256,
-                        snapshot.size_bytes,
-                        snapshot.mtime_ns,
-                    )
-                    != captured
-                ):
+            row = existing_sources.get(source_path)
+            action = "add"
+            state = None
+            if row is not None:
+                state = _capture_stable_file_state(abs_path)
+                if state is None:
                     raise _SourceChangedDuringSync
+                observed_states[source_path] = (abs_path, *state)
+                content_changed = state[0] != row["sha256"]
+                if (
+                    not content_changed
+                    and _config_matches(row, options, source_type)
+                    and not options.full
+                ):
+                    if state[1:] != (row["size_bytes"], row["mtime_ns"]):
+                        hint_updates.append((*state[1:], source_path))
+                    if not options.reembed:
+                        missing_rows = _chunks_missing_active_embedding(
+                            conn, row["source_pk"], model_id
+                        )
+                        if not missing_rows:
+                            report.sources_unchanged.append(source_path)
+                        for missing_row in missing_rows:
+                            reembed_only_chunks.append(
+                                (
+                                    missing_row["chunk_id"],
+                                    missing_row["semantic_input_hash"],
+                                )
+                            )
+                            pending_embeddings.setdefault(
+                                missing_row["semantic_input_hash"], missing_row["body"]
+                            )
+                        continue
+                reparse = (
+                    content_changed
+                    or options.full
+                    or (row["parser_name"], row["parser_version"])
+                    != _parser(source_type)[1:3]
+                )
+                action = "reparse" if reparse else "rechunk"
+
+            snapshot_path = None
+            if action != "rechunk":
+                snapshot = _capture_source_snapshot(abs_path, snapshot_root)
+                # A continuing source must still hold the bytes just hashed.
+                if snapshot is None or (state is not None and state != snapshot[1]):
+                    raise _SourceChangedDuringSync
+                snapshot_path, state = snapshot
+                observed_states[source_path] = (abs_path, *state)
+            assert state is not None
             plans.append(
                 _SourcePlan(
                     source_path=source_path,
-                    source_pk=source_pk,
+                    source_pk=None if row is None else row["source_pk"],
                     abs_path=abs_path,
                     source_type=source_type,
                     action=action,
-                    sha256=file_hash,
-                    size_bytes=size_bytes,
-                    mtime_ns=mtime_ns,
-                    chunker_config={"max_chunk_chars": options.max_chunk_chars},
-                    snapshot_path=snapshot.path if snapshot is not None else None,
+                    file_state=state,
+                    snapshot_path=snapshot_path,
                 )
             )
 
@@ -780,7 +739,7 @@ def sync(
                             indexed_at_utc, source_type, index_status
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok')
                         """,
-                        (*_source_values(plan), plan.source_type),
+                        (*_source_values(plan, options), plan.source_type),
                     ).lastrowid
                     staging_dir = staging_dirs.get(plan.source_path)
                     if staging_dir is not None:
@@ -801,7 +760,7 @@ def sync(
                             indexed_at_utc = ?, index_status = 'ok'
                         WHERE source_pk = ?
                         """,
-                        (*_source_values(plan), plan.source_pk),
+                        (*_source_values(plan, options), plan.source_pk),
                     )
 
                 conn.executemany(
