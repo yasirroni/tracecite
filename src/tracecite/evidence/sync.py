@@ -466,7 +466,7 @@ def sync(
                 added_abs = sources_dir / sid
                 captured = _capture_stable_file_state(added_abs)
                 if captured is None:
-                    return SyncReport(status="aborted-source-changed")
+                    raise _SourceChangedDuringSync
                 file_hash, size_bytes, mtime_ns = captured
                 observed_states[sid] = (added_abs, file_hash, size_bytes, mtime_ns)
                 by_hash_added[file_hash].append(sid)
@@ -507,7 +507,7 @@ def sync(
             source_type = manifest_module.SOURCE_TYPES[abs_path.suffix.lower()]
             snapshot = _capture_source_snapshot(abs_path, snapshot_root)
             if snapshot is None:
-                return SyncReport(status="aborted-source-changed")
+                raise _SourceChangedDuringSync
             file_hash = snapshot.sha256
             size_bytes = snapshot.size_bytes
             mtime_ns = snapshot.mtime_ns
@@ -534,7 +534,7 @@ def sync(
             source_pk = row["source_pk"]
             captured = _capture_stable_file_state(abs_path)
             if captured is None:
-                return SyncReport(status="aborted-source-changed")
+                raise _SourceChangedDuringSync
             file_hash, size_bytes, mtime_ns = captured
             observed_states[source_path] = (abs_path, file_hash, size_bytes, mtime_ns)
 
@@ -581,7 +581,7 @@ def sync(
                     )
                     != captured
                 ):
-                    return SyncReport(status="aborted-source-changed")
+                    raise _SourceChangedDuringSync
             plans.append(
                 _SourcePlan(
                     source_path=source_path,
@@ -951,13 +951,11 @@ def sync(
                 embedding_dimensions=schema.EMBEDDING_DIMENSIONS,
             )
             conn.execute("COMMIT")
-        except Exception as exc:
+        except Exception:
             with contextlib.suppress(sqlite3.Error):
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
             shutil.rmtree(generation_root, ignore_errors=True)
-            if isinstance(exc, _SourceChangedDuringSync):
-                return SyncReport(status="aborted-source-changed")
             raise
 
         if options.cleanup_asset_generations:
@@ -966,6 +964,8 @@ def sync(
             )
 
         return report
+    except _SourceChangedDuringSync:
+        return SyncReport(status="aborted-source-changed")
     finally:
         if conn is not None:
             conn.close()
