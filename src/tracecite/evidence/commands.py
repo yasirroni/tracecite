@@ -600,23 +600,34 @@ def _print_warnings(conn, root: Path | None) -> int:
     from .paths import source_file_state
 
     warnings = 0
-    (blank_pages,) = conn.execute(
-        "SELECT count(*) FROM pages JOIN sources USING (source_pk) "
-        "WHERE source_type = 'pdf' AND trim(text, char(9, 10, 13, 32)) = ''"
-    ).fetchone()
+    blank_pages: dict[str, list[str]] = defaultdict(list)
+    for path, page in conn.execute(
+        "SELECT path, physical_page FROM pages JOIN sources USING (source_pk) "
+        "WHERE source_type = 'pdf' AND trim(text, char(9, 10, 13, 32)) = '' "
+        "ORDER BY path, physical_page"
+    ):
+        blank_pages[path].append(str(page))
     if blank_pages:
         warnings += 1
         print(
-            f"WARNING: {blank_pages} PDF page(s) have no extracted text; scanned "
-            "pages need Tesseract, then tracecite sync --full"
+            f"WARNING: {sum(map(len, blank_pages.values()))} PDF page(s) have no "
+            "extracted text; scanned pages need Tesseract, then tracecite sync --full:"
         )
+        for path, pages in blank_pages.items():
+            print(f"  {path}: {', '.join(pages)}")
     if root is None:
         return warnings
     states: dict[str, list[str]] = defaultdict(list)
     for row in conn.execute("SELECT * FROM sources ORDER BY path"):
         states[source_file_state(Path(root), row)].append(row["path"])
     for state, message in (
-        ("changed", "changed on disk since sync; re-run tracecite sync"),
+        (
+            "changed",
+            (
+                "changed on disk since sync; run tracecite sync, which lists any "
+                "file it cannot parse under skipped"
+            ),
+        ),
         ("missing", "missing under the root"),
     ):
         if states[state]:

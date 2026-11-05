@@ -1236,7 +1236,8 @@ def test_sync_and_page_flag_pages_without_text(tmp_path, capsys, monkeypatch):
 
     # Doctor keeps reporting the page after later syncs stop listing it.
     assert cli.main(["doctor", "--database", str(database_path)]) == 0
-    assert "1 PDF page(s) have no extracted text" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "1 PDF page(s) have no extracted text" in out and "\n  scan.pdf: 2\n" in out
 
     for page, expect_note in (("2", True), ("1", False)):
         exit_code = cli.main(
