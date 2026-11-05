@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .chunking import normalise_text
@@ -172,6 +172,9 @@ def verify_report(
     for line in lines:
         for match in _CITATION_RE.finditer(line):
             result.citation_keys_used.add(match.group("key"))
+    # Citations whose source and page resolve, and their source rows.
+    viable: dict[str, tuple[sqlite3.Row, ReferenceDefinition]] = {}
+    source_rows: dict[str, sqlite3.Row] = {}
     for key in sorted(result.citation_keys_used):
         definition = result.definitions.get(key)
         if key in invalid_definition_keys:
@@ -202,6 +205,7 @@ def verify_report(
                 )
             )
             continue
+        source_rows[key] = source_row
         page_row = conn.execute(
             "SELECT physical_page FROM pages WHERE source_pk = ? AND physical_page = ?",
             (source_row["source_pk"], definition.page),
@@ -214,6 +218,8 @@ def verify_report(
                     f"page {definition.page} is not indexed for {source_row['path']}",
                 )
             )
+            continue
+        viable[key] = (source_row, definition)
     paragraph_keys: list[str] = []
     paragraph_break_pending = False
     index = 0
@@ -232,40 +238,15 @@ def verify_report(
             quote_parts[0] = quote_parts[0].removeprefix('"')
             quote_parts[-1] = quote_parts[-1].removesuffix('"')
             quote = "\n".join(quote_parts)
-            viable: list[tuple[str, sqlite3.Row, ReferenceDefinition]] = []
-            for key in dict.fromkeys(paragraph_keys):
-                definition = result.definitions.get(key)
-                if (
-                    definition is None
-                    or key in invalid_definition_keys
-                    or definition.page <= 0
-                ):
-                    continue
-                try:
-                    source_row = _row_for_definition(
-                        conn, definition, report_path, root
-                    )
-                except PathAuthorityError:
-                    continue
-                if source_row is None:
-                    continue
-                page_row = conn.execute(
-                    "SELECT physical_page FROM pages WHERE source_pk = ? AND physical_page = ?",
-                    (source_row["source_pk"], definition.page),
-                ).fetchone()
-                if page_row is not None:
-                    viable.append((key, source_row, definition))
-            if not quote.strip() or len(viable) != 1:
+            keys = [key for key in dict.fromkeys(paragraph_keys) if key in viable]
+            if not quote.strip() or len(keys) != 1:
                 result.quote_results.append(
                     QuoteVerification("structural-error", 0, quote)
                 )
             else:
-                key, source_row, definition = viable[0]
-                best = verify_quote(conn, source_row["path"], definition.page, quote)
-                best = QuoteVerification(
-                    best.status, best.physical_page, best.quote, key, source_row["path"]
-                )
-                result.quote_results.append(best)
+                source_row, definition = viable[keys[0]]
+                checked = verify_quote(conn, source_row["path"], definition.page, quote)
+                result.quote_results.append(replace(checked, citation_key=keys[0]))
             index += 1
             continue
         if line.strip() == "":
@@ -287,16 +268,7 @@ def verify_report(
         registry_root = Path(source_links_root or root).resolve()
         registry, registry_issues = load_source_links(source_links_path, registry_root)
         result.source_link_issues.extend(registry_issues)
-        for key in sorted(result.citation_keys_used):
-            definition = result.definitions.get(key)
-            if not definition:
-                continue
-            try:
-                source_row = _row_for_definition(conn, definition, report_path, root)
-            except PathAuthorityError:
-                continue
-            if source_row is None:
-                continue
+        for source_row in source_rows.values():
             source_abs = (root / source_row["path"]).resolve()
             entries = registry.get(source_abs, [])
             if not entries:
