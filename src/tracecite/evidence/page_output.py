@@ -8,11 +8,11 @@ from .paths import file_sha256
 
 
 class PageOutputError(ValueError):
-    pass
+    exit_code = 2
 
 
 class PageAssetMissingError(PageOutputError):
-    pass
+    exit_code = 1
 
 
 def _asset_payload(database_path: Path, asset_row) -> dict:

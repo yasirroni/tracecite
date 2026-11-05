@@ -7,10 +7,14 @@ import re
 import sqlite3
 import sys
 from collections import defaultdict
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from . import config as config_module
 from . import schema
+from .page_extraction import PageExtractionError
+from .page_output import PageOutputError
+from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
 RRF_K = 60
 
@@ -25,14 +29,21 @@ def _require(value, flag: str):
     return value
 
 
-def _connect(database: Path, *, read_only: bool):
-    try:
-        return schema.connect_existing(
-            _require(database, "--database"), read_only=read_only
-        )
-    except FileNotFoundError as exc:
-        print(str(exc), file=sys.stderr)
-        return None
+@contextmanager
+def _database(database: Path | None, *, read_only: bool = True):
+    """Open an existing database, check its schema, and close it on exit."""
+    with closing(
+        schema.connect_existing(_require(database, "--database"), read_only=read_only)
+    ) as conn:
+        schema.ensure_schema(conn)
+        yield conn
+
+
+def _indexed_source(conn, args: argparse.Namespace):
+    """Return ``args.source_path`` relative to the root, and its source row or None."""
+    root = Path(args.root or Path.cwd()).resolve()
+    source_path = normalise_source_path(root, args.source_path)
+    return source_path, source_row_for_path(conn, source_path)
 
 
 def _resolve_runtime_args(args: argparse.Namespace) -> argparse.Namespace:
@@ -379,13 +390,9 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    from .page_output import PageAssetMissingError, PageOutputError, page_assets_for
+    from .page_output import page_assets_for
 
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
+    with _database(args.database) as conn:
         model_cache_dir = (
             args.model_cache_dir or Path(args.database).resolve().parent / "model-cache"
         )
@@ -414,38 +421,19 @@ def cmd_search(args: argparse.Namespace) -> int:
                 else (None, [])
             )
         print(_json(results, indent=2))
-    except PageAssetMissingError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    except PageOutputError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-    finally:
-        conn.close()
     return 0
 
 
 def cmd_page(args: argparse.Namespace) -> int:
-    from .page_output import PageAssetMissingError, PageOutputError, page_json_payload
+    from .page_output import page_json_payload
     from .page_selection import (
         PageSelectionSyntaxError,
         PageSelectionUnavailableError,
         resolve_page_selection,
     )
-    from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
-        root = Path(args.root or Path.cwd()).resolve()
-        try:
-            source_path = normalise_source_path(root, args.source_path)
-        except PathAuthorityError as exc:
-            print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
-            return 2
-        source_row = source_row_for_path(conn, source_path)
+    with _database(args.database) as conn:
+        source_path, source_row = _indexed_source(conn, args)
         if source_row is None:
             print(f"not-found: {source_path} page 1", file=sys.stderr)
             return 1
@@ -478,19 +466,10 @@ def cmd_page(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
         if args.format == "json":
-            try:
-                payload = [
-                    page_json_payload(
-                        conn, args.database, source_row, selected_rows[page]
-                    )
-                    for page in selected_pages
-                ]
-            except PageAssetMissingError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-            except PageOutputError as exc:
-                print(str(exc), file=sys.stderr)
-                return 2
+            payload = [
+                page_json_payload(conn, args.database, source_row, selected_rows[page])
+                for page in selected_pages
+            ]
             print(_json(payload, indent=2))
         elif len(selected_pages) == 1:
             print(selected_rows[selected_pages[0]]["text"])
@@ -500,34 +479,15 @@ def cmd_page(args: argparse.Namespace) -> int:
                     print()
                 print(f"--- physical page {page} ---")
                 print(selected_rows[page]["text"])
-    finally:
-        conn.close()
     return 0
 
 
 def cmd_extract_pages(args: argparse.Namespace) -> int:
-    from .page_extraction import (
-        PageExtractionError,
-        PageExtractionMissingError,
-        extract_pages,
-    )
+    from .page_extraction import extract_pages
 
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
+    with _database(args.database) as conn:
         root = Path(args.root or Path.cwd()).resolve()
-        try:
-            result = extract_pages(
-                conn, root, args.source_path, args.page, args.output_dir
-            )
-        except PageExtractionMissingError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        except PageExtractionError as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
+        result = extract_pages(conn, root, args.source_path, args.page, args.output_dir)
         print(
             _json(
                 {
@@ -538,14 +498,11 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
                 indent=2,
             )
         )
-    finally:
-        conn.close()
     return 0
 
 
 def cmd_verify_quote(args: argparse.Namespace) -> int:
     from . import verify
-    from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
     page_range = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d+)\s*)?", args.page)
     first, last = (
@@ -559,18 +516,8 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
-        root = Path(args.root or Path.cwd()).resolve()
-        try:
-            source_path = normalise_source_path(root, args.source_path)
-        except PathAuthorityError as exc:
-            print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
-            return 2
-        source_row = source_row_for_path(conn, source_path)
+    with _database(args.database) as conn:
+        source_path, source_row = _indexed_source(conn, args)
         if source_row is None:
             result = verify.QuoteVerification(
                 "source-not-indexed", first, args.quote, source_path=source_path
@@ -588,8 +535,6 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
         print(_json({**_quote_json(result), "last_page": last}))
-    finally:
-        conn.close()
     if result.status in {"exact", "normalised"}:
         return 0
     return 2 if result.status.endswith("-not-indexed") else 1
@@ -608,11 +553,7 @@ def _quote_json(result) -> dict:
 def cmd_verify_report(args: argparse.Namespace) -> int:
     from . import verify
 
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
+    with _database(args.database) as conn:
         result = verify.verify_report(
             conn,
             args.report_path,
@@ -633,19 +574,13 @@ def cmd_verify_report(args: argparse.Namespace) -> int:
                 indent=2,
             )
         )
-    finally:
-        conn.close()
     return 0 if result.ok else 1
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     from . import sync as sync_module
 
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
+    with _database(args.database) as conn:
         issues = sync_module.integrity_check(conn)
         for issue in issues:
             print(f"ISSUE: {issue}")
@@ -653,8 +588,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if not issues:
             print(f"doctor: no integrity issues found, {warnings} warning(s)")
         return 0 if not issues else 1
-    finally:
-        conn.close()
 
 
 def _print_warnings(conn, root: Path | None) -> int:
@@ -720,11 +653,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    conn = _connect(args.database, read_only=True)
-    if conn is None:
-        return 2
-    try:
-        schema.ensure_schema(conn)
+    with _database(args.database) as conn:
         selected = set()
         missing: list[str] = []
         if not prune_all:
@@ -744,35 +673,28 @@ def cmd_prune(args: argparse.Namespace) -> int:
             missing = sorted(matched - selected)
         plan = sync_module.plan_prune(conn, selected)
         sync_module.validate_prune_plan(conn, args.database, plan)
-        leaks = []
-        if args.apply:
-            conn.close()
-            conn = _connect(args.database, read_only=False)
-            if conn is None:
-                return 2
-            schema.ensure_schema(conn)
+    leaks = []
+    if args.apply:
+        with _database(args.database, read_only=False) as conn:
             leaks = sync_module.apply_prune(conn, args.database, plan)
-        status = "preview"
-        if args.apply:
-            status = "applied-with-cleanup-warnings" if leaks else "applied"
-        print(
-            _json(
-                {
-                    "status": status,
-                    "selected_count": len(selected),
-                    "planned_count": len(plan),
-                    "paths": list(plan),
-                    "missing_paths": missing,
-                    "applied": bool(args.apply),
-                    "database_committed": bool(args.apply),
-                    "cleanup_warnings": leaks,
-                }
-            )
+    status = "preview"
+    if args.apply:
+        status = "applied-with-cleanup-warnings" if leaks else "applied"
+    print(
+        _json(
+            {
+                "status": status,
+                "selected_count": len(selected),
+                "planned_count": len(plan),
+                "paths": list(plan),
+                "missing_paths": missing,
+                "applied": bool(args.apply),
+                "database_committed": bool(args.apply),
+                "cleanup_warnings": leaks,
+            }
         )
-        return 3 if args.apply and leaks else 0
-    finally:
-        if conn is not None:
-            conn.close()
+    )
+    return 3 if args.apply and leaks else 0
 
 
 def dispatch(handler, args: argparse.Namespace) -> int:
@@ -783,3 +705,9 @@ def dispatch(handler, args: argparse.Namespace) -> int:
         # A damaged page can pass the open-time check and fail mid-query.
         print(f"tracecite: database error in {args.database}: {exc}", file=sys.stderr)
         return 2
+    except PathAuthorityError as exc:
+        print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
+        return 2
+    except (PageOutputError, PageExtractionError) as exc:
+        print(exc, file=sys.stderr)
+        return exc.exit_code

@@ -23,11 +23,13 @@ from .paths import (
 
 
 class PageExtractionError(ValueError):
-    pass
+    exit_code = 2
 
 
 class PageExtractionMissingError(PageExtractionError):
     """The source or a selected page is not indexed or not on disk."""
+
+    exit_code = 1
 
 
 @dataclass(frozen=True)
