@@ -206,9 +206,7 @@ class _SourcePlan:
     sha256: str
     size_bytes: int
     mtime_ns: int
-    parser_config: dict
     chunker_config: dict
-    normalisation_config: dict
     snapshot_path: Path | None = None
     units: list[ParsedChunkUnit] = field(default_factory=list)
     pages: list = field(default_factory=list)
@@ -316,12 +314,12 @@ def _source_values(plan: _SourcePlan) -> tuple:
         plan.size_bytes,
         plan.mtime_ns,
         *_parser_identity(plan.source_type),
-        json.dumps(plan.parser_config),
+        json.dumps(_parser_config_for(plan.source_type)),
         schema.CHUNKER_NAME,
         schema.CHUNKER_VERSION,
         json.dumps(plan.chunker_config),
         schema.NORMALISATION_VERSION,
-        json.dumps(plan.normalisation_config),
+        "{}",
         schema.utc_now(),
     )
 
@@ -529,9 +527,7 @@ def sync(
                     sha256=file_hash,
                     size_bytes=size_bytes,
                     mtime_ns=mtime_ns,
-                    parser_config=_parser_config_for(source_type),
                     chunker_config={"max_chunk_chars": options.max_chunk_chars},
-                    normalisation_config={},
                     snapshot_path=snapshot.path,
                 )
             )
@@ -601,9 +597,7 @@ def sync(
                     sha256=file_hash,
                     size_bytes=size_bytes,
                     mtime_ns=mtime_ns,
-                    parser_config=_parser_config_for(source_type),
                     chunker_config={"max_chunk_chars": options.max_chunk_chars},
-                    normalisation_config={},
                     snapshot_path=snapshot.path if snapshot is not None else None,
                 )
             )
@@ -619,7 +613,9 @@ def sync(
                 # Parsers raise arbitrary errors on damaged files; skip the
                 # file so the rest of the selection still syncs.
                 try:
-                    result = parser_module.parse(plan.content_path, plan.parser_config)
+                    result = parser_module.parse(
+                        plan.content_path, _parser_config_for(plan.source_type)
+                    )
                 except Exception as exc:  # noqa: BLE001
                     report.skipped_sources[plan.source_path] = (
                         f"cannot parse: {_source_error(exc, plan)}"
@@ -939,7 +935,7 @@ def sync(
                             schema.CHUNKER_VERSION,
                             json.dumps(plan.chunker_config),
                             schema.NORMALISATION_VERSION,
-                            json.dumps(plan.normalisation_config),
+                            "{}",
                             schema.utc_now(),
                             plan.source_pk,
                         ),
