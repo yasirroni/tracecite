@@ -290,7 +290,7 @@ def test_unambiguous_rename_zero_parse_and_embed_calls(
 
 
 def test_rename_target_mutation_before_transaction_aborts_without_writes(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
+    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
@@ -314,25 +314,22 @@ def test_rename_target_mutation_before_transaction_aborts_without_writes(
             database_path.with_name(database_path.name + "-shm").exists(),
         )
 
-    def mutate_at_begin(event):
-        if event == "begin-immediate":
-            build_pdf(
-                renamed_path,
-                [
-                    [
-                        "Changed",
-                        "Rename target changed after detection before transaction.",
-                    ]
-                ],
-            )
+    real_generation_root = sync_module._asset_generation_root
 
-    sync_module.ASSET_EVENT_HOOK = mutate_at_begin
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=embedder
+    def mutate_before_transaction(*args):
+        build_pdf(
+            renamed_path,
+            [["Changed", "Rename target changed after detection before transaction."]],
         )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+        return real_generation_root(*args)
+
+    monkeypatch.setattr(
+        sync_module, "_asset_generation_root", mutate_before_transaction
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=embedder
+    )
+    monkeypatch.undo()
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -1081,7 +1078,7 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
 
 
 def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
 ):
     import os
 
@@ -1092,19 +1089,20 @@ def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
     source.write_text(original, encoding="utf-8")
     write_manifest(manifest_path, {"a.md": "a.md"})
 
-    def mutate_at_begin(event):
-        if event == "begin-immediate":
-            info = source.stat()
-            source.write_text(replacement, encoding="utf-8")
-            os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+    real_generation_root = sync_module._asset_generation_root
 
-    sync_module.ASSET_EVENT_HOOK = mutate_at_begin
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+    def mutate_before_transaction(*args):
+        info = source.stat()
+        source.write_text(replacement, encoding="utf-8")
+        os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+        return real_generation_root(*args)
+
+    monkeypatch.setattr(
+        sync_module, "_asset_generation_root", mutate_before_transaction
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -1121,7 +1119,7 @@ def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(
 
 
 def test_rename_mutation_with_restored_metadata_aborts(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
 ):
     import os
 
@@ -1137,19 +1135,20 @@ def test_rename_mutation_with_restored_metadata_aborts(
     old_path.rename(new_path)
     write_manifest(manifest_path, {"new.md": "new.md"})
 
-    def mutate_after_capture(event):
-        if event == "begin-immediate":
-            info = new_path.stat()
-            new_path.write_text(replacement, encoding="utf-8")
-            os.utime(new_path, ns=(info.st_atime_ns, info.st_mtime_ns))
+    real_generation_root = sync_module._asset_generation_root
 
-    sync_module.ASSET_EVENT_HOOK = mutate_after_capture
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+    def mutate_before_transaction(*args):
+        info = new_path.stat()
+        new_path.write_text(replacement, encoding="utf-8")
+        os.utime(new_path, ns=(info.st_atime_ns, info.st_mtime_ns))
+        return real_generation_root(*args)
+
+    monkeypatch.setattr(
+        sync_module, "_asset_generation_root", mutate_before_transaction
+    )
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:
@@ -1161,7 +1160,7 @@ def test_rename_mutation_with_restored_metadata_aborts(
 
 
 def test_reparse_mutation_at_precommit_rolls_back_and_repairs(
-    corpus_dir, manifest_path, database_path, make_embedder
+    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
 ):
     import os
 
@@ -1175,19 +1174,18 @@ def test_reparse_mutation_at_precommit_rolls_back_and_repairs(
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
     source.write_text(planned, encoding="utf-8")
 
-    def mutate_before_final_check(event):
-        if event == "pre-commit-source-check":
-            info = source.stat()
-            source.write_text(replacement, encoding="utf-8")
-            os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+    real_ensure_embedding = sync_module._ensure_embedding
 
-    sync_module.ASSET_EVENT_HOOK = mutate_before_final_check
-    try:
-        report = sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    finally:
-        sync_module.ASSET_EVENT_HOOK = None
+    def mutate_inside_transaction(*args):
+        info = source.stat()
+        source.write_text(replacement, encoding="utf-8")
+        os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns))
+        return real_ensure_embedding(*args)
+
+    monkeypatch.setattr(sync_module, "_ensure_embedding", mutate_inside_transaction)
+    report = sync_module.sync(
+        corpus_dir, manifest_path, database_path, embedder=make_embedder()
+    )
 
     assert report.status == "aborted-source-changed"
     with closing(schema.connect(database_path)) as conn:

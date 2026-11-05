@@ -35,7 +35,7 @@ import stat
 import tempfile
 import uuid
 from collections import defaultdict, deque
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -47,13 +47,6 @@ from .parsers import pdf as pdf_parser
 from .parsers import workbook as workbook_parser
 from .parsers.base import ParsedChunkUnit, units_from_layout
 from .paths import file_sha256
-
-ASSET_EVENT_HOOK: Callable[[str], None] | None = None
-
-
-def _asset_event(name: str) -> None:
-    if ASSET_EVENT_HOOK is not None:
-        ASSET_EVENT_HOOK(name)
 
 
 class SyncError(RuntimeError):
@@ -782,7 +775,6 @@ def sync(
             raise
 
         # ==== single write transaction ====
-        _asset_event("begin-immediate")
         if not _observed_sources_match(observed_states):
             shutil.rmtree(generation_root, ignore_errors=True)
             return SyncReport(status="aborted-source-changed")
@@ -980,7 +972,6 @@ def sync(
                     (chunk_id, embedding_id),
                 )
 
-            _asset_event("pre-commit-source-check")
             if not _observed_sources_match(observed_states):
                 raise _SourceChangedDuringSync
 
@@ -1387,13 +1378,11 @@ def _render_assets(
         asset_path = base_dir / f"page-{physical_page:04d}.{render.ext}"
         asset_path.write_bytes(render.image_bytes)
         sha256 = file_sha256(asset_path)
-        _asset_event("asset-hash")
         rendered.append((physical_page, asset_path, render, "page-render", sha256))
         for crop in pdf_parser.render_figure_crops(plan.content_path, physical_page):
             crop_path = base_dir / f"{crop.label}.{crop.ext}"
             crop_path.write_bytes(crop.image_bytes)
             sha256 = file_sha256(crop_path)
-            _asset_event("asset-hash")
             rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
     generation_obj = AssetGeneration(
         root=generation_root,

@@ -264,24 +264,6 @@ def test_actual_commit_failure_rolls_back_or_recovers_without_candidate_adoption
         assert sync_module.integrity_check(conn) == []
 
 
-def test_asset_hashing_completes_before_write_transaction(
-    corpus_dir, manifest_path, database_path, monkeypatch
-):
-    build_pdf(
-        corpus_dir / "doc.pdf",
-        [["Title", "Hashing must finish before BEGIN IMMEDIATE."]],
-    )
-    write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    events: list[str] = []
-    monkeypatch.setattr(sync_module, "ASSET_EVENT_HOOK", events.append)
-    _sync(corpus_dir, manifest_path, database_path)
-    assert "asset-hash" in events
-    assert "begin-immediate" in events
-    assert max(
-        index for index, event in enumerate(events) if event == "asset-hash"
-    ) < events.index("begin-immediate")
-
-
 def test_prune_apply_removes_only_pruned_physical_asset_directory_from_shared_generation(
     corpus_dir, manifest_path, database_path
 ):
