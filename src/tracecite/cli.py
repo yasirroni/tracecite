@@ -523,11 +523,16 @@ def _docs_index(args: argparse.Namespace) -> int:
     print(f"Documentation index input: {result.profile.input_root}")
     print(f"Documentation index database: {result.profile.database_path}")
     print(f"Tables normalised: {result.tables_normalized}")
-    print(f"status: {report.status}")
+    from .evidence.commands import cli_sync_status
+
+    status = cli_sync_status(report)
+    print(f"status: {status}")
     print(f"added: {report.sources_added}")
+    for path, reason in report.skipped_sources.items():
+        print(f"skipped: {path}: {reason}")
     print(f"unchanged: {len(report.sources_unchanged)} source(s)")
     print(f"embeddings generated: {report.embeddings_generated}")
-    return 0 if report.status == "ok" else 1
+    return 0 if status == "ok" else 1
 
 
 def _docs_search(args: argparse.Namespace) -> int:

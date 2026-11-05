@@ -67,11 +67,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
         model_cache_dir=args.model_cache_dir,
         only_relative_paths=only_paths,
     )
-    # The library status says whether the sync applied; the CLI also reports a
-    # selected source that it could not index, so the status matches the exit code.
+    report.status = cli_sync_status(report)
     not_indexed = [*report.missing_explicit_paths, *report.skipped_sources]
-    if report.status == "ok" and not_indexed:
-        report.status = "incomplete"
     if args.json:
         print(_json(dataclasses.asdict(report), indent=2))
     else:
@@ -83,6 +80,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     return 0 if report.status == "ok" else 1
+
+
+def cli_sync_status(report) -> str:
+    """Return the sync status, or ``incomplete`` when a selected source was not indexed.
+
+    The library status says whether the sync applied; the CLI also counts a
+    selected source it could not index, so its status matches its exit code.
+    """
+    if report.status == "ok" and (
+        report.missing_explicit_paths or report.skipped_sources
+    ):
+        return "incomplete"
+    return report.status
 
 
 def _print_sync_report(report) -> None:

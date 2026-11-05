@@ -116,3 +116,25 @@ def test_docs_mode_dispatch_passes_contract_arguments_and_status(capsys) -> None
     ):
         assert cli._docs_mode(args, cli.check_docs) == 1
     assert "stale: docs/x.md" in capsys.readouterr().err
+
+
+def test_docs_index_exits_1_and_names_a_skipped_source(capsys) -> None:
+    from tracecite.evidence.sync import SyncReport
+
+    args = cli.build_parser().parse_args(
+        ["docs", "index", "--docs-config", "config.toml", "--repo-root", "repo"]
+    )
+    report = SyncReport(skipped_sources={"bad.md": "cannot parse: invalid UTF-8"})
+    result = SimpleNamespace(
+        profile=SimpleNamespace(input_root=Path("in"), database_path=Path("db")),
+        tables_normalized=0,
+        sync_report=report,
+    )
+    with (
+        patch.object(cli, "load_docs_contract"),
+        patch.object(cli, "sync_docs_index", return_value=result),
+    ):
+        assert cli._docs_index(args) == 1
+    out = capsys.readouterr().out
+    assert "status: incomplete\n" in out
+    assert "skipped: bad.md: cannot parse: invalid UTF-8\n" in out
