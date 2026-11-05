@@ -34,6 +34,8 @@ from .tables import (
 DEFAULT_LIMIT = 10
 DEFAULT_FTS_LIMIT = 50
 DEFAULT_VECTOR_LIMIT = 50
+# Equal to chunking.DEFAULT_MAX_CHUNK_CHARS; importing that module here would
+# load the parsers for every command, including --help.
 DEFAULT_MAX_CHUNK_CHARS = 1200
 
 PANDOC_HELP = (
@@ -47,6 +49,13 @@ PIPE_FALLBACK_HELP = (
 LIMIT_HELP = "Number of results to return (default: %(default)s)."
 FTS_LIMIT_HELP = "Full-text candidates ranked before fusion (default: %(default)s)."
 VECTOR_LIMIT_HELP = "Vector candidates ranked before fusion (default: %(default)s)."
+
+
+def _add_pandoc_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--pandoc", help=PANDOC_HELP)
+    parser.add_argument(
+        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
+    )
 
 
 def _add_evidence_common_args(parser: argparse.ArgumentParser, command: str) -> None:
@@ -235,10 +244,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Fail when the table has normalisation errors instead of reporting them.",
     )
-    normalise.add_argument("--pandoc", help=PANDOC_HELP)
-    normalise.add_argument(
-        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
-    )
+    _add_pandoc_args(normalise)
 
     document = subparsers.add_parser(
         "document", help="Normalise every table in one document"
@@ -258,8 +264,7 @@ def build_parser() -> argparse.ArgumentParser:
     document_normalise.add_argument("--output", type=Path)
     document_normalise.add_argument("--source-code-path")
     document_normalise.add_argument("--strict", action="store_true")
-    document_normalise.add_argument("--pandoc")
-    document_normalise.add_argument("--allow-pipe-fallback", action="store_true")
+    _add_pandoc_args(document_normalise)
 
     prepare = subparsers.add_parser(
         "prepare",
@@ -308,14 +313,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--quarto",
         help="Quarto command for --render-embedding-site (default: quarto on PATH).",
     )
-    prepare.add_argument("--pandoc", help=PANDOC_HELP)
+    _add_pandoc_args(prepare)
     prepare.add_argument(
         "--strict-tables",
         action="store_true",
         help="Fail when any table has normalisation errors.",
-    )
-    prepare.add_argument(
-        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
     )
     prepare.add_argument(
         "--no-clean",
@@ -390,10 +392,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Markdown file, or directory whose *.md files are checked recursively.",
     )
-    check.add_argument("--pandoc", help=PANDOC_HELP)
-    check.add_argument(
-        "--allow-pipe-fallback", action="store_true", help=PIPE_FALLBACK_HELP
-    )
+    _add_pandoc_args(check)
     check.add_argument(
         "--debug-tables",
         action="store_true",
