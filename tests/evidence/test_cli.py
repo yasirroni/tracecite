@@ -1099,7 +1099,7 @@ def test_doctor_warns_about_changed_and_missing_sources_without_failing(
     assert "changed on disk" in out and "\n  notes.md\n" in out
     assert "missing under the root" in out and "\n  gone.md\n" in out
     assert "touched.md" not in out
-    assert "doctor: no issues found" in out
+    assert "doctor: no integrity issues found, 2 warning(s)" in out
 
     assert cli.main(["doctor", "--database", str(database_path)]) == 0
     assert "notes.md" not in capsys.readouterr().out
@@ -1194,6 +1194,10 @@ def test_sync_and_page_flag_pages_without_text(tmp_path, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "pages-without-text: 1\n  scan.pdf: 2\n" in out
     assert "Tesseract" in out
+
+    # Doctor keeps reporting the page after later syncs stop listing it.
+    assert cli.main(["doctor", "--database", str(database_path)]) == 0
+    assert "1 PDF page(s) have no extracted text" in capsys.readouterr().out
 
     for page, expect_note in (("2", True), ("1", False)):
         exit_code = cli.main(

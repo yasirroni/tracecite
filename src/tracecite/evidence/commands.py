@@ -660,34 +660,48 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         issues = sync_module.integrity_check(conn)
         for issue in issues:
             print(f"ISSUE: {issue}")
-        if args.root is not None:
-            _print_source_state_warnings(conn, Path(args.root))
+        warnings = _print_warnings(conn, args.root)
         if not issues:
-            print("doctor: no issues found")
+            print(f"doctor: no integrity issues found, {warnings} warning(s)")
         return 0 if not issues else 1
     finally:
         conn.close()
 
 
-def _print_source_state_warnings(conn, root: Path) -> None:
-    """Report indexed sources whose files differ from the indexed version.
+def _print_warnings(conn, root: Path | None) -> int:
+    """Print and count the warnings: PDF pages without text and, with a root,
+    indexed sources whose files changed or disappeared.
 
-    These are warnings, not integrity issues: the indexed text stays
-    citable after its file changes or disappears.
+    These are not integrity issues: the indexed text stays citable.
     """
     from .paths import source_file_state
 
+    warnings = 0
+    (blank_pages,) = conn.execute(
+        "SELECT count(*) FROM pages JOIN sources USING (source_pk) "
+        "WHERE source_type = 'pdf' AND trim(text, char(9, 10, 13, 32)) = ''"
+    ).fetchone()
+    if blank_pages:
+        warnings += 1
+        print(
+            f"WARNING: {blank_pages} PDF page(s) have no extracted text; scanned "
+            "pages need Tesseract, then tracecite sync --full"
+        )
+    if root is None:
+        return warnings
     states: dict[str, list[str]] = defaultdict(list)
     for row in conn.execute("SELECT * FROM sources ORDER BY path"):
-        states[source_file_state(root, row)].append(row["path"])
+        states[source_file_state(Path(root), row)].append(row["path"])
     for state, message in (
         ("changed", "changed on disk since sync; re-run tracecite sync"),
         ("missing", "missing under the root"),
     ):
         if states[state]:
+            warnings += 1
             print(f"WARNING: {len(states[state])} indexed source(s) {message}:")
             for path in states[state]:
                 print(f"  {path}")
+    return warnings
 
 
 def cmd_prune(args: argparse.Namespace) -> int:

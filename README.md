@@ -47,10 +47,17 @@ declared PDF, Markdown, or workbook sources
 
 The Python normaliser and CLI work without Julia. Automatic builds fall back to the Python overlay when configured Julia inputs cannot run; `--only julia` builds need Julia.
 
-Evidence synchronisation and hybrid search use the optional `evidence` dependencies:
+Install TraceCite from PyPI. Evidence synchronisation and hybrid search need the `evidence` extra; Quarto documentation builds with Python pages also need the `docs` extra:
 
 ```sh
-uv pip install -e ".[evidence]"
+pip install "tracecite[evidence]"
+pip install "tracecite[evidence,docs]"
+```
+
+The `evidence` extra installs PyTorch through `sentence-transformers`. On Linux, pip installs the CUDA build by default, a download of several gigabytes. On a machine without a GPU, install the CPU build first:
+
+```sh
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
 Workbook parsing reads OOXML packages with only the Python standard library, without Excel, Julia, Quarto, or third-party workbook readers.
@@ -121,8 +128,9 @@ tracecite doctor --database .tracecite/evidence.sqlite
 
 - `sync` needs at least one `[[source]]` or `[[include]]` rule; without one, it stops without creating or changing the database.
 - It prints one line per added, reparsed, renamed, missing, or unselected path; `--json` prints the full report.
-- A declared `[[source]]` missing under the root is listed under `missing-sources` and makes sync exit 1; the other sources still sync. A sync of one path checks only that path.
-- PDF pages without text, such as blank or scanned pages, are listed under `pages-without-text`. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores those pages without text. After installing it, run `tracecite sync --full` to extract their text.
+- A declared `[[source]]` missing under the root is listed under `missing-sources`. A selected file that sync cannot read or parse, or that is a symlink, is listed under `skipped` with the reason; a skipped file indexed earlier keeps its previous rows. Either case ends with `status: incomplete` and exit 1, and the other sources still sync. A sync of one path checks only that path.
+- A second `sync` or `prune --apply` of the same database waits for the first to finish.
+- PDF pages without text, such as blank or scanned pages, are listed under `pages-without-text` when they are parsed, and `doctor` counts them on every run. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores those pages without text. After installing it, run `tracecite sync --full` to extract their text.
 - `sync` is incremental and non-pruning. Sources that are gone or no longer selected stay searchable and citable until you preview and apply `tracecite prune`.
 
 #### Prune
@@ -131,7 +139,7 @@ tracecite doctor --database .tracecite/evidence.sqlite
 
 #### Doctor
 
-`doctor --root <dir>` also warns about sources that changed or disappeared since the last sync. Only database, vector, and asset integrity issues change its exit status.
+`doctor` warns about PDF pages without text, and with `--root <dir>` about sources that changed or disappeared since the last sync. Only database, vector, and asset integrity issues change its exit status; the last line counts the warnings.
 
 #### Search
 
@@ -283,7 +291,7 @@ The core package needs only Python.
 ```sh
 uv venv
 source .venv/bin/activate
-uv pip install -e ".[evidence,test]"
+uv pip install -e ".[docs,evidence,test]"
 ```
 
 `requirements.txt` pins runtime and evidence dependencies to the newest versions `pyproject.toml` allows; install it for a reproducible environment. Refresh it with [`pru`](https://github.com/yasirroni/pru); installing `-e ".[evidence]"` in the same command keeps upgrades within `pyproject.toml` bounds:
