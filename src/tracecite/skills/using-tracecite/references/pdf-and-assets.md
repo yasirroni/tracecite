@@ -13,8 +13,9 @@ normalisation-only change reconstructs the same units via `pdf.units_from_page_l
 reopening the PDF.
 
 `chunking.group_units()` merges adjacent units into one chunk while they share the same
-`heading_path` and `physical_page` and stay under `--max-chunk-chars` (default 1200) — so a chunk
-never silently straddles a heading or page boundary. PDF chunks are page-local: a chunk never spans two pages.
+`physical_page` and stay under `--max-chunk-chars` (default 1200). A new `heading_path` starts a new
+chunk once the chunk holds body text, so consecutive headings, including the short lines the PDF
+parser takes for headings, join the section that follows. PDF chunks are page-local: a chunk never spans two pages.
 
 ## Markdown extraction
 

@@ -1295,3 +1295,23 @@ def test_concurrent_syncs_of_one_database_both_succeed(
     reports = [future.result() for future in futures]
     assert [report.status for report in reports] == ["ok", "ok"]
     assert sorted(len(report.sources_added) for report in reports) == [0, 1]
+
+
+def test_consecutive_headings_join_the_section_that_follows(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_markdown(
+        corpus_dir / "notes.md",
+        "# Plan\n\n## Storage\n\nStorage grows.\n\n## Wind\n\nWind grows.\n",
+    )
+    write_manifest(manifest_path, {"notes.md": "notes.md"})
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+
+    with closing(schema.connect(database_path)) as conn:
+        chunks = conn.execute(
+            "SELECT body, heading_path FROM chunks ORDER BY ordinal"
+        ).fetchall()
+    assert [(row["body"], row["heading_path"]) for row in chunks] == [
+        ("Plan\n\nStorage\n\nStorage grows.", '["Plan", "Storage"]'),
+        ("Wind\n\nWind grows.", '["Plan", "Wind"]'),
+    ]

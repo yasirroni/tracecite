@@ -76,9 +76,10 @@ def group_units(
 ) -> list[list[ParsedChunkUnit]]:
     """Greedily group consecutive units into chunks bounded by ``max_chars``.
 
-    A single unit is never split. Grouping only combines adjacent units that
-    share the same heading path so a chunk never silently straddles a
-    section boundary.
+    A single unit is never split, and a chunk never crosses a page. A new
+    heading path starts a new chunk once the current chunk holds body text,
+    so consecutive headings, such as a title and a subtitle or the short
+    lines a PDF parser takes for headings, join the section that follows.
     """
 
     groups: list[list[ParsedChunkUnit]] = []
@@ -88,8 +89,11 @@ def group_units(
         unit_len = len(unit.text)
         breaks_group = current and (
             current_len + unit_len > max_chars
-            or unit.heading_path != current[-1].heading_path
             or unit.physical_page != current[-1].physical_page
+            or (
+                unit.heading_path != current[-1].heading_path
+                and any(part.content_type != "heading" for part in current)
+            )
         )
         if breaks_group:
             groups.append(current)
@@ -187,7 +191,7 @@ def build_chunk_candidates(
         semantic_hash = compute_semantic_input_hash(
             normalisation_version=normalisation_version,
             source_type=source_type,
-            heading_path=first.heading_path,
+            heading_path=last.heading_path,
             symbol=first.symbol,
             body=body,
         )
@@ -195,7 +199,7 @@ def build_chunk_candidates(
             ChunkCandidate(
                 logical_key=first.logical_key,
                 ordinal=ordinal,
-                heading_path=first.heading_path,
+                heading_path=last.heading_path,
                 symbol=first.symbol,
                 body=body,
                 content_type=content_type,
