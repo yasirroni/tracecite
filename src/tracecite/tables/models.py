@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 from typing import Any, Literal
@@ -117,3 +117,95 @@ def source_hash(raw_source: str, context: TableContext) -> str:
             "utf-8"
         )
     ).hexdigest()
+
+
+def expand_spans(
+    rows: Iterable[Iterable[tuple[int, int, str] | None]],
+    width: int,
+    diagnostics: list[TableDiagnostic],
+    row_label: str,
+) -> list[list[str]]:
+    """Expand row and column spans by repeating each spanning cell's text.
+
+    Each cell is ``(rowspan, colspan, text)``, or None when its source shape
+    is unsupported. ``row_label`` names the rows in diagnostics, such as
+    ``HTML`` or ``body``.
+    """
+    pending: dict[int, tuple[int, str]] = {}
+    expanded: list[list[str]] = []
+    for row_number, cells in enumerate(rows, start=1):
+        values: list[str | None] = [None] * width
+        for column, (remaining, text) in list(pending.items()):
+            if column < width:
+                values[column] = text
+            if remaining <= 1:
+                del pending[column]
+            else:
+                pending[column] = (remaining - 1, text)
+
+        cursor = 0
+        for cell in cells:
+            while cursor < width and values[cursor] is not None:
+                cursor += 1
+            if cursor >= width:
+                diagnostics.append(
+                    TableDiagnostic(
+                        "table.extra-cell",
+                        "error",
+                        f"The {row_label} row contains more logical cells than the table width.",
+                        row=row_number,
+                    )
+                )
+                break
+            if cell is None:
+                diagnostics.append(
+                    TableDiagnostic(
+                        "table.unsupported-cell",
+                        "error",
+                        "A Pandoc table cell has an unsupported AST shape.",
+                        row=row_number,
+                        column=cursor + 1,
+                    )
+                )
+                continue
+
+            rowspan, colspan, text = cell
+            if rowspan > 1 or colspan > 1:
+                diagnostics.append(
+                    TableDiagnostic(
+                        "table.span-expanded",
+                        "warning",
+                        f"A {rowspan}x{colspan} cell span was expanded by repeating its visible value.",
+                        row=row_number,
+                        column=cursor + 1,
+                    )
+                )
+            for offset in range(colspan):
+                column = cursor + offset
+                if column >= width:
+                    diagnostics.append(
+                        TableDiagnostic(
+                            "table.span-overflow",
+                            "error",
+                            "A cell span exceeds the table width.",
+                            row=row_number,
+                            column=cursor + 1,
+                        )
+                    )
+                    break
+                values[column] = text
+                if rowspan > 1:
+                    pending[column] = (rowspan - 1, text)
+            cursor += colspan
+
+        expanded.append([value or "" for value in values])
+
+    if pending:
+        diagnostics.append(
+            TableDiagnostic(
+                "table.rowspan-overflow",
+                "error",
+                f"A row span extends beyond the final {row_label} row.",
+            )
+        )
+    return expanded
