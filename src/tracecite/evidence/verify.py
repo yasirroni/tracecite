@@ -13,6 +13,8 @@ _DEFINITION_LIKE_RE = re.compile(r"^\[(?P<key>[^\]]+)\]:")
 _CITATION_RE = re.compile(r"\[[^\]]*\]\[(?P<key>[^\]]+)\]")
 _BLOCKQUOTE_RE = re.compile(r"^>\s?(?P<quote>.*)$")
 _FENCE_RE = re.compile(r"^\s{0,3}(?P<marker>`{3,}|~{3,})(?P<suffix>.*)$")
+# A run of N backticks opens a code span that the next run of exactly N closes.
+_CODE_SPAN_RE = re.compile(r"(?<!`)(`+)(?!`)(?:.*?[^`])??\1(?!`)")
 _STRAIGHT_QUOTES = str.maketrans(
     {
         "\u2018": "'",
@@ -330,39 +332,5 @@ def _prose_lines(lines: list[str]) -> list[str]:
                     in_comment = True
                     break
                 line = line[:start] + line[end + 3 :]
-        output.append(_strip_inline_code(line))
+        output.append(_CODE_SPAN_RE.sub("", line))
     return output
-
-
-def _strip_inline_code(line: str) -> str:
-    output: list[str] = []
-    index = 0
-    while index < len(line):
-        if line[index] != "`":
-            output.append(line[index])
-            index += 1
-            continue
-        marker = line[index]
-        end = index
-        while end < len(line) and line[end] == marker:
-            end += 1
-        length = end - index
-        search = end
-        close_end = None
-        while search < len(line):
-            candidate = line.find(marker, search)
-            if candidate < 0:
-                break
-            run_end = candidate
-            while run_end < len(line) and line[run_end] == marker:
-                run_end += 1
-            if run_end - candidate == length:
-                close_end = run_end
-                break
-            search = run_end
-        if close_end is None:
-            output.extend(line[index:end])
-            index = end
-            continue
-        index = close_end
-    return "".join(output)
