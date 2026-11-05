@@ -168,7 +168,7 @@ def _match_rows(conn, query, fts_limit, source_types):
         JOIN chunks ON chunks.rowid = chunks_fts.rowid
         JOIN sources ON sources.source_pk = chunks.source_pk
         WHERE chunks_fts MATCH ?{type_filter}
-        ORDER BY bm25(chunks_fts)
+        ORDER BY bm25(chunks_fts), length(sources.path), sources.path
         LIMIT ?
     """
     try:
@@ -201,7 +201,7 @@ def _cjk_substring_rows(conn, cjk_runs, limit, source_types):
         FROM chunks
         JOIN sources ON sources.source_pk = chunks.source_pk
         WHERE {contains_all}{type_filter}
-        ORDER BY chunks.rowid
+        ORDER BY length(sources.path), sources.path, chunks.rowid
         LIMIT ?
         """,
         [*cjk_runs, *type_params, limit],
@@ -227,6 +227,13 @@ def hybrid_search(
     """
     if not query.strip():
         raise ValueError("search query is empty")
+    if embedder is not None and _CJK_RUN_RE.search(query):
+        print(
+            "tracecite: the embedding model is English-only, so this query "
+            "with CJK text uses lexical search only",
+            file=sys.stderr,
+        )
+        embedder = None
     fts_rows = _fts_rows(conn, query, fts_limit, source_types)
     fts_rank = {row["chunk_id"]: rank for rank, row in enumerate(fts_rows, start=1)}
     vector_rank = (
@@ -278,10 +285,9 @@ def _vector_rank(conn, query, vector_limit, embedder, source_types) -> dict[str,
         embedding_to_chunks: dict[int, list[str]] = defaultdict(list)
         for row in chunk_rows:
             embedding_to_chunks[row["embedding_id"]].append(row["chunk_id"])
-        rank = 0
-        for match in vector_matches:
+        # Chunks with identical text share one embedding and so one rank.
+        for rank, match in enumerate(vector_matches, start=1):
             for chunk_id in embedding_to_chunks.get(match.embedding_id, []):
-                rank += 1
                 vector_rank.setdefault(chunk_id, rank)
     return vector_rank
 
@@ -294,18 +300,31 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
             fused_scores[chunk_id] += 1.0 / (RRF_K + rank)
             provenance[chunk_id].add(retrieval)
 
-    ranked_chunk_ids = sorted(fused_scores, key=fused_scores.__getitem__, reverse=True)
+    chunks = {
+        chunk_id: conn.execute(
+            "SELECT c.*, s.path AS source_path, s.source_type, s.sha256 "
+            "FROM chunks c JOIN sources s USING (source_pk) WHERE c.chunk_id = ?",
+            (chunk_id,),
+        ).fetchone()
+        for chunk_id in fused_scores
+    }
+    # Equal scores, such as those of byte-identical files, rank the shortest
+    # path first, then the first in sort order.
+    ranked_chunk_ids = sorted(
+        fused_scores,
+        key=lambda chunk_id: (
+            -fused_scores[chunk_id],
+            len(chunks[chunk_id]["source_path"]),
+            chunks[chunk_id]["source_path"],
+        ),
+    )
 
     results = []
     # Byte-identical files yield identical chunks; report each passage once,
     # under its best-ranked path, before applying the limit.
     by_identity: dict[tuple[str, str, str], dict] = {}
     for chunk_id in ranked_chunk_ids:
-        chunk = conn.execute(
-            "SELECT c.*, s.path AS source_path, s.source_type, s.sha256 "
-            "FROM chunks c JOIN sources s USING (source_pk) WHERE c.chunk_id = ?",
-            (chunk_id,),
-        ).fetchone()
+        chunk = chunks[chunk_id]
         identity = (chunk["sha256"], chunk["logical_key"], chunk["lexical_hash"])
         if identity in by_identity:
             by_identity[identity]["duplicate_paths"].append(chunk["source_path"])
