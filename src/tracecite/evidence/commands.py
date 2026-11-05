@@ -311,12 +311,13 @@ def _ranked_results(conn, limit, fts_rank, vector_rank):
             provenance[chunk_id].add(retrieval)
 
     chunks = {
-        chunk_id: conn.execute(
+        row["chunk_id"]: row
+        for row in conn.execute(
             "SELECT c.*, s.path AS source_path, s.source_type, s.sha256 "
-            "FROM chunks c JOIN sources s USING (source_pk) WHERE c.chunk_id = ?",
-            (chunk_id,),
-        ).fetchone()
-        for chunk_id in fused_scores
+            "FROM chunks c JOIN sources s USING (source_pk) "
+            "WHERE c.chunk_id IN (SELECT value FROM json_each(?))",
+            (json.dumps(list(fused_scores)),),
+        )
     }
     # Equal scores, such as those of byte-identical files, rank the shortest
     # path first, then the first in sort order.
