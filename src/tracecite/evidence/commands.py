@@ -248,19 +248,24 @@ def hybrid_search(
     """
     if not query.strip():
         raise ValueError("search query is empty")
+    vector_query = query
     if embedder is not None and _CJK_RUN_RE.search(query):
+        vector_query = " ".join(_CJK_RUN_RE.sub(" ", query).split())
         print(
-            "tracecite: the embedding model is English-only, so this query "
-            "with CJK text uses lexical search only",
+            "tracecite: the embedding model is English-only, so "
+            + (
+                "vector search uses only the words without CJK text"
+                if vector_query
+                else "this query with CJK text uses lexical search only"
+            ),
             file=sys.stderr,
         )
-        embedder = None
     fts_rows = _fts_rows(conn, query, fts_limit, source_types)
     fts_rank = {row["chunk_id"]: rank for rank, row in enumerate(fts_rows, start=1)}
     vector_rank = (
-        {}
-        if embedder is None
-        else _vector_rank(conn, query, vector_limit, embedder, source_types)
+        _vector_rank(conn, vector_query, vector_limit, embedder, source_types)
+        if embedder is not None and vector_query
+        else {}
     )
     return _ranked_results(conn, limit, fts_rank, vector_rank)
 

@@ -330,6 +330,11 @@ def test_lexical_search_finds_cjk_text_inside_unspaced_runs(
         assert [(r["source_path"], r["provenance"]) for r in results] == [
             ("ja.md", ["lexical"])
         ]
+        # A mixed query still runs vector search on its other words.
+        results = hybrid_search(
+            conn, "Electricity 電力需要", 5, 50, 50, make_embedder()
+        )
+        assert any("vector" in r["provenance"] for r in results)
 
 
 def test_search_collapses_hits_from_byte_identical_files_before_the_limit(

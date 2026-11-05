@@ -154,7 +154,7 @@ tracecite search "coal retirement" \
 - An empty query exits with status 2.
 - `--lexical-only` uses full-text search alone and skips loading the embedding model.
 - Chinese, Japanese, and Korean (CJK) text has no spaces, so lexical search also matches each CJK run of the query as a substring of the indexed text. This reads every passage, so it is slower than ordinary full-text search on a large database.
-- The embedding model is English-only, so a query with CJK text skips vector search and uses lexical search only.
+- The embedding model is English-only, so vector search leaves out the CJK text of a query. A query with only CJK text uses lexical search only.
 - Byte-identical files at different paths give one hit, under the shortest path (then the first in sort order), with the others in `duplicate_paths`.
 
 Each result includes retrieval provenance and a source-specific locator. This abbreviated workbook result shows the stable fields; the worksheet and ranges vary with the workbook and chunk settings:
