@@ -1107,13 +1107,13 @@ def test_doctor_warns_about_changed_and_missing_sources_without_failing(
         assert sync_module.integrity_check(conn) == []
 
 
-def test_verify_quote_reports_source_state_and_keeps_checking_indexed_text(
+def test_verify_quote_checks_the_indexed_text_whatever_the_file_holds(
     tmp_path, capsys, monkeypatch
 ):
     root, database_path = _sync_notes(tmp_path, monkeypatch)
     capsys.readouterr()
 
-    def verify(path: str) -> tuple[int, dict, str]:
+    def verify() -> tuple[int, str]:
         exit_code = cli.main(
             [
                 "verify",
@@ -1122,38 +1122,17 @@ def test_verify_quote_reports_source_state_and_keeps_checking_indexed_text(
                 str(root),
                 "--database",
                 str(database_path),
-                path,
+                "notes.md",
                 "1",
                 "The original sentence.",
             ]
         )
-        captured = capsys.readouterr()
-        return exit_code, json.loads(captured.out), captured.err
-
-    exit_code, payload, err = verify("notes.md")
-    assert (exit_code, payload["status"], payload["source_state"]) == (
-        0,
-        "exact",
-        "current",
-    )
-    assert err == ""
+        return exit_code, json.loads(capsys.readouterr().out)["status"]
 
     (root / "notes.md").write_text("# Notes\n\nAn edited sentence.\n", "utf-8")
-    exit_code, payload, err = verify("notes.md")
-    assert (exit_code, payload["status"], payload["source_state"]) == (
-        0,
-        "exact",
-        "changed",
-    )
-    assert "notes.md" in err and "sync" in err
-
+    assert verify() == (0, "exact")
     (root / "notes.md").unlink()
-    exit_code, payload, _ = verify("notes.md")
-    assert (exit_code, payload["status"], payload["source_state"]) == (
-        0,
-        "exact",
-        "missing",
-    )
+    assert verify() == (0, "exact")
 
 
 def test_sync_and_page_flag_pages_without_text(tmp_path, capsys, monkeypatch):

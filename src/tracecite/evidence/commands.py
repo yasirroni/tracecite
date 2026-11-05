@@ -544,12 +544,7 @@ def cmd_extract_pages(args: argparse.Namespace) -> int:
 
 def cmd_verify_quote(args: argparse.Namespace) -> int:
     from . import verify
-    from .paths import (
-        PathAuthorityError,
-        normalise_source_path,
-        source_file_state,
-        source_row_for_path,
-    )
+    from .paths import PathAuthorityError, normalise_source_path, source_row_for_path
 
     page_range = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d+)\s*)?", args.page)
     first, last = (
@@ -575,20 +570,11 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
             print(_json({"error": "path-error", "detail": str(exc)}), file=sys.stderr)
             return 2
         source_row = source_row_for_path(conn, source_path)
-        source_state = None
         if source_row is None:
             result = verify.QuoteVerification(
                 "source-not-indexed", first, args.quote, source_path=source_path
             )
         else:
-            source_state = source_file_state(root, source_row)
-            if source_state == "changed":
-                print(
-                    f"warning: {source_row['path']} changed on disk since it was "
-                    "indexed; this check used the indexed text, so re-run "
-                    "tracecite sync to verify against the current file",
-                    file=sys.stderr,
-                )
             result = verify.verify_quote(conn, source_path, first, args.quote, last)
             if result.status == "page-not-indexed":
                 (page_count,) = conn.execute(
@@ -600,15 +586,7 @@ def cmd_verify_quote(args: argparse.Namespace) -> int:
                     f"so page {args.page.strip()} is out of range",
                     file=sys.stderr,
                 )
-        print(
-            _json(
-                {
-                    **_quote_json(result),
-                    "last_page": last,
-                    "source_state": source_state,
-                }
-            )
-        )
+        print(_json({**_quote_json(result), "last_page": last}))
     finally:
         conn.close()
     if result.status in {"exact", "normalised"}:
