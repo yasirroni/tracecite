@@ -363,7 +363,7 @@ def _lock_database(database_path: Path) -> int:
     Close the returned descriptor to release the lock.
     """
     # ponytail: one flock on the database directory, so databases that share a
-    # directory also share the lock; POSIX only, like the asset cleanup.
+    # directory also share the lock; POSIX only.
     import fcntl
 
     descriptor = os.open(Path(database_path).resolve().parent, os.O_RDONLY)
@@ -1059,191 +1059,6 @@ def validate_prune_plan(
     return set().union(*targets_by_source.values())
 
 
-def _require_dirfd_primitives() -> None:
-    required = (os.open, os.stat, os.unlink, os.rename, os.rmdir)
-    if not all(func in os.supports_dir_fd for func in required):
-        raise OSError("safe asset cleanup requires POSIX dir_fd support")
-    if os.stat not in os.supports_follow_symlinks:
-        raise OSError("safe asset cleanup requires no-follow stat support")
-    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
-        raise OSError("safe asset cleanup requires O_DIRECTORY and O_NOFOLLOW")
-
-
-def _open_dir_at(parent_fd: int, name: str) -> int:
-    return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
-
-
-def _unlink_symlink_at(parent_fd: int, name: str) -> bool:
-    try:
-        mode = os.stat(name, dir_fd=parent_fd, follow_symlinks=False).st_mode
-    except FileNotFoundError:
-        return True
-    if stat.S_ISLNK(mode):
-        os.unlink(name, dir_fd=parent_fd)
-        return True
-    return False
-
-
-def _rmtree_dir_at(parent_fd: int, name: str) -> None:
-    child_fd = _open_dir_at(parent_fd, name)
-    try:
-        for entry in os.listdir(child_fd):
-            mode = os.stat(entry, dir_fd=child_fd, follow_symlinks=False).st_mode
-            if stat.S_ISDIR(mode) and not stat.S_ISLNK(mode):
-                _rmtree_dir_at(child_fd, entry)
-            else:
-                os.unlink(entry, dir_fd=child_fd)
-    finally:
-        os.close(child_fd)
-    os.rmdir(name, dir_fd=parent_fd)
-
-
-def _quarantine_fd_at(generations_fd: int) -> int:
-    quarantine_root = ".prune-quarantine"
-    with contextlib.suppress(FileExistsError):
-        os.mkdir(quarantine_root, dir_fd=generations_fd)
-    try:
-        return _open_dir_at(generations_fd, quarantine_root)
-    except OSError:
-        if _unlink_symlink_at(generations_fd, quarantine_root):
-            os.mkdir(quarantine_root, dir_fd=generations_fd)
-            return _open_dir_at(generations_fd, quarantine_root)
-        raise
-
-
-def _remove_generation_entry_at(generations_fd: int, generation: str) -> None:
-    try:
-        generation_fd = _open_dir_at(generations_fd, generation)
-    except FileNotFoundError:
-        return
-    except OSError:
-        if _unlink_symlink_at(generations_fd, generation):
-            return
-        raise
-    else:
-        os.close(generation_fd)
-    _quarantine_and_remove(
-        generations_fd,
-        generations_fd,
-        generation,
-        f"{generation}-{uuid.uuid4().hex}",
-        f"quarantined asset generation is not a directory: {generation}",
-    )
-
-
-def _quarantine_and_remove(
-    generations_fd: int, parent_fd: int, name: str, quarantine_name: str, error: str
-) -> None:
-    """Move ``name`` into the quarantine, then delete it, restoring it on failure."""
-    quarantine_fd = _quarantine_fd_at(generations_fd)
-    try:
-        os.rename(name, quarantine_name, src_dir_fd=parent_fd, dst_dir_fd=quarantine_fd)
-        try:
-            mode = os.stat(
-                quarantine_name, dir_fd=quarantine_fd, follow_symlinks=False
-            ).st_mode
-            if stat.S_ISLNK(mode):
-                os.unlink(quarantine_name, dir_fd=quarantine_fd)
-            elif stat.S_ISDIR(mode):
-                _rmtree_dir_at(quarantine_fd, quarantine_name)
-            else:
-                raise ValueError(error)
-        except Exception:
-            with contextlib.suppress(OSError):
-                os.rename(
-                    quarantine_name,
-                    name,
-                    src_dir_fd=quarantine_fd,
-                    dst_dir_fd=parent_fd,
-                )
-            raise
-    finally:
-        os.close(quarantine_fd)
-    with contextlib.suppress(OSError):
-        os.rmdir(".prune-quarantine", dir_fd=generations_fd)
-
-
-def _remove_source_entry_at(
-    generations_fd: int, generation: str, source_pk: str, source_dir: Path
-) -> None:
-    try:
-        generation_fd = _open_dir_at(generations_fd, generation)
-    except FileNotFoundError:
-        return
-    except OSError:
-        if _unlink_symlink_at(generations_fd, generation):
-            return
-        raise
-    try:
-        try:
-            mode = os.stat(
-                source_pk, dir_fd=generation_fd, follow_symlinks=False
-            ).st_mode
-        except FileNotFoundError:
-            return
-        if stat.S_ISLNK(mode):
-            os.unlink(source_pk, dir_fd=generation_fd)
-            return
-        if not stat.S_ISDIR(mode):
-            raise ValueError(f"pruned asset path is not a directory: {source_dir}")
-        _quarantine_and_remove(
-            generations_fd,
-            generation_fd,
-            source_pk,
-            f"{generation}-{source_pk}-{uuid.uuid4().hex}",
-            f"quarantined asset path is not a directory: {source_dir}",
-        )
-    finally:
-        os.close(generation_fd)
-
-
-def _with_generations_fd(database_path: Path, action) -> None:
-    _require_dirfd_primitives()
-    with contextlib.ExitStack() as stack:
-        fd = os.open(Path(database_path).resolve().parent, os.O_RDONLY | os.O_DIRECTORY)
-        stack.callback(os.close, fd)
-        for name in ("imgs", "generations"):
-            fd = _open_dir_at(fd, name)
-            stack.callback(os.close, fd)
-        action(fd)
-
-
-def _safe_remove_asset_generation(database_path: Path, generation_dir: Path) -> None:
-    generations_root = Path(database_path).resolve().parent / "imgs" / "generations"
-    try:
-        generation = Path(generation_dir).relative_to(generations_root).parts
-    except ValueError as exc:
-        raise ValueError(
-            f"asset generation escapes image root: {generation_dir}"
-        ) from exc
-    if len(generation) != 1:
-        raise ValueError(
-            f"asset generation cleanup expects a generation directory: {generation_dir}"
-        )
-    _with_generations_fd(
-        database_path, lambda fd: _remove_generation_entry_at(fd, generation[0])
-    )
-
-
-def _safe_remove_pruned_asset_dir(source_dir: Path, database_path: Path) -> None:
-    generations_root = Path(database_path).resolve().parent / "imgs" / "generations"
-    try:
-        relative_parts = Path(source_dir).relative_to(generations_root).parts
-    except ValueError as exc:
-        raise ValueError(
-            f"pruned asset directory escapes image root: {source_dir}"
-        ) from exc
-    if len(relative_parts) != 2:
-        raise ValueError(
-            f"pruned asset directory must be a generation/source directory: {source_dir}"
-        )
-    generation, source_pk = relative_parts
-    _with_generations_fd(
-        database_path,
-        lambda fd: _remove_source_entry_at(fd, generation, source_pk, source_dir),
-    )
-
-
 def apply_prune(
     conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> list[str]:
@@ -1290,11 +1105,11 @@ def _apply_prune(
         for row in conn.execute("SELECT source_pk, asset_path FROM assets").fetchall()
     }
     for asset_dir in sorted(pruned_asset_targets, key=str):
-        if asset_dir in referenced_dirs:
+        if asset_dir in referenced_dirs or not asset_dir.exists():
             continue
         try:
-            _safe_remove_pruned_asset_dir(asset_dir, database_path)
-        except Exception as exc:  # noqa: BLE001
+            shutil.rmtree(asset_dir)
+        except OSError as exc:
             leaks.append(f"failed to remove pruned asset directory {asset_dir}: {exc}")
     try:
         leaks.extend(cleanup_asset_generations(conn, database_path))
@@ -1429,9 +1244,7 @@ def cleanup_asset_generations(
     referenced = referenced_asset_generations(conn, database_path)
     for generation in root.iterdir():
         symlink = generation.is_symlink()
-        if generation.name == ".prune-quarantine" or (
-            not symlink and generation in referenced
-        ):
+        if not symlink and generation in referenced:
             continue
         kind = (
             "invalid asset generation symlink"
@@ -1439,8 +1252,11 @@ def cleanup_asset_generations(
             else "unreferenced asset generation"
         )
         try:
-            _safe_remove_asset_generation(database_path, generation)
-        except Exception as exc:  # noqa: BLE001
+            if symlink:
+                generation.unlink()
+            else:
+                shutil.rmtree(generation)
+        except OSError as exc:
             leaks.append(f"failed to remove {kind} {generation}: {exc}")
     return leaks
 
