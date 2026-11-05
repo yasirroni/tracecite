@@ -108,11 +108,14 @@ def test_backend_search_scans_shards_for_filtered_and_unfiltered_results(conn):
     assert unfiltered[-1].embedding_id == allowed_ids[0]
 
 
-def test_schema_v1_database_requires_rebuild_and_resync(tmp_path):
-    database_path = tmp_path / "schema-v1.sqlite"
+def test_database_with_another_schema_version_must_be_rebuilt(tmp_path):
+    database_path = tmp_path / "other-schema.sqlite"
     connection = schema.connect(database_path)
     schema.ensure_schema(connection)
-    connection.execute("UPDATE kb_config SET schema_version = 1 WHERE id = 1")
+    connection.execute(
+        "UPDATE kb_config SET schema_version = ? WHERE id = 1",
+        (schema.SCHEMA_VERSION + 1,),
+    )
     connection.close()
 
     connection = schema.connect(database_path)

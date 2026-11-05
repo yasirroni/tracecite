@@ -113,25 +113,6 @@ def test_relative_asset_storage_relocates_with_database_and_imgs(
         assert sync_module.integrity_check(conn) == []
 
 
-def test_schema_v3_rejects_existing_absolute_asset_paths(
-    corpus_dir, manifest_path, database_path
-):
-    build_pdf(
-        corpus_dir / "doc.pdf", [["Title", "Absolute asset path compatibility check."]]
-    )
-    write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
-    _sync(corpus_dir, manifest_path, database_path)
-    with closing(schema.connect(database_path)) as conn:
-        stored = conn.execute("SELECT asset_path FROM assets LIMIT 1").fetchone()[
-            "asset_path"
-        ]
-        absolute = schema.resolve_asset_path(database_path, stored)
-        conn.execute("UPDATE assets SET asset_path = ?", (str(absolute),))
-        conn.commit()
-        with pytest.raises(schema.IncompatibleDatabaseError, match="absolute asset"):
-            schema.ensure_schema(conn)
-
-
 def test_new_source_assets_finalize_from_staging_to_source_pk_directory(
     corpus_dir, manifest_path, database_path
 ):

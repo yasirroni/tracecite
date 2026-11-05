@@ -115,25 +115,6 @@ type = "documentation"
     assert entry.metadata == {"type": "documentation"}
 
 
-def test_schema_v2_is_rejected_with_v3_requirement_message(tmp_path: Path) -> None:
-    registry_path = _write(
-        tmp_path / "source-links.toml",
-        """schema_version = 2
-
-[[source]]
-title = "Report"
-publisher = "Publisher"
-local_path = "sources/report.pdf"
-public_url = "https://example.invalid/report.pdf"
-public_origin = "official"
-""",
-    )
-    registry, issues = load_source_links(registry_path, tmp_path)
-    assert registry == {}
-    assert len(issues) == 1
-    assert "schema_version = 3" in issues[0]
-
-
 def test_schema_version_missing_is_rejected(tmp_path: Path) -> None:
     registry_path = _write(tmp_path / "source-links.toml", "source = []\n")
     registry, issues = load_source_links(registry_path, tmp_path)

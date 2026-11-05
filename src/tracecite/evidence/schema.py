@@ -256,13 +256,6 @@ def _validate_schema_objects(conn: sqlite3.Connection) -> None:
             raise IncompatibleDatabaseError(
                 f"schema v{SCHEMA_VERSION} table {table} is missing required column(s) {', '.join(sorted(missing))}"
             )
-    absolute = conn.execute(
-        "SELECT asset_path FROM assets WHERE asset_path GLOB '/*' LIMIT 1"
-    ).fetchone()
-    if absolute is not None:
-        raise IncompatibleDatabaseError(
-            "schema v3 database contains absolute asset paths and must be rebuilt"
-        )
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:

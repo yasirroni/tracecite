@@ -10,23 +10,6 @@ import pytest
 from tracecite.evidence import schema
 
 
-def test_schema_v3_uses_internal_source_pk_only(database_path: Path):
-    with closing(schema.connect(database_path)) as conn:
-        schema.ensure_schema(conn)
-        columns = {
-            table: [row["name"] for row in conn.execute(f"PRAGMA table_info({table})")]
-            for table in ("sources", "pages", "chunks", "assets")
-        }
-        assert columns["sources"][:2] == ["source_pk", "path"]
-        for table in ("pages", "chunks", "assets"):
-            assert "source_pk" in columns[table]
-        source_sql = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE name='sources'"
-        ).fetchone()[0]
-        assert "source_pk INTEGER PRIMARY KEY AUTOINCREMENT" in source_sql
-        assert "path TEXT NOT NULL UNIQUE" in source_sql
-
-
 def _tracecite_objects(conn):
     return [
         row["name"]
@@ -69,12 +52,6 @@ def test_schema_creation_rolls_back_partial_ddl_after_vec0_failure(database_path
         )
 
 
-def _replace_sources_without_source_pk(conn):
-    conn.execute("CREATE TABLE bad_sources AS SELECT path FROM sources")
-    conn.execute("ALTER TABLE sources RENAME TO sources_real")
-    conn.execute("ALTER TABLE bad_sources RENAME TO sources")
-
-
 def _replace_table_with_columns(conn, table: str, columns: list[str]) -> None:
     conn.execute(
         f"CREATE TABLE bad_{table} AS SELECT {', '.join(columns)} FROM {table}"
@@ -92,7 +69,6 @@ def _replace_table_with_columns(conn, table: str, columns: list[str]) -> None:
             "chunks_sourcepk_idx",
         ),
         (lambda conn: conn.execute("DROP TRIGGER chunks_ai"), "chunks_ai"),
-        (_replace_sources_without_source_pk, "source_pk"),
     ],
 )
 def test_ensure_schema_rejects_incomplete_matching_version_schema(

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -72,12 +71,6 @@ def sync_with_fake_model(monkeypatch, corpus_dir, manifest_path, database_path) 
         corpus_dir, manifest_path, database_path, embedder=FakeEmbedder()
     )
     assert report.status == "ok"
-
-
-def read_manifest(path: Path) -> dict[str, str]:
-    with Path(path).open("rb") as handle:
-        data = tomllib.load(handle)
-    return {entry["path"]: entry["path"] for entry in data.get("source", [])}
 
 
 def build_pdf(path: Path, pages: list[list[str]]) -> Path:
