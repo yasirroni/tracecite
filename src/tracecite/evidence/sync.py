@@ -1079,14 +1079,9 @@ def _apply_prune(
         conn.executemany(
             "DELETE FROM sources WHERE path = ?", [(path,) for path in plan]
         )
-        orphan_rows = conn.execute(
-            "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
-        ).fetchall()
-        for row in orphan_rows:
-            backend.delete(conn, row["embedding_id"])
-            conn.execute(
-                "DELETE FROM embeddings WHERE embedding_id = ?", (row["embedding_id"],)
-            )
+        orphans = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
+        backend.delete(conn, [row["embedding_id"] for row in conn.execute(orphans)])
+        conn.execute(f"DELETE FROM embeddings WHERE embedding_id IN ({orphans})")
         schema.touch_config(conn)
         conn.execute("COMMIT")
     except Exception:

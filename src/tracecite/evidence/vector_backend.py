@@ -9,7 +9,7 @@ from __future__ import annotations
 import heapq
 import json
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 VECTOR_TABLE = "embedding_vectors"
@@ -57,15 +57,16 @@ class SqliteVecBackend:
         self, conn: sqlite3.Connection, embedding_id: int, vector: Sequence[float]
     ) -> None:
         packed = _sqlite_vec().serialize_float32(list(vector))
-        self.delete(conn, embedding_id)
+        self.delete(conn, [embedding_id])
         conn.execute(
             f"INSERT INTO {VECTOR_TABLE}(embedding_id, shard_id, vector) VALUES (?, ?, ?)",
             (embedding_id, self._shard_id(embedding_id), packed),
         )
 
-    def delete(self, conn: sqlite3.Connection, embedding_id: int) -> None:
-        conn.execute(
-            f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?", (embedding_id,)
+    def delete(self, conn: sqlite3.Connection, embedding_ids: Iterable[int]) -> None:
+        conn.executemany(
+            f"DELETE FROM {VECTOR_TABLE} WHERE embedding_id = ?",
+            [(embedding_id,) for embedding_id in embedding_ids],
         )
 
     def search(

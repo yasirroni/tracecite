@@ -49,7 +49,7 @@ def test_backend_upsert_search_delete_contract(conn):
     filtered = backend.search(conn, vector_a, top_k=2, allowed_embedding_ids=[id_b])
     assert [m.embedding_id for m in filtered] == [id_b]
 
-    backend.delete(conn, id_a)
+    backend.delete(conn, [id_a])
     conn.execute("DELETE FROM chunk_embeddings WHERE embedding_id = ?", (id_a,))
     conn.execute("DELETE FROM embeddings WHERE embedding_id = ?", (id_a,))
     remaining = backend.search(conn, vector_a, top_k=2)
