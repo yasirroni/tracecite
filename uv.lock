@@ -2118,7 +2118,6 @@ version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
-    { name = "pandas" },
     { name = "pyyaml" },
     { name = "tabulate" },
 ]
@@ -2128,6 +2127,7 @@ docs = [
     { name = "ipykernel" },
     { name = "nbclient" },
     { name = "nbformat" },
+    { name = "pandas" },
 ]
 evidence = [
     { name = "huggingface-hub" },
@@ -2135,8 +2135,12 @@ evidence = [
     { name = "sentence-transformers" },
     { name = "sqlite-vec" },
 ]
+pandas = [
+    { name = "pandas" },
+]
 test = [
     { name = "build" },
+    { name = "pandas" },
     { name = "pytest" },
 ]
 
@@ -2148,15 +2152,17 @@ requires-dist = [
     { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=7.3" },
     { name = "nbclient", marker = "extra == 'docs'", specifier = ">=0.11" },
     { name = "nbformat", marker = "extra == 'docs'", specifier = ">=5.10" },
-    { name = "pandas", specifier = ">=2.0" },
+    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.0" },
     { name = "pymupdf", marker = "extra == 'evidence'", specifier = ">=1.28,<2" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4,<9" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sentence-transformers", marker = "extra == 'evidence'", specifier = ">=5.6,<6" },
     { name = "sqlite-vec", marker = "extra == 'evidence'", specifier = ">=0.1.9,<0.2" },
     { name = "tabulate", specifier = ">=0.9" },
+    { name = "tracecite", extras = ["pandas"], marker = "extra == 'docs'" },
+    { name = "tracecite", extras = ["pandas"], marker = "extra == 'test'" },
 ]
-provides-extras = ["docs", "evidence", "test"]
+provides-extras = ["docs", "evidence", "pandas", "test"]
 
 [[package]]
 name = "traitlets"

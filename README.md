@@ -47,7 +47,7 @@ declared PDF, Markdown, or workbook sources
 
 The Python normaliser and CLI work without Julia. Automatic builds fall back to the Python overlay when configured Julia inputs cannot run; `--only julia` builds need Julia.
 
-Install TraceCite from PyPI. Evidence synchronisation and hybrid search need the `evidence` extra; Quarto documentation builds with Python pages also need the `docs` extra:
+Install TraceCite from PyPI. Evidence synchronisation and hybrid search need the `evidence` extra; Quarto documentation builds with Python pages also need the `docs` extra. `knowledge_table` and `computed_first_row_summary` take a pandas DataFrame, which the `pandas` extra installs:
 
 ```sh
 pip install "tracecite[evidence]"
