@@ -29,6 +29,19 @@ def test_markdown_parser_against_static_fixture():
     assert all(u.line_start is not None for u in result.units)
 
 
+def test_markdown_sibling_headings_do_not_nest_when_levels_skip(tmp_path):
+    path = tmp_path / "notes.md"
+    path.write_text("## A\n\nBody.\n\n### A1\n\n## B\n\n# Top\n\n### C\n")
+    units = markdown_parser.parse(path).units
+    assert [u.heading_path for u in units if u.content_type == "heading"] == [
+        ["A"],
+        ["A", "A1"],
+        ["B"],
+        ["Top"],
+        ["Top", "C"],
+    ]
+
+
 def test_markdown_units_from_layout_reconstruction_matches_fresh_parse():
     result = markdown_parser.parse(FIXTURES_DIR / "sample-report.md")
     import json
