@@ -438,13 +438,14 @@ def _lock_database(database_path: Path) -> int:
 
     Two syncs that plan from the same database state would both insert the
     same sources, so a second sync or prune waits for the first to finish.
-    Close the returned descriptor to release the lock.
+    The lock is an flock on ``<database>.lock`` beside the database, so it is
+    POSIX only. Close the returned descriptor to release the lock.
     """
-    # ponytail: one flock on the database directory, so databases that share a
-    # directory also share the lock; POSIX only.
     import fcntl
 
-    descriptor = os.open(Path(database_path).resolve().parent, os.O_RDONLY)
+    descriptor = os.open(
+        f"{Path(database_path).resolve()}.lock", os.O_RDONLY | os.O_CREAT, 0o644
+    )
     fcntl.flock(descriptor, fcntl.LOCK_EX)
     return descriptor
 

@@ -129,7 +129,7 @@ tracecite doctor --database .tracecite/evidence.sqlite
 - `sync` needs at least one `[[source]]` or `[[include]]` rule; without one, it stops without creating or changing the database.
 - It prints one line per added, reparsed, renamed, missing, or unselected path; `--json` prints the full report.
 - A declared `[[source]]` missing under the root is listed under `missing-sources`. A selected file that sync cannot read or parse, or that is a symlink, is listed under `skipped` with the reason; a skipped file indexed earlier keeps its previous rows. Either case ends with `status: incomplete` and exit 1, and the other sources still sync. A sync of one path checks only that path.
-- A second `sync` or `prune --apply` of the same database waits for the first to finish.
+- A second `sync` or `prune --apply` of the same database waits for the first to finish. The wait uses an empty `<database>.lock` file beside the database.
 - PDF pages without text, such as blank or scanned pages, are listed under `pages-without-text` when they are parsed, and `doctor` lists them on every run. Scanned pages need [Tesseract](https://github.com/tesseract-ocr/tesseract) for OCR; without it, sync stores those pages without text. After installing it, run `tracecite sync --full` to extract their text.
 - `sync` is incremental and non-pruning. Sources that are gone or no longer selected stay searchable and citable until you preview and apply `tracecite prune`.
 
