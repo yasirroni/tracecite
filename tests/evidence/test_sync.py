@@ -12,6 +12,7 @@ from conftest import (
     build_markdown,
     build_pdf,
     build_pdf_with_image_only_page,
+    requires_tesseract,
     write_manifest,
 )
 
@@ -990,6 +991,7 @@ def test_sync_embeds_more_chunks_than_sqlite_allows_parameters(
     assert report.embeddings_generated == 60
 
 
+@requires_tesseract
 def test_sync_ocr_fallback_populates_pages_and_chunks(
     corpus_dir, manifest_path, database_path, make_embedder
 ):

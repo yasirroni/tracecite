@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -170,6 +171,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIsNone(selection.profile)
 
 
+@unittest.skipIf(shutil.which("quarto") is None, "Quarto is not installed")
 class BuildTests(unittest.TestCase):
     def _project(self, output_dir: str = "build") -> tuple[Path, Path]:
         directory = tempfile.TemporaryDirectory()

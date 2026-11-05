@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tomllib
 from collections.abc import Sequence
 from pathlib import Path
@@ -11,6 +12,10 @@ import pytest
 
 from tracecite.evidence import schema
 from tracecite.evidence import sync as sync_module
+
+requires_tesseract = pytest.mark.skipif(
+    shutil.which("tesseract") is None, reason="Tesseract is not installed"
+)
 
 
 class FakeEmbedder:

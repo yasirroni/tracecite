@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from conftest import requires_tesseract
+
 from tracecite.evidence.parsers import markdown as markdown_parser
 from tracecite.evidence.parsers import pdf as pdf_parser
 from tracecite.evidence.parsers.base import units_from_layout
@@ -58,6 +60,7 @@ def test_pdf_parser_heading_and_body_content_types(tmp_path):
     assert result.pages[0].physical_page == 1
 
 
+@requires_tesseract
 def test_pdf_parser_ocr_fallback_for_no_text_layer_page(tmp_path):
     """A page with a genuinely rasterised, no-text-layer image (built via
     PyMuPDF like every other fixture here, not mocked) must still surface
@@ -146,6 +149,7 @@ def test_pdf_parser_figure_crop_nearby_text_association(tmp_path):
     assert "Figure 1" in crops[0].nearby_text
 
 
+@requires_tesseract
 def test_pdf_parser_tesseract_cli_stage_recovers_text(tmp_path, monkeypatch):
     """The second, last-resort OCR stage genuinely shells out to the
     Tesseract CLI (via ``subprocess.run`` with an argument list) against a

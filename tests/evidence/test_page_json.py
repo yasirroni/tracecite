@@ -6,6 +6,7 @@ from pathlib import Path
 
 from conftest import (
     build_pdf_with_image_only_page,
+    requires_tesseract,
     sync_with_fake_model,
     write_manifest,
 )
@@ -38,6 +39,7 @@ def _sync_pdf_with_assets(
     return pdf_path
 
 
+@requires_tesseract
 def test_page_json_returns_ordered_array_with_page_assets(
     corpus_dir, manifest_path, database_path, monkeypatch, capsys
 ):
