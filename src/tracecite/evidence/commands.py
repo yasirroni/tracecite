@@ -774,21 +774,8 @@ def cmd_prune(args: argparse.Namespace) -> int:
             conn.close()
 
 
-def dispatch(args: argparse.Namespace) -> int:
+def dispatch(handler, args: argparse.Namespace) -> int:
     args = _resolve_runtime_args(args)
-    if args.command == "verify":
-        handler = {"quote": cmd_verify_quote, "report": cmd_verify_report}[
-            args.verify_command
-        ]
-    else:
-        handler = {
-            "sync": cmd_sync,
-            "search": cmd_search,
-            "page": cmd_page,
-            "extract-pages": cmd_extract_pages,
-            "prune": cmd_prune,
-            "doctor": cmd_doctor,
-        }[args.command]
     try:
         return handler(args)
     except sqlite3.DatabaseError as exc:
