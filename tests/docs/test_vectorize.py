@@ -464,7 +464,8 @@ def test_docs_index_commands_require_evidence_extra_guidance_when_missing(
             )
             == 2
         )
-    assert capsys.readouterr().err  # missing-extra guidance on stderr; wording not pinned
+    # Missing-extra guidance goes to stderr; its wording is not pinned.
+    assert capsys.readouterr().err
 
 
 def test_docs_index_search_doctor_parser_options_are_explicit() -> None:
