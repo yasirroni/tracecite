@@ -4,6 +4,8 @@ title: "TraceCite table normalisation"
 
 TraceCite treats generated documentation as a reusable analytical knowledge layer. Executable `.py` and `.jl` pages remain the computational authority. Quarto retains their executed Pandoc Markdown and produces the documentation website. TraceCite then preserves each raw table and derives a deterministic retrieval representation without mutating the original site.
 
+The `tracecite-docs` package builds the site and normalises its tables. The `tracecite` package indexes sources, searches them, and verifies citations.
+
 ## Two representations, one result
 
 ```text
@@ -13,16 +15,16 @@ TraceCite treats generated documentation as a reusable analytical knowledge laye
     -> HTML website
 
 retained Markdown
-    -> `tracecite prepare` CLI/package
+    -> `tracecite-docs prepare` CLI/package
     -> raw table evidence + normalised row text
-    -> FTS and vector evidence index (`tracecite docs index`)
+    -> FTS and vector evidence index (`tracecite-docs index`)
 ```
 
-The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact normalised retrieval text that `tracecite docs index` embeds; it does not contain vectors.
+The normal documentation site contains only the original table. An optional embedding-inspection site copies every retained Markdown page, keeps the raw table, and appends the exact normalised retrieval text that `tracecite-docs index` embeds; it does not contain vectors.
 
 ## Build boundary
 
-`tracecite docs build docs` is the public automatic builder. It discovers configured executable inputs, selects the complete site or a safe reduced fallback, stages retained Markdown, and optionally renders the inspection site. Use its `--only python` and `--only julia` options for explicit reduced builds.
+`tracecite-docs build docs` is the public automatic builder. It discovers configured executable inputs, selects the complete site or a safe reduced fallback, stages retained Markdown, and optionally renders the inspection site. Use its `--only python` and `--only julia` options for explicit reduced builds.
 
 | Representation | Preserved content | Main consumer | Default location |
 |---|---|---|---|
@@ -48,17 +50,16 @@ The normal documentation site contains only the original table. An optional embe
 ## Build the documentation and inspection sites
 
 ```bash
-python -m pip install -e .
-uv run tracecite docs build docs
-uv run tracecite docs build docs --only python
+uv run tracecite-docs build docs
+uv run tracecite-docs build docs --only python
 julia --version
-uv run tracecite docs build docs --only julia
+uv run tracecite-docs build docs --only julia
 ```
 
 The public builder uses the complete base Quarto configuration when both
 runtimes are available. If Julia is unavailable, it warns with every skipped
 configured Julia source and uses the Python-only overlay. Explicit reduced
 builds use the two `--only` commands above. Projects that already have
-rendered and staged retained Markdown can invoke `tracecite prepare` directly.
+rendered and staged retained Markdown can invoke `tracecite-docs prepare` directly.
 
-After a Quarto render, another project can invoke `tracecite prepare` directly with its retained Markdown root and preparation options.
+After a Quarto render, another project can invoke `tracecite-docs prepare` directly with its retained Markdown root and preparation options.

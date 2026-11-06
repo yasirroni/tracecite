@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          uv sync --locked --extra docs
+          uv sync --locked
           julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
           julia --project=docs_jl -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
@@ -57,9 +57,9 @@ jobs:
         run: |
           set -euxo pipefail
           rm -rf docs/build docs_quarto_py/build docs_quarto_jl/build docs_jl/build
-          uv run tracecite docs build docs
-          uv run tracecite docs build docs_quarto_py --only python | tee /tmp/docs-quarto-py.log
-          uv run tracecite docs build docs_quarto_jl --only julia | tee /tmp/docs-quarto-jl.log
+          uv run tracecite-docs build docs
+          uv run tracecite-docs build docs_quarto_py --only python | tee /tmp/docs-quarto-py.log
+          uv run tracecite-docs build docs_quarto_jl --only julia | tee /tmp/docs-quarto-jl.log
           julia --project=docs_jl docs_jl/make.jl 2>&1 | tee /tmp/docs-jl.log
 
       - name: Verify build artifacts

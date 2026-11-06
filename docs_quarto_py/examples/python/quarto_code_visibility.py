@@ -20,8 +20,7 @@ ordinary TraceCite-compatible Markdown with a stable table identifier.
 # %%
 #| label: quarto-visibility-setup
 import pandas as pd
-
-from tracecite.tables import knowledge_table
+from tracecite_docs.tables import knowledge_table
 
 example = pd.DataFrame({"method": ["visible", "hidden", "folded"], "count": [1, 2, 3]})
 

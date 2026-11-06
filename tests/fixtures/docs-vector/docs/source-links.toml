@@ -1,9 +1,0 @@
-schema_version = 3
-
-[[source]]
-name = "fixture-report"
-local_path = "sources/report.pdf"
-public_url = "https://publisher.example/report.pdf"
-
-[source.metadata]
-publisher = "Publisher"

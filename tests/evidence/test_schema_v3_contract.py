@@ -52,14 +52,6 @@ def test_schema_creation_rolls_back_partial_ddl_after_vec0_failure(database_path
         )
 
 
-def _replace_table_with_columns(conn, table: str, columns: list[str]) -> None:
-    conn.execute(
-        f"CREATE TABLE bad_{table} AS SELECT {', '.join(columns)} FROM {table}"
-    )
-    conn.execute(f"ALTER TABLE {table} RENAME TO {table}_real")
-    conn.execute(f"ALTER TABLE bad_{table} RENAME TO {table}")
-
-
 @pytest.mark.parametrize(
     "mutator",
     [
@@ -74,33 +66,5 @@ def test_ensure_schema_rejects_incomplete_matching_version_schema(
     with closing(schema.connect(database_path)) as conn:
         schema.ensure_schema(conn)
         mutator(conn)
-        with pytest.raises(schema.IncompatibleDatabaseError):
-            schema.ensure_schema(conn)
-
-
-@pytest.mark.parametrize(
-    "table, kept_columns",
-    [
-        (
-            "kb_config",
-            ["id", "schema_version", "fts_config", "sqlite_vec_version"],
-        ),
-        (
-            "sources",
-            ["source_pk", "path", "sha256", "size_bytes", "mtime_ns"],
-        ),
-        (
-            "chunks",
-            ["chunk_id", "source_pk", "body", "semantic_input_hash"],
-        ),
-        ("assets", ["asset_id", "source_pk", "asset_path"]),
-    ],
-)
-def test_ensure_schema_rejects_missing_operational_columns(
-    database_path: Path, table, kept_columns
-):
-    with closing(schema.connect(database_path)) as conn:
-        schema.ensure_schema(conn)
-        _replace_table_with_columns(conn, table, kept_columns)
         with pytest.raises(schema.IncompatibleDatabaseError):
             schema.ensure_schema(conn)

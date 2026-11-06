@@ -13,8 +13,7 @@ and stable identifiers for retrieval.
 ::: {#dirty-dataframe-setup .cell execution_count=1}
 ``` {.python .cell-code}
 import pandas as pd
-
-from tracecite.tables import computed_first_row_summary, knowledge_table
+from tracecite_docs.tables import computed_first_row_summary, knowledge_table
 
 dirty_table = pd.DataFrame(
     {

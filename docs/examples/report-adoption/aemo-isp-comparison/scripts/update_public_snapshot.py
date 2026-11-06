@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def main() -> int:
-    from tracecite.docs import check_docs, load_docs_contract
+    from tracecite_docs.docs import check_docs, load_docs_contract
 
     config = ROOT / "docs" / "tracecite.toml"
     contract = load_docs_contract(config, repo_root=ROOT)

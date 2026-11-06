@@ -14,24 +14,24 @@ Run the workflow from `docs/examples/report-adoption/aemo-isp-comparison/`:
 ```sh
 python3 scripts/render_docs.py
 
-uv run --project ../../../.. python -m tracecite docs author \
+uv run --project ../../../.. python -m tracecite_docs author \
   --docs-config docs/tracecite.toml \
   --repo-root .
 
-uv run --project ../../../.. python -m tracecite docs index \
+uv run --project ../../../.. python -m tracecite_docs index \
   --docs-config docs/tracecite.toml \
   --repo-root .
 
-uv run --project ../../../.. python -m tracecite docs search \
+uv run --project ../../../.. python -m tracecite_docs search \
   "coal retirement Step Change" \
   --docs-config docs/tracecite.toml \
   --repo-root .
 
-uv run --project ../../../.. python -m tracecite docs doctor \
+uv run --project ../../../.. python -m tracecite_docs doctor \
   --docs-config docs/tracecite.toml \
   --repo-root .
 
-uv run --project ../../../.. python -m tracecite docs check \
+uv run --project ../../../.. python -m tracecite_docs check \
   --docs-config docs/tracecite.toml \
   --repo-root .
 

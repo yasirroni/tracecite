@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from bisect import bisect_left
 
-from .base import ParsedChunkUnit, ParsedPage, ParseResult
+from .base import ParsedChunkUnit, ParsedPage, ParseResult, layout_units
 
 NAME = "markdown-heading"
 
@@ -77,10 +77,8 @@ def parse(path, config: dict | None = None) -> ParseResult:
                     heading_path=list(heading_path),
                     symbol=None,
                     content_type="body",
-                    physical_page=None,
                     line_start=start_line,
                     line_end=end_line,
-                    locator={},
                 )
             )
             para_index += 1
@@ -109,10 +107,8 @@ def parse(path, config: dict | None = None) -> ParseResult:
                     heading_path=list(heading_path),
                     symbol=None,
                     content_type="heading",
-                    physical_page=None,
                     line_start=line_no,
                     line_end=line_no,
-                    locator={},
                 )
             )
             continue
@@ -124,18 +120,6 @@ def parse(path, config: dict | None = None) -> ParseResult:
         para_lines.append(raw_line)
     flush_paragraph(len(lines))
 
-    layout_units = [
-        {
-            "text": unit.text,
-            "logical_key": unit.logical_key,
-            "heading_path": unit.heading_path,
-            "content_type": unit.content_type,
-            "line_start": unit.line_start,
-            "line_end": unit.line_end,
-        }
-        for unit in units
-    ]
-
     page = ParsedPage(
         physical_page=1,
         printed_label=None,
@@ -143,6 +127,6 @@ def parse(path, config: dict | None = None) -> ParseResult:
         extraction_method=NAME,
         extraction_status="ok" if units else "empty",
         section_candidates=[u.text for u in units if u.content_type == "heading"],
-        layout={"units": layout_units},
+        layout={"units": layout_units(units, "line_start", "line_end")},
     )
     return ParseResult(pages=[page], units=units)

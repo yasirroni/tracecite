@@ -222,56 +222,10 @@ def test_search_contract_for_markdown_result_exposes_line_locator(
         assert "pdf_link" not in result
 
 
-def test_search_uses_atomically_activated_embedding_model_ids(
-    corpus_dir, manifest_path, database_path, make_embedder, monkeypatch
-):
-    embedder = make_embedder()
-    _sync_corpus(corpus_dir, manifest_path, database_path, embedder)
-    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "activated-revision")
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-
-    with closing(schema.connect(database_path)) as conn:
-        config = schema.load_config(conn)
-        assert config.embedding_revision == "activated-revision"
-        new_ids = [
-            row["embedding_id"]
-            for row in conn.execute(
-                "SELECT embedding_id FROM embeddings WHERE model_id = ? ORDER BY embedding_id",
-                (schema.embedding_model_id(revision="activated-revision"),),
-            ).fetchall()
-        ]
-        old_ids = [
-            row["embedding_id"]
-            for row in conn.execute(
-                "SELECT embedding_id FROM embeddings WHERE model_id = ? ORDER BY embedding_id",
-                (schema.embedding_model_id(),),
-            ).fetchall()
-        ]
-        assert new_ids and old_ids and set(new_ids).isdisjoint(old_ids)
-        captured = {}
-
-        class CapturingBackend:
-            def search(self, conn, query_vector, top_k, allowed_embedding_ids=None):
-                captured["allowed"] = list(allowed_embedding_ids or [])
-                return []
-
-        monkeypatch.setattr(
-            sync_module.vector_backend, "SqliteVecBackend", CapturingBackend
-        )
-        hybrid_search(conn, "retirement dates", 1, 50, 50, embedder)
-        assert captured["allowed"] == new_ids
-
-
-def test_search_constructs_active_model_and_returns_results_after_cached_reactivation(
+def test_search_constructs_the_database_embedding_model(
     corpus_dir, manifest_path, database_path, make_embedder, monkeypatch, tmp_path
 ):
     _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
-    with monkeypatch.context() as patch:
-        patch.setattr(schema, "EMBEDDING_REVISION", "revision-b")
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
 
     constructed = []
 

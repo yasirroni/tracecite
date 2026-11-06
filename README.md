@@ -2,33 +2,11 @@
 
 TraceCite lets people and AI agents search their documents, cite the exact page or cell, and check that a quote matches its source.
 
-Its core is source-linked table normalisation. Tables in rendered Python or Julia documentation stay unchanged as the original evidence, and TraceCite derives deterministic, self-describing row text from them for search.
+TraceCite indexes Markdown, PDF, `.xlsx`, and `.xlsm` files. It stores retained text, source hashes, full-text and vector search records, and locators (PDF pages, Markdown lines, and worksheet ranges), and verifies quotations and report citations against them.
 
-TraceCite also indexes Markdown, PDF, `.xlsx`, and `.xlsm` files. It stores retained text, source hashes, full-text and vector search records, and locators (PDF pages, Markdown lines, and worksheet ranges), and verifies quotations and report citations against them.
+[tracecite-docs](https://pypi.org/project/tracecite-docs/) builds Quarto sites from executable Python and Julia pages, normalises their tables into source-linked row text for search, and indexes the retained pages with TraceCite. The [TraceCite documentation](https://yasirroni.github.io/tracecite/) covers both packages.
 
-`tracecite docs index` adds a project's retained documentation and its normalised tables to an evidence index. `tracecite docs stage` routes source links to local files or public URLs.
-
-## Core architecture
-
-```text
-Python or Julia executable page
-    -> Quarto retained Pandoc Markdown
-       -> raw table evidence
-       -> HTML site
-
-retained Markdown
-    -> `tracecite prepare` CLI/package
-       -> canonical table model
-       -> row-oriented retrieval text
-       -> diagnostics
-       -> optional embedding-inspection website copy
-```
-
-The normal site is pure Quarto output. The inspection copy, which doubles each table, is generated only on request.
-
-`tracecite docs build docs` discovers configured executable inputs, builds the complete site when both runtimes are available or falls back to the available one with a warning naming each skipped file, stages retained Markdown, and optionally renders the inspection site. `tracecite prepare` does the table normalisation.
-
-The evidence path is separate from the documentation renderer:
+## Architecture
 
 ```text
 declared PDF, Markdown, or workbook sources
@@ -38,20 +16,12 @@ declared PDF, Markdown, or workbook sources
     -> ranked JSON results with source identity and evidence locators
 ```
 
-## Prerequisites
+## Installation
 
-- Python 3.11 or newer;
-- Pandoc, standalone or bundled with Quarto;
-- Quarto for documentation-site renders;
-- Julia 1.10 or newer, only for Julia documentation pages.
-
-The Python normaliser and CLI work without Julia. Automatic builds fall back to the Python overlay when configured Julia inputs cannot run; `--only julia` builds need Julia.
-
-Install TraceCite from PyPI. Evidence synchronisation and hybrid search need the `evidence` extra; Quarto documentation builds with Python pages also need the `docs` extra. `knowledge_table` and `computed_first_row_summary` take a pandas DataFrame, which the `pandas` extra installs:
+TraceCite needs Python 3.11 or newer. Evidence synchronisation and hybrid search need the `evidence` extra:
 
 ```sh
 pip install "tracecite[evidence]"
-pip install "tracecite[evidence,docs]"
 ```
 
 The `evidence` extra installs PyTorch through `sentence-transformers`. On Linux, pip installs the CUDA build by default, a download of several gigabytes. On a machine without a GPU, install the CPU build first:
@@ -64,37 +34,7 @@ Workbook parsing reads OOXML packages with only the Python standard library, wit
 
 ## Usage
 
-The `tracecite` CLI normalises tables and documents, builds documentation, and syncs and searches source evidence. `prepare` reads retained Markdown after a Quarto render and creates the optional inspection copy.
-
-### Public API
-
-```python
-from tracecite.tables import (
-    normalise_pandoc_table,
-    normalise_html_table,
-    normalise_document_tables,
-)
-```
-
-`normalise_pandoc_table()` is the core contract. It accepts one Pandoc table and returns raw evidence, canonical Markdown, normalised text, row records, diagnostics, hashes, and version metadata.
-
-Each row gets a deterministic `row_id`, which follows the logical row rather than its rank or position when `row_identity` metadata is supplied.
-
-`normalise_html_table()` supports Literate.jl, Documenter.jl, PrettyTables, notebook HTML MIME, row spans, and column spans through an HTML-to-canonical-Markdown adapter.
-
-### Normalise one table
-
-```sh
-tracecite table normalise table.md --to text
-tracecite table normalise table.html --from html --to debug-markdown
-```
-
-### Normalise one document
-
-```sh
-tracecite document normalise report.md --to jsonl
-tracecite document normalise report.md --to embedding-markdown --output report.embedding.md
-```
+The `tracecite` CLI syncs, searches, and verifies source evidence, and installs the bundled agent skills.
 
 ### Index and search source evidence
 
@@ -227,45 +167,6 @@ tracecite verify quote reports/example.pdf 4-5 "Exact quotation" --database evid
 
 Verification reads only the indexed text, so run `tracecite sync` after a file changes to check against the new version.
 
-### Build the documentation
-
-```sh
-uv run tracecite docs build docs
-uv run tracecite docs build docs_quarto_py --only python
-uv run tracecite docs build docs_quarto_jl --only julia
-```
-
-<!-- TODO:
-Explain the expected `[WARNING] Could not fetch resource`
--->
-
-Without Julia, the builder names each Julia source it skips and renders the Python overlay, leaving Julia sources untouched. `--only python` or `--only julia` builds one language. Projects with their own Quarto render can run `tracecite prepare` on their staged retained Markdown.
-
-`docs/examples/report-adoption/aemo-isp-comparison/` is a complete author -> check -> index -> search -> doctor -> publish-only example using two AEMO Integrated System Plan reports.
-
-`docs/examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`, `source_links`, `index_output`, `publication_exclude`, and optional `host_render_command` under `[docs]`. Contract paths are repository-relative and stay inside the repository.
-
-Open the built site:
-
-```sh
-open docs/build/index.html
-```
-
-### Direct preparation command
-
-```sh
-tracecite prepare docs/build \
-  --project-config docs/_quarto.yml \
-  --project-profile python \
-  --source-project docs \
-  --keep-embedding-markdown .tracecite/embedding-site \
-  --render-embedding-site
-```
-
-The copy includes `_tracecite/tables.jsonl` and `_tracecite/manifest.json`, and its `_quarto.yml` keeps the selected profile's theme and navigation without execution engines or build hooks. It is disposable, gitignored, and excluded from recursive ingestion.
-
-Its Markdown keeps each original table for audit and appends the normalised form for inspection. Normal indexing reads `tables.jsonl` or `NormalisedTable` objects directly and needs no copy.
-
 ### Install the agent skills
 
 TraceCite bundles three AI agent skills: `using-tracecite`, `writing-evidence-backed-reports`, and `routing-documentation-source-links`. Copy them into the project's `.agents/skills/` directory:
@@ -286,25 +187,47 @@ Rerunning it replaces the copies with the installed version's skills.
 
 ### Environment
 
-The core package needs only Python.
-
 ```sh
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[docs,evidence,test]"
+uv sync --extra evidence --extra test
 ```
 
-`requirements.txt` pins runtime and evidence dependencies to the newest versions `pyproject.toml` allows; install it for a reproducible environment. Refresh it with [`pru`](https://github.com/yasirroni/pru); installing `-e ".[evidence]"` in the same command keeps upgrades within `pyproject.toml` bounds:
+`uv sync` also installs `tracecite-docs` from the `docs` dependency group to build the documentation.
+
+`requirements.txt` pins the evidence dependencies to the newest versions `pyproject.toml` allows; install it for a reproducible environment. Refresh it with [`pru`](https://github.com/yasirroni/pru); installing `-e ".[evidence]"` in the same command keeps upgrades within `pyproject.toml` bounds:
 
 ```sh
 uv pip install -r requirements.txt
 pru -r requirements.txt upgrade_requirements --cmd 'uv pip install --upgrade -e ".[evidence]"'
 ```
 
-Building the whole `docs/` also needs the Julia environment:
+### Build the documentation
+
+The build needs [Quarto](https://quarto.org/), which bundles Pandoc, and Julia 1.10 or newer for the Julia pages. Set up the Julia environment once:
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
+```
+
+```sh
+uv run tracecite-docs build docs
+uv run tracecite-docs build docs_quarto_py --only python
+uv run tracecite-docs build docs_quarto_jl --only julia
+```
+
+<!-- TODO:
+Explain the expected `[WARNING] Could not fetch resource`
+-->
+
+Without Julia, the builder names each Julia source it skips and renders the Python overlay, leaving Julia sources untouched. `--only python` or `--only julia` builds one language.
+
+`docs/examples/report-adoption/aemo-isp-comparison/` is a complete author -> check -> index -> search -> doctor -> publish-only example using two AEMO Integrated System Plan reports.
+
+`docs/examples/report-adoption/aemo-isp-comparison/docs/tracecite.toml` demonstrates the documentation evidence contract. Schema version 1 defines exactly `authored_root`, `retained_root`, `staged_root`, `source_links`, `index_output`, `publication_exclude`, and optional `host_render_command` under `[docs]`. Contract paths are repository-relative and stay inside the repository.
+
+Open the built site:
+
+```sh
+open docs/build/index.html
 ```
 
 ### Lint and format
@@ -330,5 +253,5 @@ uv build
 The Julia package is tested by `docs/examples/julia/dirty_dataframe.jl`, which the documentation build runs with its hidden checks:
 
 ```sh
-tracecite docs build docs
+tracecite-docs build docs
 ```

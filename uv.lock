@@ -2116,10 +2116,51 @@ wheels = [
 name = "tracecite"
 version = "0.0.3"
 source = { editable = "." }
+
+[package.optional-dependencies]
+evidence = [
+    { name = "huggingface-hub" },
+    { name = "pymupdf" },
+    { name = "sentence-transformers" },
+    { name = "sqlite-vec" },
+]
+test = [
+    { name = "build" },
+    { name = "pytest" },
+]
+
+[package.dev-dependencies]
+docs = [
+    { name = "tracecite-docs", extra = ["docs"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build", marker = "extra == 'test'", specifier = ">=1.2" },
+    { name = "huggingface-hub", marker = "extra == 'evidence'", specifier = ">=1.23,<2" },
+    { name = "pymupdf", marker = "extra == 'evidence'", specifier = ">=1.28,<2" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4,<9" },
+    { name = "sentence-transformers", marker = "extra == 'evidence'", specifier = ">=5.6,<6" },
+    { name = "sqlite-vec", marker = "extra == 'evidence'", specifier = ">=0.1.9,<0.2" },
+]
+provides-extras = ["evidence", "test"]
+
+[package.metadata.requires-dev]
+docs = [{ name = "tracecite-docs", extras = ["docs"], specifier = ">=0.0.1" }]
+
+[[package]]
+name = "tracecite-docs"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "pyyaml" },
     { name = "tabulate" },
+    { name = "tracecite" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/eb/f7c3b0d1fd92834852b64f40064779c02d27bd689e2c2965d57ee283c3d6/tracecite_docs-0.0.1.tar.gz", hash = "sha256:a1bb4228fd9fb92139891c2f6d7308e90ac25cce06cd383f26d48aaf9d5059c2", size = 67110, upload-time = "2026-11-06T05:24:35.317Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/56/ff/1719daebd8484a21a9438239373be5f98624587345c3fc2c0deb5ba344f2/tracecite_docs-0.0.1-py3-none-any.whl", hash = "sha256:c2f0059c7f17b389226cc99f30131a2bf961f7b5c011b5d36e998125ad66f2ad", size = 58085, upload-time = "2026-11-06T05:24:36.883Z" },
 ]
 
 [package.optional-dependencies]
@@ -2129,40 +2170,6 @@ docs = [
     { name = "nbformat" },
     { name = "pandas" },
 ]
-evidence = [
-    { name = "huggingface-hub" },
-    { name = "pymupdf" },
-    { name = "sentence-transformers" },
-    { name = "sqlite-vec" },
-]
-pandas = [
-    { name = "pandas" },
-]
-test = [
-    { name = "build" },
-    { name = "pandas" },
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "beautifulsoup4", specifier = ">=4.12" },
-    { name = "build", marker = "extra == 'test'", specifier = ">=1.2" },
-    { name = "huggingface-hub", marker = "extra == 'evidence'", specifier = ">=1.23,<2" },
-    { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=7.3" },
-    { name = "nbclient", marker = "extra == 'docs'", specifier = ">=0.11" },
-    { name = "nbformat", marker = "extra == 'docs'", specifier = ">=5.10" },
-    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.0" },
-    { name = "pymupdf", marker = "extra == 'evidence'", specifier = ">=1.28,<2" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4,<9" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "sentence-transformers", marker = "extra == 'evidence'", specifier = ">=5.6,<6" },
-    { name = "sqlite-vec", marker = "extra == 'evidence'", specifier = ">=0.1.9,<0.2" },
-    { name = "tabulate", specifier = ">=0.9" },
-    { name = "tracecite", extras = ["pandas"], marker = "extra == 'docs'" },
-    { name = "tracecite", extras = ["pandas"], marker = "extra == 'test'" },
-]
-provides-extras = ["docs", "evidence", "pandas", "test"]
 
 [[package]]
 name = "traitlets"

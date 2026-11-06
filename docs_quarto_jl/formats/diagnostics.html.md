@@ -32,7 +32,7 @@ Default document ingestion does not discard a table merely because optional meta
 Strict validation deliberately fails instead:
 
 ```bash
-tracecite check docs/build
+tracecite-docs table check docs/build
 ```
 
 For example, this invalid metadata is shown as source text rather than interpreted by this page:

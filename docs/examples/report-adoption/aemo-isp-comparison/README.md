@@ -48,19 +48,19 @@ Run these commands from the example's own directory (`docs/examples/report-adopt
 1. `python3 scripts/render_docs.py`
    Render the authored report; done automatically by author mode below, shown for reference.
 
-2. `uv run --project ../../../.. python -m tracecite docs author --docs-config docs/tracecite.toml --repo-root .`
+2. `uv run --project ../../../.. python -m tracecite_docs author --docs-config docs/tracecite.toml --repo-root .`
    Author: render the authored report and stage local/public copies.
 
-3. `uv run --project ../../../.. python -m tracecite docs check --docs-config docs/tracecite.toml --repo-root .`
+3. `uv run --project ../../../.. python -m tracecite_docs check --docs-config docs/tracecite.toml --repo-root .`
    Check: read-only freshness verification of the staged output.
 
-4. `uv run --project ../../../.. python -m tracecite docs index --docs-config docs/tracecite.toml --repo-root .`
+4. `uv run --project ../../../.. python -m tracecite_docs index --docs-config docs/tracecite.toml --repo-root .`
    Index: build the searchable vector index.
 
-5. `uv run --project ../../../.. python -m tracecite docs search "Integrated System Plan" --docs-config docs/tracecite.toml --repo-root .`
+5. `uv run --project ../../../.. python -m tracecite_docs search "Integrated System Plan" --docs-config docs/tracecite.toml --repo-root .`
    Search the index.
 
-6. `uv run --project ../../../.. python -m tracecite docs doctor --docs-config docs/tracecite.toml --repo-root .`
+6. `uv run --project ../../../.. python -m tracecite_docs doctor --docs-config docs/tracecite.toml --repo-root .`
    Doctor: deeper integrity check.
 
 7. `python3 scripts/update_public_snapshot.py`
@@ -82,5 +82,5 @@ The report uses two citation routes:
 - Quarto
 - Git LFS
 - Python 3.11+
-- For author, check, and publish-only: standard TraceCite
-- For index, search, and doctor: `tracecite[evidence]` extra
+- For author and check: `tracecite-docs`
+- For index, search, and doctor: the `tracecite-docs[evidence]` extra

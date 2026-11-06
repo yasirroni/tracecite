@@ -490,10 +490,6 @@ def sync(
                 f"embedding dimensions {schema.EMBEDDING_DIMENSIONS} are incompatible with schema v{config.schema_version} "
                 f"database dimensions {config.embedding_dimensions}"
             )
-        active_config_changed = (
-            schema.EMBEDDING_MODEL != config.embedding_model
-            or schema.EMBEDDING_REVISION != config.embedding_revision
-        )
         model_id = schema.embedding_model_id(
             schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION
         )
@@ -680,13 +676,7 @@ def sync(
         )
         report.embeddings_generated = len(hash_to_vector)
 
-        if not (
-            plans
-            or hint_updates
-            or renames
-            or reembed_only_chunks
-            or active_config_changed
-        ):
+        if not (plans or hint_updates or renames or reembed_only_chunks):
             return report
 
         rendered_assets: dict[str, list] = {}
@@ -757,8 +747,8 @@ def sync(
                         final_dir = staging_dir.with_name(str(plan.source_pk))
                         os.replace(staging_dir, final_dir)
                         rendered_assets[plan.source_path] = [
-                            (page, final_dir / path.name, *rest)
-                            for page, path, *rest in rendered_assets[plan.source_path]
+                            (final_dir / path.name, *rest)
+                            for path, *rest in rendered_assets[plan.source_path]
                         ]
                 else:
                     conn.execute(
@@ -880,12 +870,6 @@ def sync(
                 raise _SourceChangedDuringSync
 
             schema.touch_config(conn)
-            schema.activate_embedding_config(
-                conn,
-                embedding_model=schema.EMBEDDING_MODEL,
-                embedding_revision=schema.EMBEDDING_REVISION,
-                embedding_dimensions=schema.EMBEDDING_DIMENSIONS,
-            )
             conn.execute("COMMIT")
         except Exception:
             with contextlib.suppress(sqlite3.Error):
@@ -1083,23 +1067,17 @@ def _asset_generation_root(database_path: Path, generation: str) -> Path:
     return schema.resolve_asset_path(database_path, f"imgs/generations/{generation}")
 
 
-def _render_assets(
-    plan: _SourcePlan, base_dir: Path
-) -> list[tuple[int, Path, object, str, str]]:
+def _render_assets(plan: _SourcePlan, base_dir: Path) -> list[tuple[Path, object, str]]:
     base_dir.mkdir(parents=True, exist_ok=False)
-    rendered: list[tuple[int, Path, object, str, str]] = []
-    physical_pages = sorted({page.physical_page for page in plan.pages})
-    for physical_page in physical_pages:
-        render = pdf_parser.render_page(plan.content_path, physical_page)
-        asset_path = base_dir / f"page-{physical_page:04d}.{render.ext}"
-        asset_path.write_bytes(render.image_bytes)
-        sha256 = file_sha256(asset_path)
-        rendered.append((physical_page, asset_path, render, "page-render", sha256))
-        for crop in pdf_parser.render_figure_crops(plan.content_path, physical_page):
-            crop_path = base_dir / f"{crop.label}.{crop.ext}"
-            crop_path.write_bytes(crop.image_bytes)
-            sha256 = file_sha256(crop_path)
-            rendered.append((physical_page, crop_path, crop, "figure-crop", sha256))
+    rendered: list[tuple[Path, object, str]] = []
+    for physical_page in sorted({page.physical_page for page in plan.pages}):
+        page_render = pdf_parser.render_page(plan.content_path, physical_page)
+        crops = pdf_parser.render_figure_crops(plan.content_path, physical_page)
+        for asset in [page_render, *crops]:
+            name = asset.label or f"page-{physical_page:04d}"
+            asset_path = base_dir / f"{name}.{asset.ext}"
+            asset_path.write_bytes(asset.image_bytes)
+            rendered.append((asset_path, asset, file_sha256(asset_path)))
     return rendered
 
 
@@ -1109,32 +1087,34 @@ def _persist_assets(
     assert plan.source_pk is not None
     conn.execute("DELETE FROM assets WHERE source_pk = ?", (plan.source_pk,))
     database_parent = Path(database_path).resolve().parent
-    for physical_page, asset_path, render, asset_type, sha256 in rendered_assets:
+    rows = []
+    for asset_path, asset, sha256 in rendered_assets:
         asset_identifier = asset_path.resolve().relative_to(database_parent).as_posix()
         schema.resolve_asset_path(database_path, asset_identifier)
-        # NOTE: ocr_text and visual_description are always NULL; OCR fallback
-        # writes page and chunk text only.
-        conn.execute(
-            """
-            INSERT INTO assets (
-                asset_id, source_pk, physical_page, asset_path, sha256, width, height,
-                asset_type, label, caption, nearby_text, ocr_text, visual_description, bbox_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?)
-            """,
+        rows.append(
             (
                 f"{plan.source_path}:{asset_path.stem}",
                 plan.source_pk,
-                physical_page,
+                asset.physical_page,
                 asset_identifier,
                 sha256,
-                render.width,
-                render.height,
-                asset_type,
-                render.label,
-                render.nearby_text,
-                json.dumps(render.bbox) if render.bbox else None,
-            ),
+                asset.width,
+                asset.height,
+                asset.asset_type,
+                asset.label,
+                asset.nearby_text,
+                json.dumps(asset.bbox) if asset.bbox else None,
+            )
         )
+    conn.executemany(
+        """
+        INSERT INTO assets (
+            asset_id, source_pk, physical_page, asset_path, sha256, width, height,
+            asset_type, label, nearby_text, bbox_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
 
 
 def referenced_asset_generations(

@@ -64,11 +64,10 @@ def cmd_sync(args: argparse.Namespace) -> int:
     from . import sync as sync_module
 
     options = sync_module.SyncOptions(
-        max_chunk_chars=args.max_chunk_chars,
-        generate_assets=not args.no_assets,
-        full=args.full,
-        reembed=args.reembed,
+        generate_assets=not args.no_assets, full=args.full, reembed=args.reembed
     )
+    if args.max_chunk_chars is not None:
+        options.max_chunk_chars = args.max_chunk_chars
     only_paths = {Path(args.path).as_posix()} if args.path else None
     report = sync_module.sync(
         _require(args.root, "--root"),

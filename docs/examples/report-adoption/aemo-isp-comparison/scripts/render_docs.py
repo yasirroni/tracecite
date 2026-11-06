@@ -1,7 +1,7 @@
 """Render the authored Quarto report into TraceCite's retained Markdown root.
 
 Run from the example's own root (this is the host-owned render hook that
-``tracecite docs author`` invokes; it must not be run through TraceCite itself).
+``tracecite-docs author`` invokes; it must not be run through TraceCite itself).
 """
 
 from __future__ import annotations

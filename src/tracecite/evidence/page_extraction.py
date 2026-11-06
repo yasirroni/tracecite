@@ -5,7 +5,6 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -20,6 +19,7 @@ from .paths import (
     normalise_source_path,
     source_row_for_path,
 )
+from .schema import utc_now
 
 
 class PageExtractionError(ValueError):
@@ -52,15 +52,15 @@ def _selector_token(selector: str | None, normalized_pages: list[int]) -> str:
 
 
 def _bounded_name(
-    source_stem: str, selector: str | None, normalized_pages: list[int], suffix: str
+    source_stem: str, selector: str | None, normalized_pages: list[int]
 ) -> str:
     base = f"tracecite-extract-{_slugify(source_stem)}-{_selector_token(selector, normalized_pages)}"
-    return f"{base[:72]}{suffix}"
+    return base[:72]
 
 
 def _ensure_real_output_dir(output_dir: Path) -> Path:
     output_dir = Path(output_dir)
-    if not output_dir.exists() or not output_dir.is_dir():
+    if not output_dir.is_dir():
         raise PageExtractionError(f"output directory does not exist: {output_dir}")
     if output_dir.is_symlink():
         raise PageExtractionError(
@@ -157,22 +157,17 @@ def extract_pages(
                 f"source pdf has only {document.page_count} page(s), cannot satisfy selection {normalized_pages}"
             )
 
-        pdf_name = _bounded_name(
-            Path(source_path).stem, selector, normalized_pages, ".pdf"
-        )
-        manifest_name = _bounded_name(
-            Path(source_path).stem, selector, normalized_pages, ".json"
-        )
-        final_pdf = output_dir_resolved / pdf_name
-        final_manifest = output_dir_resolved / manifest_name
+        name = _bounded_name(Path(source_path).stem, selector, normalized_pages)
+        final_pdf = output_dir_resolved / f"{name}.pdf"
+        final_manifest = output_dir_resolved / f"{name}.json"
         if final_pdf.exists() or final_manifest.exists():
             raise PageExtractionError(
                 f"output already exists: {final_pdf if final_pdf.exists() else final_manifest}"
             )
 
         with TemporaryDirectory(dir=output_dir_resolved.parent) as temp_root:
-            staged_pdf = Path(temp_root) / pdf_name
-            staged_manifest = Path(temp_root) / manifest_name
+            staged_pdf = Path(temp_root) / final_pdf.name
+            staged_manifest = Path(temp_root) / final_manifest.name
             with pymupdf.open() as derivative:
                 for page in normalized_pages:
                     derivative.insert_pdf(
@@ -188,9 +183,9 @@ def extract_pages(
                 "page_count": len(normalized_pages),
                 "source_page_count": document.page_count,
                 "source_sha256": source_sha256,
-                "derivative_filename": pdf_name,
+                "derivative_filename": final_pdf.name,
                 "derivative_sha256": file_sha256(staged_pdf),
-                "created_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                "created_at_utc": utc_now(),
             }
             staged_manifest.write_text(
                 json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"

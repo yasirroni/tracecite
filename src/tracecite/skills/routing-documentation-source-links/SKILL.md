@@ -14,14 +14,14 @@ Maintain one Markdown authority. Route only the generated build copy to a local 
 - This skill owns `docs/source-links.toml`, target-specific staging, conservative link substitution, and documentation-build integration.
 - Do not download sources, parse PDFs, generate embeddings, interpret report evidence, or rewrite maintained Markdown in place.
 - Do not grow this registry into a BibTeX/BibLaTeX/CSL export, a Zotero integration, or a DOI-resolution system. `metadata` is opaque routing-adjacent data, never a second bibliography store.
-- TraceCite's Python implementation exposes the same operation as
-  `tracecite.docs.stage_docs` and `tracecite docs stage --docs-config PATH
+- The `tracecite-docs` Python package exposes the same operation as
+  `tracecite_docs.docs.stage_docs` and `tracecite-docs stage --docs-config PATH
   --repo-root ROOT --target local|public`; the report verifier and staging use
   one schema-v3 registry and Markdown-link parser.
 
 ## Required architecture
 
-`tracecite.docs.stage_docs` (CLI: `tracecite docs stage --docs-config PATH --repo-root ROOT --target local|public`) is the sole reference implementation of this contract. A host repository that needs this capability in a different runtime (e.g. a Julia/Documenter.jl package) vendors its own independent implementation of the schema-v3 registry and rewriting rules described here, rather than depending on `tracecite` directly.
+`tracecite_docs.docs.stage_docs` (CLI: `tracecite-docs stage --docs-config PATH --repo-root ROOT --target local|public`) is the sole reference implementation of this contract. A host repository that needs this capability in a different runtime (e.g. a Julia/Documenter.jl package) vendors its own independent implementation of the schema-v3 registry and rewriting rules described here, rather than depending on `tracecite-docs` directly.
 
 ```text
 maintained Markdown with local links

@@ -47,6 +47,20 @@ class ParseResult:
     units: list[ParsedChunkUnit]
 
 
+def layout_units(units: list[ParsedChunkUnit], *extra_fields: str) -> list[dict]:
+    """Serialise units for ``pages.layout_json``; inverse of ``units_from_layout``."""
+    return [
+        {
+            "text": unit.text,
+            "logical_key": unit.logical_key,
+            "heading_path": unit.heading_path,
+            "content_type": unit.content_type,
+            **{name: getattr(unit, name) for name in extra_fields},
+        }
+        for unit in units
+    ]
+
+
 def units_from_layout(layout_json: str | None) -> list[ParsedChunkUnit]:
     """Rebuild Markdown or workbook chunk-input units from retained ``pages.layout_json``."""
     layout = json.loads(layout_json) if layout_json else {}

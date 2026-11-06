@@ -20,11 +20,7 @@ classifiers = [
   "Topic :: Scientific/Engineering",
   "Topic :: Text Processing :: Indexing",
 ]
-dependencies = [
-  "beautifulsoup4>=4.12",
-  "PyYAML>=6.0",
-  "tabulate>=0.9",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/yasirroni/tracecite"
@@ -32,17 +28,20 @@ Documentation = "https://yasirroni.github.io/tracecite/"
 Issues = "https://github.com/yasirroni/tracecite/issues"
 
 [project.optional-dependencies]
-# Quarto runs Python documentation pages through a Jupyter kernel.
-docs = ["ipykernel>=7.3", "nbclient>=0.11", "nbformat>=5.10", "tracecite[pandas]"]
 evidence = [
   "huggingface-hub>=1.23,<2",
   "pymupdf>=1.28,<2",
   "sentence-transformers>=5.6,<6",
   "sqlite-vec>=0.1.9,<0.2",
 ]
-# knowledge_table and computed_first_row_summary take a pandas DataFrame.
-pandas = ["pandas>=2.0"]
-test = ["build>=1.2", "pytest>=8.4,<9", "tracecite[pandas]"]
+test = ["build>=1.2", "pytest>=8.4,<9"]
+
+[dependency-groups]
+# Builds the documentation site; the published package does not depend on it.
+docs = ["tracecite-docs[docs]>=0.0.1"]
+
+[tool.uv]
+default-groups = ["docs"]
 
 [project.scripts]
 tracecite = "tracecite.cli:main"
