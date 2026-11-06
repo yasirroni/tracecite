@@ -21,7 +21,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .base import ParsedChunkUnit, ParsedPage, ParseResult
+from .base import ParsedChunkUnit, ParsedPage, ParseResult, layout_units
 
 NAME = "workbook-ooxml"
 DEFAULT_MAX_UNIT_CHARS = 1000
@@ -304,16 +304,6 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                 max_formula_chars=max_formula_chars,
             )
             units.extend(sheet_units)
-            layout_units = [
-                {
-                    "text": unit.text,
-                    "logical_key": unit.logical_key,
-                    "heading_path": unit.heading_path,
-                    "content_type": unit.content_type,
-                    "locator": unit.locator,
-                }
-                for unit in sheet_units
-            ]
             pages.append(
                 ParsedPage(
                     physical_page=sheet.index,
@@ -327,7 +317,7 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                         "sheet": sheet.name,
                         "sheet_index": sheet.index,
                         "sheet_state": sheet.state,
-                        "units": layout_units,
+                        "units": layout_units(sheet_units, "locator"),
                     },
                 )
             )

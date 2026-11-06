@@ -165,12 +165,9 @@ def _excel_bounding_range(locators: list[dict]) -> str | None:
             if parsed is None:
                 return None
             coordinates.append(parsed)
-    min_column = min(column for column, _row in coordinates)
-    max_column = max(column for column, _row in coordinates)
-    min_row = min(row for _column, row in coordinates)
-    max_row = max(row for _column, row in coordinates)
-    start = f"{_column_label(min_column)}{min_row}"
-    end = f"{_column_label(max_column)}{max_row}"
+    columns, rows = zip(*coordinates)
+    start = f"{_column_label(min(columns))}{min(rows)}"
+    end = f"{_column_label(max(columns))}{max(rows)}"
     return start if start == end else f"{start}:{end}"
 
 

@@ -47,7 +47,6 @@ class RenderedAsset:
     height: int
     bbox: tuple[float, float, float, float] | None
     label: str | None = None
-    caption: str | None = None
     nearby_text: str | None = None
 
 
@@ -207,16 +206,10 @@ def parse(path: Path, config: dict | None = None) -> ParseResult:
                 )
                 ocr_text = ocr_text.strip()
                 if len(ocr_text) > len(page_text.strip()):
-                    page_rect = page.rect
                     blocks = [
                         {
                             "text": ocr_text,
-                            "bbox": [
-                                page_rect.x0,
-                                page_rect.y0,
-                                page_rect.x1,
-                                page_rect.y1,
-                            ],
+                            "bbox": list(page.rect),
                             "heading_path": [],
                             "content_type": "body",
                             "start_offset": 0,
