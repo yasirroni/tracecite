@@ -13,9 +13,6 @@ from . import __version__
 DEFAULT_LIMIT = 10
 DEFAULT_FTS_LIMIT = 50
 DEFAULT_VECTOR_LIMIT = 50
-# Equal to chunking.DEFAULT_MAX_CHUNK_CHARS; importing that module here would
-# load the parsers for every command, including --help.
-DEFAULT_MAX_CHUNK_CHARS = 1200
 
 LIMIT_HELP = "Number of results to return (default: %(default)s)."
 FTS_LIMIT_HELP = "Full-text candidates ranked before fusion (default: %(default)s)."
@@ -58,9 +55,7 @@ def _add_evidence_parsers(
     sync_parser.add_argument(
         "--reembed", action="store_true", help="Force embedding regeneration."
     )
-    sync_parser.add_argument(
-        "--max-chunk-chars", type=int, default=DEFAULT_MAX_CHUNK_CHARS
-    )
+    sync_parser.add_argument("--max-chunk-chars", type=int, default=None)
     sync_parser.add_argument(
         "--no-assets", action="store_true", help="Skip PDF page render/crop generation."
     )
