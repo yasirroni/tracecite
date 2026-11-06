@@ -85,38 +85,6 @@ ORDINARY_TABLES = (
 _KNOWN_TABLES = {*ORDINARY_TABLES, "sqlite_sequence"}
 _KNOWN_TABLE_PREFIXES = ("chunks_fts", "embedding_vectors")
 
-_REQUIRED_COLUMNS = {
-    "kb_config": {
-        "id",
-        "schema_version",
-        "fts_config",
-        "sqlite_vec_version",
-        "embedding_model",
-        "embedding_revision",
-        "embedding_dimensions",
-        "parser_versions",
-        "chunker_version",
-        "normalisation_version",
-        "created_at_utc",
-        "updated_at_utc",
-    },
-    "sources": {
-        "source_pk",
-        "path",
-        "source_type",
-        "sha256",
-        "size_bytes",
-        "mtime_ns",
-        "parser_name",
-        "parser_version",
-    },
-    "pages": {"page_id", "source_pk", "physical_page", "text"},
-    "chunks": {"chunk_id", "source_pk", "logical_key", "body", "semantic_input_hash"},
-    "embeddings": {"embedding_id", "model_id", "semantic_input_hash"},
-    "chunk_embeddings": {"chunk_id", "embedding_id"},
-    "assets": {"asset_id", "source_pk", "asset_path", "sha256"},
-}
-
 _REQUIRED_OBJECTS = {
     "table": {*ORDINARY_TABLES, "chunks_fts", "embedding_vectors"},
     "index": {
@@ -231,13 +199,6 @@ def _validate_schema_objects(conn: sqlite3.Connection) -> None:
                 raise IncompatibleDatabaseError(
                     f"schema v{SCHEMA_VERSION} is missing required {object_type} {name}"
                 )
-    for table, required_columns in sorted(_REQUIRED_COLUMNS.items()):
-        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-        missing = required_columns - columns
-        if missing:
-            raise IncompatibleDatabaseError(
-                f"schema v{SCHEMA_VERSION} table {table} is missing required column(s) {', '.join(sorted(missing))}"
-            )
 
 
 _DDL = """
