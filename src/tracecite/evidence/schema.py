@@ -37,6 +37,8 @@ CHUNKER_VERSION = "4"
 
 NORMALISATION_VERSION = "1"
 
+# A database keeps the embedding model it was built with; changing the model,
+# revision, or dimensions needs a SCHEMA_VERSION bump so old databases are rebuilt.
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 EMBEDDING_DIMENSIONS = 384
@@ -408,23 +410,6 @@ def load_config(conn: sqlite3.Connection) -> KnowledgeBaseConfig:
 
 def touch_config(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE kb_config SET updated_at_utc = ? WHERE id = 1", (utc_now(),))
-
-
-def activate_embedding_config(
-    conn: sqlite3.Connection,
-    *,
-    embedding_model: str,
-    embedding_revision: str,
-    embedding_dimensions: int,
-) -> None:
-    conn.execute(
-        """
-        UPDATE kb_config
-        SET embedding_model = ?, embedding_revision = ?, embedding_dimensions = ?, updated_at_utc = ?
-        WHERE id = 1
-        """,
-        (embedding_model, embedding_revision, embedding_dimensions, utc_now()),
-    )
 
 
 def imgs_dir(database_path: Path) -> Path:

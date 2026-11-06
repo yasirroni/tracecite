@@ -490,10 +490,6 @@ def sync(
                 f"embedding dimensions {schema.EMBEDDING_DIMENSIONS} are incompatible with schema v{config.schema_version} "
                 f"database dimensions {config.embedding_dimensions}"
             )
-        active_config_changed = (
-            schema.EMBEDDING_MODEL != config.embedding_model
-            or schema.EMBEDDING_REVISION != config.embedding_revision
-        )
         model_id = schema.embedding_model_id(
             schema.EMBEDDING_MODEL, schema.EMBEDDING_REVISION
         )
@@ -680,13 +676,7 @@ def sync(
         )
         report.embeddings_generated = len(hash_to_vector)
 
-        if not (
-            plans
-            or hint_updates
-            or renames
-            or reembed_only_chunks
-            or active_config_changed
-        ):
+        if not (plans or hint_updates or renames or reembed_only_chunks):
             return report
 
         rendered_assets: dict[str, list] = {}
@@ -880,12 +870,6 @@ def sync(
                 raise _SourceChangedDuringSync
 
             schema.touch_config(conn)
-            schema.activate_embedding_config(
-                conn,
-                embedding_model=schema.EMBEDDING_MODEL,
-                embedding_revision=schema.EMBEDDING_REVISION,
-                embedding_dimensions=schema.EMBEDDING_DIMENSIONS,
-            )
             conn.execute("COMMIT")
         except Exception:
             with contextlib.suppress(sqlite3.Error):

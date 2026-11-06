@@ -713,49 +713,6 @@ def test_source_changes_mid_embedding_aborts(
     conn.close()
 
 
-def test_embedding_model_change_invalidates_only_relevant_cache(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
-):
-    embedder = make_embedder()
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
-
-    conn = schema.connect(database_path)
-    original_model_id = schema.embedding_model_id()
-    original_embedding_count = conn.execute(
-        "SELECT count(*) FROM embeddings WHERE model_id = ?", (original_model_id,)
-    ).fetchone()[0]
-    conn.close()
-    assert original_embedding_count == 2
-
-    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "fake-revision-2")
-    # Reuse the same warm underlying model (revision differs only in label
-    # for this test) so no network access is required.
-    new_embedder = make_embedder()
-    report = sync_module.sync(
-        corpus_dir,
-        manifest_path,
-        database_path,
-        embedder=new_embedder,
-    )
-    # Nothing about the source, parse, or chunks changed -- only the active
-    # embedding model's cache coverage -- so no reparse/rechunk is recorded.
-    assert report.sources_reparsed == []
-    assert report.sources_rechunked == []
-    assert report.embeddings_generated == 2
-
-    conn = schema.connect(database_path)
-    old_count = conn.execute(
-        "SELECT count(*) FROM embeddings WHERE model_id = ?", (original_model_id,)
-    ).fetchone()[0]
-    new_count = conn.execute(
-        "SELECT count(*) FROM embeddings WHERE model_id = ?",
-        (schema.embedding_model_id(revision="fake-revision-2"),),
-    ).fetchone()[0]
-    conn.close()
-    assert old_count == 2  # untouched, not deleted
-    assert new_count == 2  # generated fresh for the new model
-
-
 def test_bad_embedding_dimension_rejected_before_database_writes(
     one_pdf_corpus, manifest_path, corpus_dir, database_path
 ):
@@ -773,73 +730,15 @@ def test_bad_embedding_dimension_rejected_before_database_writes(
         assert conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0] == 0
 
 
-def test_cached_model_reactivation_commits_even_without_vector_work(
-    one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
-):
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
-    original_id = schema.embedding_model_id()
-    with monkeypatch.context() as patch:
-        patch.setattr(schema, "EMBEDDING_REVISION", "revision-b")
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-    with closing(schema.connect(database_path)) as conn:
-        assert schema.load_config(conn).embedding_model_id == schema.embedding_model_id(
-            revision="revision-b"
-        )
-        original_count = conn.execute(
-            "SELECT count(*) FROM embeddings WHERE model_id = ?", (original_id,)
-        ).fetchone()[0]
-    assert original_count > 0
-
-    report = sync_module.sync(
-        corpus_dir, manifest_path, database_path, embedder=make_embedder()
-    )
-    assert report.embeddings_generated == 0
-    with closing(schema.connect(database_path)) as conn:
-        assert schema.load_config(conn).embedding_model_id == original_id
-
-
-def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
+def test_incompatible_embedding_dimensions_are_rejected_before_vector_writes(
     one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder, monkeypatch
 ):
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
     with closing(schema.connect(database_path)) as conn:
         before_config = dict(conn.execute("SELECT * FROM kb_config").fetchone())
-        before_embeddings = [
-            dict(row)
-            for row in conn.execute(
-                "SELECT * FROM embeddings ORDER BY embedding_id"
-            ).fetchall()
-        ]
         before_vectors = conn.execute(
             "SELECT count(*) FROM embedding_vectors"
         ).fetchone()[0]
-
-    def fail_activation(*args, **kwargs):
-        raise RuntimeError("activation failed after vectors")
-
-    monkeypatch.setattr(
-        sync_module.schema, "activate_embedding_config", fail_activation
-    )
-    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "failed-revision")
-    with pytest.raises(RuntimeError):
-        sync_module.sync(
-            corpus_dir, manifest_path, database_path, embedder=make_embedder()
-        )
-
-    with closing(schema.connect(database_path)) as conn:
-        assert dict(conn.execute("SELECT * FROM kb_config").fetchone()) == before_config
-        assert [
-            dict(row)
-            for row in conn.execute(
-                "SELECT * FROM embeddings ORDER BY embedding_id"
-            ).fetchall()
-        ] == before_embeddings
-        assert (
-            conn.execute("SELECT count(*) FROM embedding_vectors").fetchone()[0]
-            == before_vectors
-        )
 
     def fail_if_called(*args, **kwargs):
         raise AssertionError(
@@ -849,7 +748,6 @@ def test_activation_failure_rolls_back_new_vectors_and_keeps_old_config(
     monkeypatch.setattr(
         sync_module.vector_backend.SqliteVecBackend, "upsert", fail_if_called
     )
-    monkeypatch.setattr(schema, "EMBEDDING_REVISION", "new-revision")
     monkeypatch.setattr(schema, "EMBEDDING_DIMENSIONS", 3)
     with pytest.raises(SyncError):
         sync_module.sync(
