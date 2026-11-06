@@ -939,7 +939,7 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
 ):
     """A figure crop with a caption directly above it must get that caption
     threaded into the ``assets.nearby_text`` column through the normal sync
-    path, while ``ocr_text``/``visual_description`` stay ``NULL``."""
+    path."""
 
     import pymupdf
 
@@ -972,14 +972,12 @@ def test_sync_figure_crop_nearby_text_lands_in_assets_table(
 
     with closing(schema.connect(database_path)) as conn:
         rows = conn.execute(
-            "SELECT asset_type, nearby_text, ocr_text, visual_description FROM assets "
+            "SELECT asset_type, nearby_text FROM assets "
             "JOIN sources USING (source_pk) WHERE sources.path = 'figure.pdf' AND asset_type = 'figure-crop'"
         ).fetchall()
         assert rows
         assert rows[0]["nearby_text"] is not None
         assert "Figure 1" in rows[0]["nearby_text"]
-        assert rows[0]["ocr_text"] is None
-        assert rows[0]["visual_description"] is None
 
 
 def test_add_mutation_after_begin_with_restored_metadata_aborts_and_repairs(

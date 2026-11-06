@@ -1106,14 +1106,12 @@ def _persist_assets(
                 json.dumps(asset.bbox) if asset.bbox else None,
             )
         )
-    # NOTE: caption, ocr_text and visual_description are always NULL; OCR
-    # fallback writes page and chunk text only.
     conn.executemany(
         """
         INSERT INTO assets (
             asset_id, source_pk, physical_page, asset_path, sha256, width, height,
-            asset_type, label, caption, nearby_text, ocr_text, visual_description, bbox_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?)
+            asset_type, label, nearby_text, bbox_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows,
     )

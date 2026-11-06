@@ -220,9 +220,6 @@ CREATE TABLE sources (
     source_pk INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL UNIQUE,
     source_type TEXT NOT NULL,
-    language TEXT,
-    canonical_url TEXT,
-    capture_manifest_ref TEXT,
     sha256 TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,
     mtime_ns INTEGER NOT NULL,
@@ -313,10 +310,7 @@ CREATE TABLE assets (
     height INTEGER,
     asset_type TEXT NOT NULL,
     label TEXT,
-    caption TEXT,
     nearby_text TEXT,
-    ocr_text TEXT,
-    visual_description TEXT,
     bbox_json TEXT
 );
 CREATE INDEX assets_sourcepk_page_idx ON assets(source_pk, physical_page);

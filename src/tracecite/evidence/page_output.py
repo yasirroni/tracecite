@@ -39,7 +39,6 @@ def _asset_payload(database_path: Path, asset_row) -> dict:
         "width": asset_row["width"],
         "height": asset_row["height"],
         "label": asset_row["label"],
-        "caption": asset_row["caption"],
         "nearby_text": asset_row["nearby_text"],
         "bbox": bbox,
     }
