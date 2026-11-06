@@ -17,8 +17,7 @@ and stable identifiers for retrieval.
 # %%
 #| label: dirty-dataframe-setup
 import pandas as pd
-
-from tracecite.tables import computed_first_row_summary, knowledge_table
+from tracecite_docs.tables import computed_first_row_summary, knowledge_table
 
 dirty_table = pd.DataFrame(
     {
@@ -133,7 +132,7 @@ print(computed_first_row_summary(dirty_table, columns=["status"]))
 
 from datetime import date
 
-from tracecite.tables import TableContext, normalise_pandoc_table
+from tracecite_docs.tables import TableContext, normalise_pandoc_table
 
 minimal = normalise_pandoc_table(
     knowledge_table(dirty_table, table_id="dirty-dataframe-python-minimal"),

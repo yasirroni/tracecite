@@ -17,19 +17,19 @@
       "source": "docs/examples/literate_documenter/index.md"
     },
     "examples/python/dirty_dataframe.py": {
-      "sha256": "e035353fb8628f499097dd9c5e7e232e26745db1475ddf2d321b49ff221bdd62",
+      "sha256": "2066219b1d96430d85abfc180a0d19e2e0bca63905e0878d553f87840e4bcba3",
       "source": "docs/examples/python/dirty_dataframe.py"
     },
     "examples/python/hottest_temperature.py": {
-      "sha256": "c2a3f54f98931bd6478ea238e428b098258788ec02e14d934fee40d6c9697cdd",
+      "sha256": "6105f47a70fa6f616e5330b126424c876a1b90809632fe587acd82be2a11bea9",
       "source": "docs/examples/python/hottest_temperature.py"
     },
     "examples/python/quarto_code_visibility.py": {
-      "sha256": "7bdfe7db37946bdf40121777df726ac0cb74ccd1461ee2ad216c514d95100a4f",
+      "sha256": "c3b3da8b15528daa8d303020ee79e35c2028512a49f76c2c0e565666a2714f75",
       "source": "docs/examples/python/quarto_code_visibility.py"
     },
     "examples/report-adoption/aemo-isp-comparison/index.md": {
-      "sha256": "05cc3fda2199428296fd86973dab7cb050ee5554b08847d5c12a5b980d388ce7",
+      "sha256": "725913501e77033f964b36b17310531e2c0f14fec4039133805dac76beccf330",
       "source": "docs/examples/report-adoption/aemo-isp-comparison/index.md"
     },
     "examples/report-adoption/aemo-isp-comparison/public/report.md": {
@@ -45,11 +45,11 @@
       "source": "docs/examples/workbook-vector-search/sources/aemo/2023-iasr-ev-workbook.xlsx"
     },
     "formats/diagnostics.md": {
-      "sha256": "1d17977d4a986aae261489e75bb20f49030b1e4ae0f239be9949d190adf076f8",
+      "sha256": "cea39bbad58cceff7e8991ff02180d2e10d329e90c02746b7971174b94960e4e",
       "source": "docs/formats/diagnostics.md"
     },
     "formats/html-documenter.md": {
-      "sha256": "3ee5dda720eb1b92b34a67e538b02844e793e8dafee8b3747aaa23e294982816",
+      "sha256": "5c09efbcc6e90b4e4b98bc05ac37b790757d1a4c203a731e590c4f7e5ed7f560",
       "source": "docs/formats/html-documenter.md"
     },
     "formats/pandoc-tables.md": {
@@ -57,7 +57,7 @@
       "source": "docs/formats/pandoc-tables.md"
     },
     "guide/api.md": {
-      "sha256": "4842cc9f5714e1af3774f2b2a3659da79f276a8fd90af16a55db85d068fbc946",
+      "sha256": "a6b7c76e082f41c9688ad4569bada8375f6ad5bc3bd4ce180bb418c56c547d86",
       "source": "docs/guide/api.md"
     },
     "guide/architecture.md": {
@@ -65,7 +65,7 @@
       "source": "docs/guide/architecture.md"
     },
     "guide/embedding-site.md": {
-      "sha256": "8498d350df2e84f5d40f36b483c984d31efd5b3e2565ba2eeceec98d8f8b3a65",
+      "sha256": "0c45810046eb255e24336707373e972a55d892572bc02d65ec0d88d85fe3f1ab",
       "source": "docs/guide/embedding-site.md"
     },
     "guide/repository_layout.py": {
@@ -73,11 +73,11 @@
       "source": "docs/guide/repository_layout.py"
     },
     "guide/searchable-evidence.md": {
-      "sha256": "f8380454e9aab39d67b9208a86745ae3bb43740038bc1d3d12ab7c042f66e5d5",
+      "sha256": "bf483b9c2f8341c69339c008c0bb3481cf1b98d67d6a175ceed8620414b37abf",
       "source": "docs/guide/searchable-evidence.md"
     },
     "index.md": {
-      "sha256": "58dcc3ddb9db76b4a45e0f6da7c84500910aa63efbdebb4365faf4d8d893472c",
+      "sha256": "01bd254f3e52b63b06ec89c2b34eb983b7780dfe149fc91d372265ccd4c32e0d",
       "source": "docs/index.md"
     }
   },

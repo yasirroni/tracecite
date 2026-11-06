@@ -2,10 +2,16 @@
 title: "Python API and CLI"
 ---
 
+Table normalisation and the documentation builder are in the `tracecite-docs` package:
+
+```bash
+pip install tracecite-docs
+```
+
 ## Core function
 
 ```python
-from tracecite.tables import normalise_pandoc_table
+from tracecite_docs.tables import normalise_pandoc_table
 
 table = normalise_pandoc_table(markdown_table)
 print(table.normalised_text)
@@ -28,7 +34,7 @@ The result contains:
 ## HTML adapter
 
 ```python
-from tracecite.tables import normalise_html_table
+from tracecite_docs.tables import normalise_html_table
 
 table = normalise_html_table(documenter_html)
 ```
@@ -38,7 +44,7 @@ The HTML adapter expands row and column spans, records diagnostics, preserves th
 ## Whole-document extraction
 
 ```python
-from tracecite.tables import normalise_document_tables
+from tracecite_docs.tables import normalise_document_tables
 
 tables = normalise_document_tables(
     markdown,
@@ -50,10 +56,10 @@ tables = normalise_document_tables(
 ## CLI
 
 ```bash
-tracecite table normalise table.md --to text
-tracecite table normalise table.html --from html --to debug-markdown
-tracecite document normalise report.md --to jsonl
-tracecite check docs/build
+tracecite-docs table normalise table.md --to text
+tracecite-docs table normalise table.html --from html --to debug-markdown
+tracecite-docs document normalise report.md --to jsonl
+tracecite-docs table check docs/build
 ```
 
 Pandoc is authoritative. `--allow-pipe-fallback` is an explicit reduced mode for ordinary pipe tables when neither standalone Pandoc nor Quarto's bundled Pandoc is available.
@@ -63,9 +69,9 @@ Pandoc is authoritative. `--allow-pipe-fallback` is an explicit reduced mode for
 For a repository with Quarto sources, the automatic builder is:
 
 ```bash
-uv run tracecite docs build docs
-uv run tracecite docs build docs --only python
-uv run tracecite docs build docs --only julia
+uv run tracecite-docs build docs
+uv run tracecite-docs build docs --only python
+uv run tracecite-docs build docs --only julia
 ```
 
 It discovers configured render inputs and performs Quarto execution, retained
@@ -73,7 +79,7 @@ Markdown staging, and optional inspection export. Use the direct `prepare`
 command below when a site has already been rendered and staged.
 
 ```bash
-tracecite prepare docs/build \
+tracecite-docs prepare docs/build \
   --project-config docs/_quarto.yml \
   --project-profile python \
   --source-project docs \

@@ -48,14 +48,14 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          uv sync --locked --extra docs
+          uv sync --locked
           julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 
       - name: Build documentation
         shell: bash
         run: |
           set -euxo pipefail
-          uv run tracecite docs build docs
+          uv run tracecite-docs build docs
           test -f docs/build/index.html
 
       - name: Deploy to GitHub Pages

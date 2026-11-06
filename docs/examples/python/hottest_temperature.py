@@ -16,8 +16,7 @@ canonical and normalised retrieval representations.
 # %%
 #| label: hottest-temperature-setup
 import pandas as pd
-
-from tracecite.tables import knowledge_table
+from tracecite_docs.tables import knowledge_table
 
 weather_events = pd.DataFrame(
     {
@@ -95,7 +94,11 @@ text that the evidence index embeds; it is not an embedding vector.
 #| label: hottest-temperature-debug-inspection
 #| output: asis
 
-from tracecite.tables import TableContext, normalise_pandoc_table, render_debug_markdown
+from tracecite_docs.tables import (
+    TableContext,
+    normalise_pandoc_table,
+    render_debug_markdown,
+)
 
 normalised = normalise_pandoc_table(
     ranked_markdown,
@@ -116,9 +119,9 @@ The equivalent public commands use the product terms `debug-markdown`,
 `embedding-markdown`, and the `embedding inspection site`:
 
 ```sh
-tracecite table normalise table.md --to debug-markdown
-tracecite document normalise report.md --to embedding-markdown
-tracecite prepare docs/build \
+tracecite-docs table normalise table.md --to debug-markdown
+tracecite-docs document normalise report.md --to embedding-markdown
+tracecite-docs prepare docs/build \
   --keep-embedding-markdown .tracecite/embedding-site \
   --render-embedding-site
 ```

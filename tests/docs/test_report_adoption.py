@@ -16,8 +16,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
-
-from tracecite.docs import (
+from tracecite_docs.docs import (
     author_docs,
     check_docs,
     doctor_docs_index,
@@ -26,6 +25,7 @@ from tracecite.docs import (
     search_docs_index,
     sync_docs_index,
 )
+
 from tracecite.evidence import schema
 
 EXAMPLE_ROOT = (
