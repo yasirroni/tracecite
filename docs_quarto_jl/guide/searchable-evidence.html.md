@@ -58,11 +58,11 @@ builder copies those files into `docs/build/` for the inspection site. Retained
 Markdown is committed; ordinary HTML, `docs/build/`, Quarto caches, and
 `.tracecite/` are disposable.
 
-In this repository, `tracecite docs build docs` owns the generic build
+In this repository, `tracecite-docs build docs` owns the generic build
 orchestration: configured-input discovery, automatic or explicit language
 selection, Quarto execution, retained-Markdown staging, inspection export, and
 freshness checks. Use `--only python` or `--only julia` for explicit reduced
-builds. An external project can run `tracecite prepare` directly after its
+builds. An external project can run `tracecite-docs prepare` directly after its
 Quarto render.
 
 See `docs/examples/report-adoption/aemo-isp-comparison/` for a complete, real
@@ -95,7 +95,7 @@ normalised retrieval text, and row records together. It is an inspection text
 representation, not a vector.
 
 ```bash
-tracecite document normalise report.md --to jsonl
+tracecite-docs document normalise report.md --to jsonl
 ```
 
 ### Synchronise

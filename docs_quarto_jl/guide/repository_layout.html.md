@@ -107,10 +107,8 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   └── render_repository_tree.py
 ├── src/
 │   ├── tracecite/
-│   │   ├── docs/
 │   │   ├── evidence/
 │   │   ├── skills/
-│   │   ├── tables/
 │   │   ├── __init__.py
 │   │   ├── __main__.py
 │   │   └── cli.py
@@ -119,13 +117,7 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   ├── docs/
 │   │   ├── __init__.py
 │   │   ├── conftest.py
-│   │   ├── test_config.py
-│   │   ├── test_contract.py
-│   │   ├── test_docs_cli.py
-│   │   ├── test_modes.py
-│   │   ├── test_report_adoption.py
-│   │   ├── test_stage.py
-│   │   └── test_vectorize.py
+│   │   └── test_report_adoption.py
 │   ├── evidence/
 │   │   ├── conftest.py
 │   │   ├── test_asset_generations.py
@@ -151,15 +143,11 @@ TraceCite keeps implementation, tests, build tools, and published documentation 
 │   │   ├── test_verify.py
 │   │   └── test_workbook.py
 │   ├── fixtures/
-│   │   ├── docs-vector/
-│   │   ├── publish-only/
 │   │   └── sample-report.md
 │   ├── test_bootstrap_docs.py
 │   ├── test_build_docs.py
-│   ├── test_docs.py
 │   ├── test_repository_tree.py
 │   ├── test_skills.py
-│   ├── test_tables.py
 │   └── test_version.py
 ├── LICENSE
 ├── Project.toml
