@@ -578,7 +578,7 @@ def sync(
         plans: list[_SourcePlan] = []
         hint_updates: list[tuple[int, int, str]] = []  # (size, mtime, path)
         # (chunk_id, semantic_input_hash) pairs needing only a fresh embedding
-        # mapping: the embedding model changed but the source did not.
+        # mapping: chunks of an unchanged source that lack an active-model embedding.
         reembed_only_chunks: list[tuple[str, str]] = []
         pending_embeddings: dict[str, str] = {}  # semantic_input_hash -> body text
 
