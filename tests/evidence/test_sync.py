@@ -16,7 +16,7 @@ from conftest import (
     write_manifest,
 )
 
-from tracecite.evidence import chunking, schema
+from tracecite.evidence import chunking, schema, vector_backend
 from tracecite.evidence import sync as sync_module
 from tracecite.evidence.parsers.base import ParsedChunkUnit
 from tracecite.evidence.sync import SyncError, SyncOptions
@@ -598,26 +598,37 @@ def test_single_chunk_edit_reembeds_only_that_chunk(
     assert len(embedder.calls[-1]) == 1  # exactly one chunk re-embedded
 
 
-def test_changed_content_retains_orphan_embeddings_until_prune(
+def test_sync_and_prune_delete_embeddings_left_without_a_chunk(
     corpus_dir, manifest_path, database_path, make_embedder
 ):
+    # A smaller chunk limit splits this section, so its old chunk text, and
+    # that text's embedding, no longer belong to any chunk.
     build_pdf(
         corpus_dir / "doc.pdf",
-        [["Alpha", "The original semantic content has one unique embedding row."]],
+        [
+            [
+                "Alpha",
+                "The first paragraph of this section has its own sentence.",
+                "The second paragraph of this section has another sentence.",
+            ]
+        ],
     )
     write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
     embedder = make_embedder()
     sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
-
-    build_pdf(
-        corpus_dir / "doc.pdf",
-        [["Alpha", "The edited semantic content must create a second embedding row."]],
+    report = sync_module.sync(
+        corpus_dir,
+        manifest_path,
+        database_path,
+        options=SyncOptions(max_chunk_chars=40),
+        embedder=embedder,
     )
-    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=embedder)
+    assert report.sources_rechunked == ["doc.pdf"]
 
+    unlinked = "SELECT count(*) FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
     with closing(schema.connect(database_path)) as conn:
-        assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 2
-        assert conn.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0] == 1
+        assert conn.execute(unlinked).fetchone()[0] == 0
+        assert vector_backend.SqliteVecBackend().integrity_check(conn) == []
         plan = sync_module.plan_prune(conn, selected_paths=[])
         sync_module.apply_prune(conn, database_path, plan)
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 0

@@ -132,6 +132,21 @@ def test_search_percentage_text_falls_back_without_changing_vector_query(
     assert capsys.readouterr().err  # fallback note emitted; wording not pinned
 
 
+def test_lexical_search_matches_the_words_of_a_query_fts5_cannot_parse(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    _sync_corpus(corpus_dir, manifest_path, database_path, make_embedder())
+    with closing(schema.connect(database_path)) as conn:
+        for query in (
+            "coal-plant",
+            "retirement: dates",
+            'coal "plant',
+            "retirement (coal)?",
+        ):
+            results = hybrid_search(conn, query, 5, 50, 50, None)
+            assert any("Retirement" in r["heading_path"] for r in results), query
+
+
 def test_fts_fallback_does_not_swallow_unrelated_sqlite_errors():
     class BrokenConnection:
         def execute(self, statement, parameters):

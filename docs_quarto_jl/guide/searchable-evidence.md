@@ -127,7 +127,7 @@ tracecite sync \
 
 Embedding is an internal synchronisation stage rather than a separate public command.
 TraceCite generates vectors only for semantic inputs that are missing from the active model's cache.
-A model-only change can add the new model's vector coverage without reparsing source files, and `--reembed` forces embedding regeneration when required.
+A database keeps the embedding model it was built with, so changing the model needs a fresh database. `--reembed` forces embedding regeneration when required.
 
 ## What becomes searchable
 

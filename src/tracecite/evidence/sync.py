@@ -578,7 +578,7 @@ def sync(
         plans: list[_SourcePlan] = []
         hint_updates: list[tuple[int, int, str]] = []  # (size, mtime, path)
         # (chunk_id, semantic_input_hash) pairs needing only a fresh embedding
-        # mapping: the embedding model changed but the source did not.
+        # mapping: chunks of an unchanged source that lack an active-model embedding.
         reembed_only_chunks: list[tuple[str, str]] = []
         pending_embeddings: dict[str, str] = {}  # semantic_input_hash -> body text
 
@@ -865,6 +865,7 @@ def sync(
                     chunk_id,
                     semantic_input_hash,
                 )
+            _delete_unlinked_embeddings(conn)
 
             if not _observed_sources_match(observed_states):
                 raise _SourceChangedDuringSync
@@ -980,16 +981,13 @@ def apply_prune(
 def _apply_prune(
     conn: sqlite3.Connection, database_path: Path, plan: tuple[str, ...]
 ) -> list[str]:
-    backend = vector_backend.SqliteVecBackend()
     conn.execute("BEGIN IMMEDIATE")
     try:
         pruned_asset_targets = validate_prune_plan(conn, database_path, plan)
         conn.executemany(
             "DELETE FROM sources WHERE path = ?", [(path,) for path in plan]
         )
-        orphans = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
-        backend.delete(conn, [row["embedding_id"] for row in conn.execute(orphans)])
-        conn.execute(f"DELETE FROM embeddings WHERE embedding_id IN ({orphans})")
+        _delete_unlinked_embeddings(conn)
         schema.touch_config(conn)
         conn.execute("COMMIT")
     except Exception:
@@ -1025,6 +1023,14 @@ def _apply_prune(
     except sqlite3.Error as exc:
         leaks.append(f"failed to vacuum the database after pruning: {exc}")
     return leaks
+
+
+def _delete_unlinked_embeddings(conn: sqlite3.Connection) -> None:
+    orphans = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
+    vector_backend.SqliteVecBackend().delete(
+        conn, [row["embedding_id"] for row in conn.execute(orphans)]
+    )
+    conn.execute(f"DELETE FROM embeddings WHERE embedding_id IN ({orphans})")
 
 
 def _ensure_embedding(

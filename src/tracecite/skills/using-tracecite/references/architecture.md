@@ -1,68 +1,63 @@
 # Architecture
 
+Read this before changing TraceCite itself.
+
 ## Module layout
 
 ```text
 tracecite/
-  pyproject.toml, uv.lock              # locked dependency truth
+  pyproject.toml, uv.lock   # locked dependency truth
   src/tracecite/
-    __init__.py
     cli.py                  # command parser and router for every subcommand
+    __main__.py             # python -m tracecite
+    skills/                 # bundled agent skills, copied by `tracecite skills install`
     evidence/
       commands.py           # sync, search, page, extract-pages, verify, prune, doctor
+      config.py             # profile TOML loading
+      manifest.py           # [[source]]/[[include]]/[[exclude]] rules and source selection
+      paths.py              # root-relative path normalisation and file hashing
       parsers/
-        base.py             # ParsedPage / ParsedChunkUnit / units_from_layout
-        pdf.py              # PyMuPDF-backed extraction, page render, figure crops
+        base.py             # ParsedPage, ParsedChunkUnit, ParseResult, units_from_layout
+        pdf.py              # PyMuPDF extraction with OCR fallback, page render, figure crops
         markdown.py
         workbook.py         # OOXML worksheet and A1-range extraction
-      chunking.py           # greedy char-budget grouping, normalisation, hashing
-      schema.py             # versioned schema + path-keyed sources + connect/ensure_schema
-      sync.py               # the whole incremental synchronisation lifecycle
-      vector_backend.py     # SqliteVecBackend: all vec0 SQL
-      page_selection.py     # physical PDF page selector grammar
-      page_output.py        # validated PDF page/crop result payloads
+      chunking.py           # character-budget grouping, normalisation, hashing
+      embedding.py          # sentence-transformers embedding model
+      schema.py             # versioned schema, connect, ensure_schema
+      sync.py               # incremental synchronisation and prune apply
+      vector_backend.py     # SqliteVecBackend: all vec0 queries
+      page_selection.py     # physical page selector grammar
+      page_output.py        # validated page and crop result payloads
       page_extraction.py    # selected-page derivative PDFs and manifests
-      verify.py             # verify quote / verify report
-  tests/                   # pytest coverage for package and CLI behaviour
-  fixtures/                # stable test fixtures
+      source_links.py       # schema-v3 source-link registry
+      verify.py             # verify quote, verify report
+  tests/                    # pytest suite; fixtures in tests/fixtures/
 ```
-
-Install the package and use the `tracecite` console script. There is no supported old-name package or command shim.
 
 ## Layering
 
 ```text
-parsers/{pdf,markdown,workbook}.py -- format-specific extraction only, no SQL
+parsers/{pdf,markdown,workbook}.py  -- format-specific extraction, no SQL
         |
-chunking.py                 -- format-agnostic grouping + identity hashing, no SQL
+chunking.py                         -- format-agnostic grouping and identity hashing, no SQL
         |
-sync.py                      -- the only place that opens a write transaction
+sync.py                             -- the only module that writes evidence rows
         |
-schema.py + vector_backend.py -- the only places that know SQL/vec0 syntax
+vector_backend.py                   -- the only module that queries vec0 (schema.py creates the table)
 ```
 
-- `commands.py` and `sync.py` reach vectors only through `SqliteVecBackend` (`upsert`, `delete`,
-  `search`, `integrity_check`), never through vec0 virtual-table SQL directly.
-- `pages` rows (see `references/schema-and-migrations.md`) are the retained parser output. A
-  chunker- or normalisation-only change rebuilds chunk-input units straight from `pages.layout_json`
-  (`pdf.units_from_page_layout` for PDFs, `base.units_from_layout` for Markdown and workbooks)
-  without reopening the source file — see `references/synchronisation.md`.
+- `commands.py` and `sync.py` reach vectors only through `SqliteVecBackend` (`upsert`, `delete`, `search`, `integrity_check`).
+- `pages` rows are the retained parser output. A chunker- or normalisation-only change rebuilds chunk units from `pages.layout_json` (`pdf.units_from_page_layout` for PDFs, `base.units_from_layout` for Markdown and workbooks) without reopening the source file.
 
-## Explicit-input contract
+## Package rules
 
-The CLI never infers a project checkout. Commands that touch a corpus take `--root`, one or more `--manifest` values, `--database`, and `--model-cache-dir` explicitly, or receive those values from an explicitly named profile. Read-only commands such as `search`, `page`, `verify quote`, `verify report`, and `doctor` use the database plus the path/page arguments they need. A host bootstrap may supply defaults, but the package remains repository-neutral.
+- The CLI never infers a project checkout. Corpus commands take `--root`, `--manifest`, `--database`, and `--model-cache-dir`, or a named profile. Read-only commands need only the database and their path and page arguments. A host may supply defaults, but the package stays repository-neutral.
+- Do not add aliases for old package or command names.
+- Help commands stay lightweight. They must not import or touch parsers, PDF or OCR code, embeddings, sqlite-vec, manifests, databases, projects, caches, or the network.
 
 ## Out of scope by design (do not reintroduce)
 
-- An approximate-nearest-neighbour index. Retrieval does an exact k-NN scan through
-  `SqliteVecBackend`; see `references/retrieval.md` for why and how bounded filters still work
-  without one.
-- A second document store (JSONL, a `document.json` per file, LanceDB, DuckDB as the live index).
-  `pages`/`chunks` in `tracecite.sqlite` are the only retained parsed representation.
-- Deterministic hash vectors as a stand-in for real semantic embeddings.
-- OCR, code/notebook/YAML/JSON parser adapters, and a Rust extension/sidecar — all explicitly
-  deferred until a representative fixture proves the pure-Python/PyMuPDF/sqlite path is
-  insufficient. `parsers/base.py`'s `Parser` protocol is the seam for adding an adapter later.
-- A ChatGPT `skill-creator`/`init_skill.py`/`package_skill.py` packaging step — this repository uses
-  its own `writing-a-skill` and `auditing-a-skill` checks plus a plain deterministic zip instead
-  (see the repository's operator guide).
+- An approximate-nearest-neighbour index. Retrieval runs exact k-NN through `SqliteVecBackend`; see `references/retrieval.md`.
+- A second document store (JSONL, a `document.json` per file, LanceDB, or DuckDB as the live index). `pages` and `chunks` in the SQLite database are the only retained parsed representation.
+- Deterministic hash vectors in place of real semantic embeddings.
+- Code, notebook, YAML, or JSON parser adapters, and a Rust extension or sidecar, until a representative fixture shows that the pure-Python, PyMuPDF, and SQLite path is not enough. A new adapter returns a `ParseResult` from `parsers/base.py` and is registered in `sync._parser`.
