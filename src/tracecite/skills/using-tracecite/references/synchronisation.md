@@ -33,7 +33,7 @@ keeps its rows and is listed in `selected_missing_paths` or `indexed_unselected_
 | Parser metadata changed (even with byte-identical file) | Reparse and rechunk that source |
 | Chunker metadata changed only | Rechunk from `pages.layout_json`; the source file is never reopened |
 | Normalisation metadata changed | Renormalise/rechunk; only chunks whose semantic hash actually changed get re-embedded |
-| Embedding model, revision, or dimensions changed | Not done in place. The change bumps the schema version, and `ensure_schema()` rejects a database with an older version, so the database is rebuilt at a fresh path |
+| Embedding model, revision, or dimensions changed | Not done in place. The change requires a schema version bump, and `ensure_schema()` rejects a database with an older version, so the database is rebuilt at a fresh path |
 | Path-only rename or manifest path change with matching content | Update the normalised `path` and locator hints while preserving the internal source key when the match is unambiguous |
 | Unambiguous same-hash path replacement | Preserve chunks/embeddings where possible; public evidence identity remains the normalised path plus locator |
 | Modification time only, hash confirms unchanged | No reparse/rechunk/re-embed; `sources.size_bytes/mtime_ns` are still refreshed as hints |
