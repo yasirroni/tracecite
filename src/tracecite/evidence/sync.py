@@ -1028,12 +1028,16 @@ def _apply_prune(
     return leaks
 
 
+_UNLINKED_EMBEDDINGS = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
+
+
 def _delete_unlinked_embeddings(conn: sqlite3.Connection) -> None:
-    orphans = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
     vector_backend.SqliteVecBackend().delete(
-        conn, [row["embedding_id"] for row in conn.execute(orphans)]
+        conn, [row["embedding_id"] for row in conn.execute(_UNLINKED_EMBEDDINGS)]
     )
-    conn.execute(f"DELETE FROM embeddings WHERE embedding_id IN ({orphans})")
+    conn.execute(
+        f"DELETE FROM embeddings WHERE embedding_id IN ({_UNLINKED_EMBEDDINGS})"
+    )
 
 
 def _ensure_embedding(
@@ -1195,6 +1199,14 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
         f"chunk_embeddings references missing chunk {row['chunk_id']}"
         for row in orphan_chunk_embeddings
     ]
+    unlinked = conn.execute(
+        f"SELECT count(*) FROM ({_UNLINKED_EMBEDDINGS})"
+    ).fetchone()[0]
+    if unlinked:
+        issues.append(
+            f"{unlinked} embeddings are linked to no chunk; "
+            "`tracecite prune --apply` deletes them"
+        )
     issues += vector_backend.SqliteVecBackend().integrity_check(conn)
 
     for row in conn.execute(
