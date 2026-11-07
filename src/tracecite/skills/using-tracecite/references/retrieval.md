@@ -16,7 +16,7 @@ and `--vector-limit` are independently configurable). Each result reports `rank`
 
 ## Query recovery
 
-The query is passed unchanged to vector embedding. Valid raw FTS5 `MATCH` expressions—quoted phrases, operators, and prefix expressions—retain their lexical behavior. If FTS5 reports its lexical syntax error, TraceCite emits a diagnostic on stderr and retries only the lexical half with the query quoted as a phrase. This permits ordinary punctuation-heavy text such as `10%, 50%, and 90%` to continue through hybrid retrieval without contaminating JSON stdout. Other SQLite errors propagate unchanged; the fallback is not a general query sanitizer.
+The query is passed unchanged to vector embedding. Valid FTS5 `MATCH` expressions, such as quoted phrases, `OR`, `NOT`, and prefix expressions like `retire*`, keep their lexical behaviour. When FTS5 cannot parse the query, for example `de-rating`, `heat: wind`, `10%`, or an unbalanced quote, TraceCite notes it on stderr and runs lexical search again with each whitespace-separated word quoted. A result must then contain every word, and any operators in that query are ignored. Database errors still propagate.
 
 Search results are for discovery. For PDFs, inspect `source_path`, retrieve the full physical page or neighbouring page selection with `tracecite page`, and use JSON page output to locate indexed page renders and figure crops when layout matters. Create a selected-page derivative with `tracecite extract-pages` only when the inspection tool requires PDF input. Use `tracecite verify quote` before treating wording as an exact or normalised quotation. A physical page number is the PDF page identity and may differ from the printed label.
 

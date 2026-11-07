@@ -75,7 +75,7 @@ When the package checkout and runtime environment differ, resolve them separatel
 
 The query is passed to both FTS5 `MATCH` and vector retrieval. Valid raw FTS5 expressions, including quoted phrases, boolean operators, and prefix expressions such as `retire*`, retain their normal lexical behaviour. Quote the shell argument when it contains spaces or FTS punctuation.
 
-Ordinary prose containing punctuation that FTS5 rejects, such as `10%, 50%, and 90%`, does not abort hybrid retrieval. TraceCite reports the lexical fallback on stderr, retries lexical search with a quoted query, and sends the original text to vector retrieval. The fallback is only for the identified FTS5 syntax error; unrelated SQLite errors still propagate. Because diagnostics use stderr, `--json`-compatible search output remains valid JSON on stdout.
+Punctuation that FTS5 cannot parse, such as `de-rating`, `heat: wind`, `10%`, or an unbalanced quote, does not stop search. TraceCite notes on stderr that lexical search matched each word instead, and sends the original text to vector retrieval. Because diagnostics use stderr, search output remains valid JSON on stdout.
 
 ## Boundaries
 

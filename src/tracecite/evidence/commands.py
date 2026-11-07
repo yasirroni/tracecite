@@ -193,18 +193,18 @@ def _match_rows(conn, query, fts_limit, source_types):
     """
     try:
         return conn.execute(statement, [query, *type_params, fts_limit]).fetchall()
-    except sqlite3.OperationalError as exc:
-        if not str(exc).startswith("fts5: syntax error"):
-            raise
-        fallback_query = f'"{query.replace(chr(34), chr(34) * 2)}"'
+    except sqlite3.OperationalError:
+        # FTS5 reads punctuation as query syntax: `de-rating` and `heat: wind` are
+        # column filters, and `?` or a lone `"` is a syntax error. Quoting each word
+        # always parses; a database error fails again here and propagates.
+        words = " ".join('"' + word.replace('"', '""') + '"' for word in query.split())
+        rows = conn.execute(statement, [words, *type_params, fts_limit]).fetchall()
         print(
-            "FTS5 lexical search rejected the query syntax; using a quoted lexical fallback. "
-            "Vector retrieval still uses the original query.",
+            "tracecite: the query is not valid FTS5 syntax, so lexical search "
+            "matched each word instead",
             file=sys.stderr,
         )
-        return conn.execute(
-            statement, [fallback_query, *type_params, fts_limit]
-        ).fetchall()
+        return rows
 
 
 def _cjk_substring_rows(conn, cjk_runs, limit, source_types):
