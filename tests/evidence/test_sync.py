@@ -634,6 +634,20 @@ def test_sync_and_prune_delete_embeddings_left_without_a_chunk(
         assert conn.execute("SELECT count(*) FROM embeddings").fetchone()[0] == 0
 
 
+def test_doctor_reports_embeddings_left_without_a_chunk_until_prune(
+    corpus_dir, manifest_path, database_path, make_embedder
+):
+    build_pdf(corpus_dir / "doc.pdf", [["Alpha", "Body text for one chunk."]])
+    write_manifest(manifest_path, {"doc.pdf": "doc.pdf"})
+    sync_module.sync(corpus_dir, manifest_path, database_path, embedder=make_embedder())
+    with closing(schema.connect(database_path)) as conn:
+        conn.execute("DELETE FROM chunks")
+        issues = sync_module.integrity_check(conn)
+        assert any("linked to no chunk" in issue for issue in issues)
+        sync_module.apply_prune(conn, database_path, ())
+        assert sync_module.integrity_check(conn) == []
+
+
 def test_delete_removes_chunks_fts_vectors_and_assets(
     one_pdf_corpus, manifest_path, corpus_dir, database_path, make_embedder
 ):

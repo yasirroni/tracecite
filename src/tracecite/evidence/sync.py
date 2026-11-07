@@ -294,6 +294,9 @@ def _needs_new_embedding(row: sqlite3.Row, candidate, options: SyncOptions) -> b
 def _chunks_missing_active_embedding(
     conn: sqlite3.Connection, source_pk: int, model_id: str
 ):
+    # CROSS JOIN fixes the join order. With a plain JOIN, SQLite scans every
+    # embedding of the model for each chunk, because the (model_id,
+    # semantic_input_hash) index matches all of them.
     return conn.execute(
         """
         SELECT c.chunk_id AS chunk_id, c.semantic_input_hash AS semantic_input_hash, c.body AS body
@@ -301,7 +304,7 @@ def _chunks_missing_active_embedding(
         WHERE c.source_pk = ?
         AND NOT EXISTS (
             SELECT 1 FROM chunk_embeddings ce
-            JOIN embeddings e ON e.embedding_id = ce.embedding_id
+            CROSS JOIN embeddings e ON e.embedding_id = ce.embedding_id
             WHERE ce.chunk_id = c.chunk_id AND e.model_id = ?
         )
         """,
@@ -1025,12 +1028,16 @@ def _apply_prune(
     return leaks
 
 
+_UNLINKED_EMBEDDINGS = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
+
+
 def _delete_unlinked_embeddings(conn: sqlite3.Connection) -> None:
-    orphans = "SELECT embedding_id FROM embeddings WHERE embedding_id NOT IN (SELECT embedding_id FROM chunk_embeddings)"
     vector_backend.SqliteVecBackend().delete(
-        conn, [row["embedding_id"] for row in conn.execute(orphans)]
+        conn, [row["embedding_id"] for row in conn.execute(_UNLINKED_EMBEDDINGS)]
     )
-    conn.execute(f"DELETE FROM embeddings WHERE embedding_id IN ({orphans})")
+    conn.execute(
+        f"DELETE FROM embeddings WHERE embedding_id IN ({_UNLINKED_EMBEDDINGS})"
+    )
 
 
 def _ensure_embedding(
@@ -1192,6 +1199,15 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
         f"chunk_embeddings references missing chunk {row['chunk_id']}"
         for row in orphan_chunk_embeddings
     ]
+    unlinked = conn.execute(
+        f"SELECT count(*) FROM ({_UNLINKED_EMBEDDINGS})"
+    ).fetchone()[0]
+    if unlinked:
+        issues.append(
+            f"{unlinked} embeddings are linked to no chunk; "
+            "`tracecite prune --apply` deletes them, along with the sources "
+            "that `tracecite prune` lists"
+        )
     issues += vector_backend.SqliteVecBackend().integrity_check(conn)
 
     for row in conn.execute(
