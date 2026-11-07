@@ -294,6 +294,9 @@ def _needs_new_embedding(row: sqlite3.Row, candidate, options: SyncOptions) -> b
 def _chunks_missing_active_embedding(
     conn: sqlite3.Connection, source_pk: int, model_id: str
 ):
+    # CROSS JOIN fixes the join order. With a plain JOIN, SQLite scans every
+    # embedding of the model for each chunk, because the (model_id,
+    # semantic_input_hash) index matches all of them.
     return conn.execute(
         """
         SELECT c.chunk_id AS chunk_id, c.semantic_input_hash AS semantic_input_hash, c.body AS body
@@ -301,7 +304,7 @@ def _chunks_missing_active_embedding(
         WHERE c.source_pk = ?
         AND NOT EXISTS (
             SELECT 1 FROM chunk_embeddings ce
-            JOIN embeddings e ON e.embedding_id = ce.embedding_id
+            CROSS JOIN embeddings e ON e.embedding_id = ce.embedding_id
             WHERE ce.chunk_id = c.chunk_id AND e.model_id = ?
         )
         """,
