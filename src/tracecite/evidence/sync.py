@@ -1205,7 +1205,8 @@ def integrity_check(conn: sqlite3.Connection) -> list[str]:
     if unlinked:
         issues.append(
             f"{unlinked} embeddings are linked to no chunk; "
-            "`tracecite prune --apply` deletes them"
+            "`tracecite prune --apply` deletes them, along with the sources "
+            "that `tracecite prune` lists"
         )
     issues += vector_backend.SqliteVecBackend().integrity_check(conn)
 
