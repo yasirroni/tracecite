@@ -5,93 +5,62 @@ description: Use when local PDF, Markdown, or OOXML workbook sources must be syn
 
 # Using TraceCite
 
-Synchronise an explicit local corpus into a TraceCite database with FTS5 lexical search, sqlite-vec semantic search, retained PDF-page, Markdown-line, and workbook sheet/A1 locators, generated PDF assets, quotation verification, report verification, explicit pruning, and `doctor` diagnostics.
+Sync local sources into a TraceCite SQLite database, then search, retrieve, verify, prune, and diagnose them.
 
-## When to use
+## Scope
 
-Use this skill once source files already exist on disk and an agent needs to:
+Use this skill once the sources are on disk. Do not use it to find or download sources, to write report prose (`writing-evidence-backed-reports`), or to swap local and public links (`routing-documentation-source-links`).
 
-- sync configured `.pdf`, `.md`, `.xlsx`, and `.xlsm` sources without auto-pruning unavailable content;
-- search by wording and semantic similarity;
-- retrieve PDF evidence by normalised root-relative path plus selected physical pages;
-- inspect workbook evidence through its source SHA-256, worksheet, bounding range, and exact A1 ranges;
-- verify a quotation or a Markdown report against retained source text;
-- inspect database/assets with `doctor` or run an explicit prune preview/apply.
-
-Do not use this skill for discovering or downloading sources, writing report narrative (`writing-evidence-backed-reports` owns that), or substituting local/public documentation links (`routing-documentation-source-links` owns that). This skill owns TraceCite runtime use, path/page evidence identity, synchronisation, search, verification, pruning, and diagnostics.
+Supported sources are `.pdf`, `.md`, `.xlsx`, and `.xlsm`. Legacy `.xls` is not supported. Workbook ingestion reads stored content only. It does not run VBA, recalculate formulae, refresh external data, or reproduce all Excel display formatting.
 
 ## Prerequisites
 
-- A TraceCite package and a Python environment that installs the `tracecite` console script. Installing this skill alone does not install the executable package.
-- A source root containing one or more supported `.pdf`, `.md`, `.xlsx`, or `.xlsm` files.
-- A combined TraceCite config with explicit inline `[[source]] path = ...`, `[[include]] glob = ...`, and optional `[[exclude]] glob = ...` rules. Separate `--manifest` inputs may augment those inline rules.
-- A database path and model-cache path owned by the caller. Repository-neutral callers may choose any paths.
-
-## Exact invocation
-
-Prefer the installed console script:
-
-```bash
-tracecite <command> [--config PATH] [...]
-```
-
-When the package checkout and runtime environment differ, resolve them separately and use the environment that owns the runtime artifacts; do not rely on imports from a disposable checkout.
+- The `tracecite` console script from an installed TraceCite package. This skill does not install it. `tracecite skills install [--target DIR]` copies the bundled skills into `.agents/skills/`.
+- A profile (`--config`), or explicit `--root`, `--manifest`, `--database`, and `--model-cache-dir`. Manifests select sources with `[[source]] path`, `[[include]] glob`, and `[[exclude]] glob` rules.
+- The caller owns the database and model-cache paths.
 
 ## Procedure
 
-1. **Confirm runtime and inputs.** Verify `tracecite --help`, source root, manifests/profile, database path, and model-cache path. Do not invent separate public IDs. PDF and Markdown evidence use the normalised root-relative path plus their page or line locator. Workbook evidence additionally uses the indexed source SHA-256, worksheet, and exact A1 ranges.
-2. **Sync the corpus:**
+1. **Check the runtime.** Run `tracecite --help` and confirm that the profile or source root, manifest, database, and model cache exist. If one is missing, stop and name it; do not invent a database path. Do not run a source entry module or import from an unrelated checkout in place of the installed script.
+2. **Sync.**
    ```bash
-   tracecite sync --config <config-path>
+   tracecite sync --config <config-path> [--json]
    tracecite sync path/inside/root.pdf --root <dir> --manifest <manifest.toml> --database <db> --model-cache-dir <cache>
    ```
-   Sync is incremental, idempotent, and non-pruning. Missing selected sources and indexed-but-unselected sources remain stored until explicit pruning.
-3. **Search, retrieve, and verify:**
+   Sync is incremental and idempotent. It never deletes a source: a missing or unselected source stays indexed until an explicit prune. `--full` reparses every source, `--reembed` regenerates embeddings, and `--no-assets` skips PDF renders. Status `aborted-source-changed` means a source changed during the sync; run it again.
+3. **Search, retrieve, and verify.**
    ```bash
-   tracecite search "later coal retirement" --database <db> --limit 20
-   tracecite page path/to/source.pdf 65 --database <db>
-   tracecite page path/to/source.pdf 63-66 --database <db>
-   tracecite page path/to/source.pdf 63-66 --format json --database <db>
+   tracecite search "later coal retirement" --database <db> --limit 20 [--lexical-only] [--source-type pdf]
+   tracecite page path/to/source.pdf 63-66 --database <db> [--format json]
    tracecite extract-pages path/to/source.pdf 63-66 --output-dir <dir> --database <db>
    tracecite verify quote path/to/source.pdf 65 "Exact quotation" --database <db>
    tracecite verify report docs/reports/<report>.md --root <dir> --database <db> [--source-links docs/source-links.toml --source-links-root <dir>]
-    tracecite doctor --database <db>
-    ```
-4. **Build evidence from retrieval results.** Treat search rank and fused score as candidate-discovery signals, not proof. Narrow a mixed corpus with more specific wording and by inspecting the returned `source_path`, `source_type`, and `source_sha256`; do not infer that a result is from the intended year or source merely because it ranked first. Markdown results can help locate a claim but are not external-source proof.
+   tracecite doctor --database <db>
+   ```
+   Search accepts FTS5 syntax: quoted phrases, `OR`, `NOT`, and prefixes such as `retire*`. Quote the shell argument. If FTS5 cannot parse the query (`de-rating`, `10%`, an unbalanced quote), lexical search matches every word instead and says so on stderr, so stdout stays valid JSON. `--lexical-only` skips loading the embedding model.
+4. **Turn results into evidence.**
+   - Rank and `fused_score` find candidates; they are not proof. Check `source_path`, `source_type`, and `source_sha256` before you assume a hit is from the intended source or year. Narrow a mixed corpus with more specific wording or `--source-type`. A Markdown hit can locate a claim but is not external-source proof.
+   - Read the full physical page with `tracecite page`. Read the neighbouring pages when the claim depends on a table, figure, footnote, or continuation. Selectors are `65`, `63-66`, `63-`, `-66`, comma-separated combinations, or `all` on its own; an omitted selector means page 1. Use `--format json` to get page renders and figure crops when layout matters.
+   - Do not open the whole source PDF for a page-local question; use `all` only when you mean the whole source. Use `extract-pages` only when a tool needs PDF input, with an existing output directory outside the source root.
+   - Before you quote, run `verify quote` on the physical page. `exact` matches the retained text. `normalised` is acceptable only when the wording is exact after whitespace, curly-quote, and case normalisation. `not-found` is not verification; never report it as verified. When sources conflict, keep the evidence from each and state the limitation.
+   - Cite `<source-path>#page=<N>` with the physical page, which can differ from the printed page label. Use an official publisher URL when the documentation's public-link policy gives one; otherwise label the link as local.
+   - For a workbook hit, check `locator.sheet` and `locator.exact_ranges` in the workbook. `locator.range` is a bounding rectangle and can include cells that did not contribute. `page`, `extract-pages`, `verify quote`, and PDF assets do not apply to workbooks.
+5. **Prune only on explicit request.** `tracecite prune ...` without `--apply` only previews; run it first. A normal prune needs a positive `[[source]]` or `[[include]]` selector and the source root (`--root` or the profile). Excludes only narrow the selection, and a selection with no matches is rejected. The plan covers unselected sources and selected sources whose files are gone. Use `--all` only when the user means to remove every source. Only `--apply` commits. Exit status `3` means the prune committed but file or compaction cleanup is incomplete.
+6. **Run `doctor`** after a bulk sync, a restore, or suspected corruption. Database, vector, asset, or hash issues block until resolved. `WARNING` lines about sources that changed or disappeared on disk are not integrity issues; the indexed text stays citable.
 
-   For workbook results, inspect `locator.sheet` and `locator.exact_ranges` against the indexed workbook. `locator.range` is a bounding rectangle and may include cells that did not contribute to the passage. Use a workbook viewer for cell inspection; `tracecite page`, `extract-pages`, quotation verification, and PDF assets do not apply to workbook sources.
+## Rules
 
-   For each candidate, retrieve the complete physical page with `tracecite page`. Omission selects physical page 1. Selectors accept positive pages, closed ranges (`63-66`), open ranges (`63-` or `-66`), and comma-separated combinations; overlapping terms are deduplicated in ascending physical-page order. The standalone selector `all` explicitly selects every indexed page and cannot be combined with another term.
-
-   Inspect neighbouring pages when the claim depends on a table, figure, footnote, or continuation. When layout matters, use `tracecite page ... --format json` to locate the validated indexed page render and figure crops. If a PDF derivative is required by the inspection tool, use `tracecite extract-pages` with the same selector and an existing caller-owned output directory outside the source root. Do not open the complete source PDF for a page-local question; use `all` only when complete-source inspection is intentional.
-
-   If a quotation is used, run `tracecite verify quote` against the physical page. `exact` means the quotation matches retained text; `normalised` is acceptable only when the quoted wording is exact after the tool's documented normalisation; `not-found` is not verification and must not be silently paraphrased as verified. Resolve conflicts by retaining the competing source/page evidence and stating the limitation.
-
-   Construct the final link from the returned normalised `source_path` and physical page, for example `<source-path>#page=<N>`. Use an official publisher or agency URL when the documentation's public-link policy provides one; otherwise use the local source link and label its local scope. A physical PDF page may differ from the printed page label.
-5. **Prune only on explicit request.** Run `tracecite prune ...` first as a preview. A normal prune must contain a positive `[[source]]` or `[[include]]` selector; excludes only narrow it, and a zero-match selection is rejected. A normal prune also needs the source root (`--root` or the profile) and plans selected sources whose files no longer exist under it as well as unselected sources. Use `tracecite prune --all ...` only when the user explicitly intends to remove every indexed source. Only `tracecite prune --apply ...` may commit removals. Treat exit status `3` as a committed database prune with incomplete filesystem or compaction cleanup, not as an uncommitted failure.
-6. **Run `doctor` after bulk syncs, restores, or suspected corruption.** Treat reported database, vector, asset, or hash issues as blocking until resolved. `WARNING` lines about indexed sources that changed or disappeared on disk are not integrity issues; the indexed text stays citable.
-
-### Query syntax and punctuation
-
-The query is passed to both FTS5 `MATCH` and vector retrieval. Valid raw FTS5 expressions, including quoted phrases, boolean operators, and prefix expressions such as `retire*`, retain their normal lexical behaviour. Quote the shell argument when it contains spaces or FTS punctuation.
-
-Punctuation that FTS5 cannot parse, such as `de-rating`, `heat: wind`, `10%`, or an unbalanced quote, does not stop search. TraceCite notes on stderr that lexical search matched each word instead, and sends the original text to vector retrieval. Because diagnostics use stderr, search output remains valid JSON on stdout.
-
-## Boundaries
-
-- PDF, Markdown, `.xlsx`, and `.xlsm` OOXML workbooks are supported source formats. Legacy binary `.xls` is not supported.
-- Workbook ingestion reads stored package content only. It does not execute VBA, recalculate formulae, refresh external data, or reproduce all Excel display formatting.
-- Do not add old command/package compatibility aliases.
-- Never mutate authoritative source files, and never let verification rewrite maintained Markdown.
-- Keep selected-page derivatives outside the source root. They are disposable caller-owned runtime outputs and must not be synchronised automatically.
-- Do not commit generated databases, embedding-model caches, SQLite sidecars, PDF renders/crops, or other runtime derivatives.
-- Help commands must remain lightweight: they must not import or touch parsers, PDF/OCR, embeddings, sqlite-vec, manifests, databases, projects, caches, or network resources.
+- Evidence identity is the normalised root-relative path plus a page or line. Workbook evidence adds the source SHA-256, the worksheet, and the exact A1 ranges. Do not invent other IDs.
+- Never change source files, and never let verification rewrite maintained Markdown.
+- Keep `extract-pages` output outside the source root; it is disposable and must not be synced.
+- Never commit databases, model caches, SQLite sidecars, PDF renders or crops, or other runtime output.
 
 ## References
 
-- `references/architecture.md` — module layout, layering, and out-of-scope technology list.
-- `references/schema-and-migrations.md` — current schema and path/page evidence contract.
-- `references/synchronisation.md` — invalidation, retention, rename, transaction, and pruning behaviour.
-- `references/retrieval.md` — hybrid FTS5/vector search design and result fields.
-- `references/pdf-and-assets.md` — PDF page/chunk extraction, quotation verification, and asset semantics.
-- `references/workspace-runtime.md` — Git worktree-safe path resolution and runtime setup.
+Load a reference only when the task needs it:
+
+- `references/retrieval.md`: search fusion, result fields, and query recovery. Read it to interpret search output.
+- `references/pdf-and-assets.md`: page selection, `extract-pages`, quotation and report verification statuses, and assets.
+- `references/schema-and-migrations.md`: manifest format, evidence identity, and stored tables.
+- `references/synchronisation.md`: invalidation, renames, and the sync transaction. Read it when a sync result looks wrong.
+- `references/architecture.md`: module layout and design limits. Read it before you change TraceCite itself.

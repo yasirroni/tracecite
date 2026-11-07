@@ -1,22 +1,22 @@
-# Schema, Configuration, and Source-Locator Evidence Identity
+# Schema, Configuration, and Evidence Identity
 
-## Database-path model
+## Database path
 
-`--database` names the SQLite file the caller owns. Repository-neutral callers may choose any path. Databases and SQLite sidecars remain generated runtime artifacts and must not be committed.
+`--database` names a SQLite file the caller owns, at any path. Databases and SQLite sidecars are generated runtime files; never commit them.
 
-TraceCite uses a fresh schema. It does not migrate or accept old bootstrap/indexer schemas, old package names, old command names, or caller-managed evidence-label contracts.
+TraceCite does not migrate. A database with another schema version is rejected; rebuild it at a fresh path. Old bootstrap or indexer schemas, old package and command names, and caller-managed evidence-label contracts are not supported.
 
 ## Evidence identity
 
-- PDF and Markdown evidence identity is the normalised root-relative POSIX source path plus a physical page or line locator.
-- Workbook evidence identity is the normalised source path and indexed SHA-256 plus the worksheet and exact A1 ranges returned in `locator_json`.
-- Internal keys such as `source_pk`, page row IDs, chunk IDs, and asset IDs are private implementation details.
-- Markdown reference labels are opaque. A report citation is authoritative because its reference definition points to a local path and positive `#page=N` fragment, not because the label encodes an ID.
+- PDF and Markdown evidence: the normalised root-relative POSIX source path plus a physical page or line locator.
+- Workbook evidence: the normalised source path and indexed SHA-256 plus the worksheet and exact A1 ranges in `locator_json`.
+- Internal keys such as `source_pk`, page row IDs, chunk IDs, and asset IDs are private.
+- Markdown reference labels are opaque. A report citation counts because its reference definition points to a local path with a positive `#page=N` fragment, not because of its label.
 - Source-link registries use schema version 3 and match by `local_path`.
 
-## Manifest contract
+## Manifest
 
-Manifests are layered and may contain explicit paths, include globs, and exclude globs:
+Manifests are layered and hold explicit paths, include globs, and exclude globs:
 
 ```toml
 schema_version = 1
@@ -37,16 +37,14 @@ glob = "workbooks/**/*.xlsm"
 glob = "reports/drafts/**"
 ```
 
-TraceCite rejects absolute paths, traversal, unsupported extensions, unknown fields, duplicate normalised entries, and symlink escapes. Selection rules apply both to files currently on disk and to paths already stored in the database; unavailable selected paths are retained rather than pruned automatically, until an explicit `tracecite prune` removes them.
+TraceCite rejects absolute paths, paths that escape the root (including through a symlink), unsupported extensions, and unknown fields. Duplicate normalised entries collapse into one. Sync skips symlinked files and reports them in `skipped_sources`. Selection rules apply to files on disk and to paths already in the database. A selected path whose file is gone stays indexed until `tracecite prune` removes it.
 
 ## Stored tables
 
-At a high level the schema stores:
-
-- configuration metadata, parser/chunker/model versions, and update timestamps;
-- `sources`, keyed internally by `source_pk` with unique normalised `path`;
-- retained `pages` text and PDF, Markdown, or workbook extraction layout;
+- configuration: schema, parser, chunker, and model versions, and update timestamps;
+- `sources`, keyed internally by `source_pk`, with a unique normalised `path`;
+- retained `pages` text and PDF, Markdown, or workbook layout;
 - `chunks`, FTS5 content, embeddings, sqlite-vec vectors, and chunk-to-embedding links;
-- generated PDF assets with stored SHA-256 hashes.
+- generated PDF assets with their SHA-256.
 
-Use `tracecite doctor` to verify relational consistency, vector/FTS state, asset existence, and asset hashes after syncs or restores.
+`tracecite doctor` checks relational consistency, vector and FTS state, asset existence, and asset hashes.
